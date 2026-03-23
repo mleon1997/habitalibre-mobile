@@ -1,12 +1,13 @@
-// src/screens/Marketplace.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { moneyUSD } from "../lib/money";
 import PropertyCard from "../components/PropertyCard.jsx";
 import mockProperties from "../data/mockProperties.js";
+import { resolveHousingRecommendation } from "../lib/recommendationResolver.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
+const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
 /* ---------------- storage ---------------- */
 function loadJSON(key) {
@@ -18,6 +19,12 @@ function loadJSON(key) {
   }
 }
 
+function saveJSON(key, val) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
 function pick(snapshot, keys) {
   if (!snapshot) return null;
   for (const k of keys) {
@@ -25,6 +32,44 @@ function pick(snapshot, keys) {
     if (snapshot?.output?.[k] != null) return snapshot.output[k];
   }
   return null;
+}
+
+function n(v, def = 0) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : def;
+}
+
+function toNum(v) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
+}
+
+function normalizeText(v) {
+  return String(v || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function cityMatchesProperty(property, zona) {
+  if (!zona) return true;
+
+  const target = normalizeText(zona);
+
+  const fields = [
+    property?.zona,
+    property?.ciudad,
+    property?.city,
+    property?.ciudadZona,
+    property?.sector,
+    property?._normalizedCity,
+    property?._normalizedSector,
+  ]
+    .map(normalizeText)
+    .filter(Boolean);
+
+  return fields.some((f) => f.includes(target) || target.includes(f));
 }
 
 function probTone(label = "") {
@@ -37,7 +82,7 @@ function probTone(label = "") {
 function formatRate(v) {
   const x = Number(v);
   if (!Number.isFinite(x)) return "—";
-  return `${(x * 100).toFixed(2)}%`;
+  return `${(x <= 1 ? x * 100 : x).toFixed(2)}%`;
 }
 
 function formatYearsFromMonths(v) {
@@ -45,6 +90,20 @@ function formatYearsFromMonths(v) {
   if (!Number.isFinite(x) || x <= 0) return "—";
   const years = Math.round(x / 12);
   return `${years} años`;
+}
+
+function normalizeMatchedProperties(snapshot) {
+  const direct =
+    snapshot?.matchedProperties ??
+    snapshot?.output?.matchedProperties ??
+    snapshot?.marketplace?.items ??
+    snapshot?.output?.marketplace?.items ??
+    snapshot?.propiedades ??
+    snapshot?.output?.propiedades ??
+    [];
+
+  if (Array.isArray(direct)) return direct;
+  return [];
 }
 
 function getScenarioForBank(bank, snapshot) {
@@ -61,7 +120,12 @@ function getScenarioForBank(bank, snapshot) {
       null
     );
   }
-  if (tipo === "NORMAL" || tipo === "PRIVADA" || tipo === "COMERCIAL") {
+  if (
+    tipo === "NORMAL" ||
+    tipo === "PRIVADA" ||
+    tipo === "COMERCIAL" ||
+    tipo === "PRIVATE"
+  ) {
     return escenariosHL?.comercial || null;
   }
 
@@ -79,9 +143,9 @@ function getBankReasons(bank, snapshot, scenario, bestMortgage) {
     bank?.cuota ??
     scenario?.cuota ??
     bestMortgage?.cuota ??
-    pick(snapshot, ["cuotaEstimada"]);
+    pick(snapshot, ["cuotaEstimada", "cuotaMensual", "monthlyPayment"]);
 
-  if (cuota != null) {
+  if (cuota != null && Number(cuota) > 0) {
     reasons.push(`Cuota estimada ${moneyUSD(cuota)}`);
   }
 
@@ -92,9 +156,16 @@ function getBankReasons(bank, snapshot, scenario, bestMortgage) {
   const precioMax =
     scenario?.precioMaxVivienda ??
     bestMortgage?.precioMaxVivienda ??
-    pick(snapshot, ["precioMaxVivienda", "precioMax", "valorMaxVivienda"]);
+    pick(snapshot, [
+      "propertyPrice",
+      "precioMaxVivienda",
+      "precioMax",
+      "valorMaxVivienda",
+      "maxHomePrice",
+      "homePrice",
+    ]);
 
-  if (precioMax != null) {
+  if (precioMax != null && Number(precioMax) > 0) {
     reasons.push("Compatible con tu perfil actual");
   }
 
@@ -135,28 +206,36 @@ function buildEligibilityFallback(snapshot) {
   return {
     VIS: {
       viable: !!vis?.viable,
-      priceMax: Number.isFinite(vis?.precioMaxVivienda) ? vis.precioMaxVivienda : 0,
+      priceMax: Number.isFinite(vis?.precioMaxVivienda)
+        ? vis.precioMaxVivienda
+        : 0,
       requiresFirstHome: true,
       requiresNewConstruction: true,
       requiresMiduviQualifiedProject: false,
     },
     VIP: {
       viable: !!vip?.viable,
-      priceMax: Number.isFinite(vip?.precioMaxVivienda) ? vip.precioMaxVivienda : 0,
+      priceMax: Number.isFinite(vip?.precioMaxVivienda)
+        ? vip.precioMaxVivienda
+        : 0,
       requiresFirstHome: true,
       requiresNewConstruction: true,
       requiresMiduviQualifiedProject: false,
     },
     BIESS_CREDICASA: {
       viable: !!biess?.viable,
-      priceMax: Number.isFinite(biess?.precioMaxVivienda) ? biess.precioMaxVivienda : 0,
+      priceMax: Number.isFinite(biess?.precioMaxVivienda)
+        ? biess.precioMaxVivienda
+        : 0,
       requiresFirstHome: false,
       requiresNewConstruction: false,
       requiresMiduviQualifiedProject: false,
     },
     PRIVATE: {
       viable: !!privada?.viable,
-      priceMax: Number.isFinite(privada?.precioMaxVivienda) ? privada.precioMaxVivienda : 0,
+      priceMax: Number.isFinite(privada?.precioMaxVivienda)
+        ? privada.precioMaxVivienda
+        : 0,
       requiresFirstHome: false,
       requiresNewConstruction: false,
       requiresMiduviQualifiedProject: false,
@@ -164,7 +243,11 @@ function buildEligibilityFallback(snapshot) {
   };
 }
 
-function getPropertyMatchProducts(property, eligibilityProducts, allowedProductIds = []) {
+function getPropertyMatchProducts(
+  property,
+  eligibilityProducts,
+  allowedProductIds = []
+) {
   const profile = property?.mortgageProfile;
   const ids = Array.isArray(profile?.productIds) ? profile.productIds : [];
   const allowedSet = new Set(allowedProductIds);
@@ -217,7 +300,25 @@ function getPropertyProgramLabel(productId) {
   return map[productId] || productId;
 }
 
-/* ---------------- design tokens ---------------- */
+function deriveMatchedProductsFromEngine(property) {
+  const explicit = Array.isArray(property?.matchedProducts)
+    ? property.matchedProducts
+    : [];
+  if (explicit.length) return explicit;
+
+  const selectedId =
+    property?.mortgageSelected?.mortgageId ||
+    property?.mortgageSelected?.id ||
+    property?.mortgageSelected?.productId ||
+    property?.evaluacionHipotecaFutura?.mortgageSelected?.mortgageId ||
+    property?.evaluacionHipotecaFutura?.productoId ||
+    property?.evaluacionHipotecaHoy?.productoId ||
+    property?.evaluacionHipoteca?.productoId ||
+    null;
+
+  return selectedId ? [selectedId] : [];
+}
+
 const UI = {
   bg: "linear-gradient(180deg, #071024 0%, #0b1a35 100%)",
   card: "rgba(255,255,255,0.06)",
@@ -227,6 +328,8 @@ const UI = {
   green: "#25d3a6",
   greenBg: "rgba(37,211,166,0.10)",
   greenBorder: "rgba(37,211,166,0.25)",
+  amberBg: "rgba(245,158,11,0.10)",
+  amberBorder: "rgba(245,158,11,0.24)",
   shadow: "0 10px 30px rgba(0,0,0,0.22)",
   shadowSoft: "0 10px 30px rgba(0,0,0,0.18)",
 };
@@ -234,9 +337,17 @@ const UI = {
 function Pill({ children, onClick, tone = "neutral" }) {
   const isClickable = !!onClick;
   const bg =
-    tone === "green" ? "rgba(37,211,166,0.14)" : "rgba(255,255,255,0.08)";
+    tone === "green"
+      ? "rgba(37,211,166,0.14)"
+      : tone === "amber"
+      ? "rgba(245,158,11,0.14)"
+      : "rgba(255,255,255,0.08)";
   const br =
-    tone === "green" ? "rgba(37,211,166,0.28)" : "rgba(255,255,255,0.10)";
+    tone === "green"
+      ? "rgba(37,211,166,0.28)"
+      : tone === "amber"
+      ? "rgba(245,158,11,0.28)"
+      : "rgba(255,255,255,0.10)";
 
   return (
     <span
@@ -290,7 +401,7 @@ function SecondaryButton({ children, onClick, disabled, style }) {
         width: "100%",
         padding: 12,
         borderRadius: 14,
-        border: `1px solid rgba(255,255,255,0.16)`,
+        border: "1px solid rgba(255,255,255,0.16)",
         background: "rgba(255,255,255,0.06)",
         color: "white",
         fontWeight: 900,
@@ -325,8 +436,12 @@ function Segment({ value, onChange, options }) {
               flex: 1,
               padding: 12,
               borderRadius: 16,
-              border: `1px solid ${active ? UI.greenBorder : "rgba(255,255,255,0.14)"}`,
-              background: active ? "rgba(37,211,166,0.14)" : "rgba(255,255,255,0.06)",
+              border: `1px solid ${
+                active ? UI.greenBorder : "rgba(255,255,255,0.14)"
+              }`,
+              background: active
+                ? "rgba(37,211,166,0.14)"
+                : "rgba(255,255,255,0.06)",
               color: "white",
               fontWeight: 900,
               boxShadow: active ? UI.shadowSoft : "none",
@@ -341,16 +456,46 @@ function Segment({ value, onChange, options }) {
 }
 
 function hasResult(snapshot) {
+  if (!snapshot) return false;
+
   const bestMortgage = pick(snapshot, ["bestMortgage"]);
   const banks = pick(snapshot, ["bancosTop3"]);
-  const cuota = pick(snapshot, ["cuotaEstimada"]);
-  const precioMax = pick(snapshot, ["precioMaxVivienda", "precioMax", "valorMaxVivienda"]);
+  const cuota = pick(snapshot, ["cuotaEstimada", "cuotaMensual", "monthlyPayment"]);
+  const precioMax = pick(snapshot, [
+    "propertyPrice",
+    "precioMaxVivienda",
+    "precioMax",
+    "valorMaxVivienda",
+    "maxHomePrice",
+    "homePrice",
+  ]);
+  const score = pick(snapshot, ["score"]);
+  const capacidad = pick(snapshot, [
+    "capacidad",
+    "capacidadPago",
+    "loanAmount",
+    "maxLoanAmount",
+    "financedAmount",
+  ]);
+  const bancoSugerido = pick(snapshot, ["bancoSugerido"]);
+  const productoSugerido = pick(snapshot, ["productoSugerido"]);
+  const matchedProperties = normalizeMatchedProperties(snapshot);
+  const housingAlternatives =
+    snapshot?.housingAlternatives ?? snapshot?.output?.housingAlternatives;
 
   return (
+    snapshot?.unlocked === true ||
+    snapshot?.output?.unlocked === true ||
     !!bestMortgage ||
+    !!bancoSugerido ||
+    !!productoSugerido ||
+    !!housingAlternatives ||
     (Array.isArray(banks) && banks.length > 0) ||
+    (Array.isArray(matchedProperties) && matchedProperties.length > 0) ||
     cuota != null ||
-    precioMax != null
+    precioMax != null ||
+    score != null ||
+    capacidad != null
   );
 }
 
@@ -366,8 +511,16 @@ function LockedMarketplace({ onGoSimular }) {
           boxShadow: UI.shadow,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>🔒 Match bloqueado</div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>
+            🔒 Match bloqueado
+          </div>
           <Pill tone="green">2 minutos</Pill>
         </div>
 
@@ -376,8 +529,8 @@ function LockedMarketplace({ onGoSimular }) {
         </div>
 
         <div style={{ marginTop: 8, opacity: 0.9, lineHeight: 1.35, fontSize: 13 }}>
-          HabitaLibre solo muestra propiedades e hipotecas que realmente puedes comprar según tu
-          capacidad y entrada.
+          HabitaLibre solo muestra propiedades e hipotecas que realmente puedes comprar
+          según tu capacidad y entrada.
         </div>
 
         <div style={{ marginTop: 12 }}>
@@ -401,8 +554,12 @@ function ZoneChips({ zona, setZona }) {
             style={{
               padding: "10px 12px",
               borderRadius: 999,
-              border: `1px solid ${active ? UI.greenBorder : "rgba(255,255,255,0.14)"}`,
-              background: active ? "rgba(37,211,166,0.14)" : "rgba(255,255,255,0.06)",
+              border: `1px solid ${
+                active ? UI.greenBorder : "rgba(255,255,255,0.14)"
+              }`,
+              background: active
+                ? "rgba(37,211,166,0.14)"
+                : "rgba(255,255,255,0.06)",
               color: "white",
               fontWeight: 900,
               boxShadow: active ? UI.shadowSoft : "none",
@@ -444,17 +601,37 @@ function EmptyState({ title, subtitle, cta, onClick }) {
 export default function Marketplace() {
   const navigate = useNavigate();
 
-  const snapshot = useMemo(() => loadJSON(LS_SNAPSHOT), []);
-  useMemo(() => loadJSON(LS_JOURNEY), []);
-  const unlocked = useMemo(() => hasResult(snapshot), [snapshot]);
+  const [snapshot, setSnapshot] = useState(() => loadJSON(LS_SNAPSHOT));
+  const [journey, setJourney] = useState(() => loadJSON(LS_JOURNEY));
 
   const [tab, setTab] = useState("props");
   const [zona, setZona] = useState("Quito");
   const [propertyMode, setPropertyMode] = useState("strict");
 
+  useEffect(() => {
+    const snap = loadJSON(LS_SNAPSHOT);
+    const j = loadJSON(LS_JOURNEY);
+
+    setSnapshot(snap);
+    setJourney(j);
+
+    console.log("[HL][Marketplace] snapshot =", snap);
+    console.log("[HL][Marketplace] journey =", j);
+  }, []);
+
+  const unlocked = useMemo(() => hasResult(snapshot), [snapshot]);
+
+  const uiRecommendation = useMemo(() => {
+    return resolveHousingRecommendation(snapshot || {});
+  }, [snapshot]);
+
+  const recommendationType = uiRecommendation?.type || "no_clear_route";
+  const goalValue = uiRecommendation?.goalValue ?? null;
+
   const bestMortgage = pick(snapshot, ["bestMortgage"]) || null;
   const bancosTop3 = pick(snapshot, ["bancosTop3"]) || [];
   const bestRoute = pick(snapshot, ["rutaRecomendada"]) || null;
+  const matchedProperties = normalizeMatchedProperties(snapshot);
 
   const eligibilityProducts =
     pick(snapshot, ["eligibilityProducts"]) || buildEligibilityFallback(snapshot);
@@ -462,79 +639,552 @@ export default function Marketplace() {
   const propertyRecommendationPolicy =
     pick(snapshot, ["propertyRecommendationPolicy"]) || null;
 
-  const productoElegido =
-    bestMortgage?.label ||
-    bestRoute?.tipo ||
-    pick(snapshot, ["productoElegido", "productoSugerido"]) ||
-    "Sin oferta viable hoy";
+  const futureViableProperty = useMemo(() => {
+    if (!Array.isArray(matchedProperties) || !matchedProperties.length) return null;
 
-  const precioMaxVivienda =
-    bestMortgage?.precioMaxVivienda ??
-    pick(snapshot, ["precioMaxVivienda", "precioMax", "valorMaxVivienda"]);
+    return (
+      matchedProperties.find(
+        (p) => String(p?.estadoCompra || "") === "entrada_viable_hipoteca_futura_viable"
+      ) ||
+      matchedProperties.find((p) => p?.evaluacionHipotecaFutura?.viable === true) ||
+      null
+    );
+  }, [matchedProperties]);
 
-  const cuotaEstimada =
-    bestMortgage?.cuota ??
-    pick(snapshot, ["cuotaEstimada"]) ??
+  const futureMortgageSelected =
+    futureViableProperty?.evaluacionHipotecaFutura?.mortgageSelected || null;
+
+  const futureProductLabel =
+    uiRecommendation?.futureRoute?.productName ||
+    futureViableProperty?.evaluacionHipotecaFutura?.productoSugerido ||
+    futureMortgageSelected?.label ||
+    futureMortgageSelected?.name ||
+    "Ruta futura viable";
+
+  const futureProbLabel =
+    uiRecommendation?.futureRoute?.raw?.probabilidad ||
+    futureViableProperty?.evaluacionHipotecaFutura?.probabilidad ||
+    "Alta";
+
+  const futureRate =
+    uiRecommendation?.futureRoute?.raw?.annualRate ??
+    uiRecommendation?.futureRoute?.raw?.rate ??
+    futureMortgageSelected?.annualRate ??
+    futureMortgageSelected?.tasaAnual ??
+    futureViableProperty?.evaluacionHipotecaFutura?.tasaAnual ??
+    null;
+
+  const futureCuota =
+    uiRecommendation?.safeNumbers?.futureMonthlyPayment ??
+    futureViableProperty?.evaluacionHipotecaFutura?.cuotaReferencia ??
+    null;
+
+  const futureMonto =
+    futureViableProperty?.evaluacionHipotecaFutura?.montoHipotecaProyectado ?? null;
+
+  const futurePlazoMeses =
+    futureMortgageSelected?.plazoMeses ??
+    futureMortgageSelected?.termMonths ??
+    pick(snapshot, ["plazoMeses", "termMonths", "loanTermMonths"]) ??
+    null;
+
+  const futureMesesConstruccion =
+    uiRecommendation?.safeNumbers?.futureMonths ??
+    futureViableProperty?.evaluacionEntrada?.mesesConstruccionRestantes ??
+    null;
+
+  const futurePropertyPrice =
+    uiRecommendation?.safeNumbers?.futureProjectedValue ??
+    futureViableProperty?.precio ??
+    futureViableProperty?.price ??
     null;
 
   const banks = Array.isArray(bancosTop3) ? bancosTop3 : [];
-  const recommendedBank = banks.length ? banks[0] : null;
+
+  const recommendedBank = banks.length
+    ? banks[0]
+    : pick(snapshot, ["bancoSugerido"])
+    ? {
+        banco: pick(snapshot, ["bancoSugerido"]),
+        tipoProducto: pick(snapshot, ["productoSugerido"]) || "BIESS",
+        cuota:
+          bestMortgage?.cuota ??
+          pick(snapshot, ["cuotaEstimada", "cuotaMensual", "monthlyPayment"]) ??
+          null,
+        tasaAnual: pick(snapshot, ["tasaAnual", "annualRate", "interestRate"]),
+        montoPrestamo: pick(snapshot, [
+          "loanAmount",
+          "maxLoanAmount",
+          "financedAmount",
+          "montoMaximo",
+          "montoPrestamoMax",
+          "prestamoMax",
+        ]),
+        probLabel: pick(snapshot, ["probabilidad"]) || null,
+      }
+    : null;
+
   const alternativeBanks = banks.slice(1, 3);
 
   const recommendedScenario = recommendedBank
     ? getScenarioForBank(recommendedBank, snapshot)
     : null;
 
-  const mainRate =
+  const immediateRate =
+    uiRecommendation?.immediate?.rate ??
     recommendedBank?.tasaAnual ??
     recommendedScenario?.tasaAnual ??
-    pick(snapshot, ["tasaAnual"]);
+    bestMortgage?.annualRate ??
+    pick(snapshot, ["tasaAnual", "annualRate", "interestRate"]);
 
-  const mainCuota =
+  const immediateCuota =
+    uiRecommendation?.immediate?.monthlyPayment ??
     recommendedBank?.cuota ??
     recommendedScenario?.cuota ??
-    pick(snapshot, ["cuotaEstimada"]);
+    bestMortgage?.cuota ??
+    pick(snapshot, ["cuotaEstimada", "cuotaMensual", "monthlyPayment"]);
 
-  const mainMonto =
+  const immediateMonto =
+    uiRecommendation?.immediate?.loanAmount ??
     recommendedBank?.montoPrestamo ??
     recommendedScenario?.montoPrestamo ??
-    pick(snapshot, ["montoMaximo"]);
+    bestMortgage?.montoPrestamo ??
+    pick(snapshot, [
+      "loanAmount",
+      "maxLoanAmount",
+      "financedAmount",
+      "montoMaximo",
+      "montoPrestamoMax",
+      "prestamoMax",
+    ]);
 
-  const mainPlazo =
+  const immediatePlazo =
+    uiRecommendation?.immediate?.termMonths ??
     recommendedBank?.plazoMeses ??
     recommendedScenario?.plazoMeses ??
-    pick(snapshot, ["plazoMeses"]);
+    bestMortgage?.plazoMeses ??
+    pick(snapshot, ["plazoMeses", "termMonths", "loanTermMonths"]);
 
-  const strictProductIds = Array.isArray(propertyRecommendationPolicy?.strictProductIds) &&
+  const immediateProbLabel =
+    recommendedBank?.probLabel ||
+    bestMortgage?.probabilidad ||
+    pick(snapshot, ["probabilidad"]) ||
+    "";
+
+  const useImmediateAsPrimary = recommendationType === "immediate";
+  const useFutureAsPrimary = recommendationType === "future_route";
+  const useInventoryAsPrimary = recommendationType === "inventory_fallback";
+
+  const inventoryFallbackProperty = uiRecommendation?.inventoryFallback?.property || null;
+
+  const productoElegido = useImmediateAsPrimary
+    ? (
+        uiRecommendation?.immediate?.productName ||
+        uiRecommendation?.immediate?.bankName ||
+        bestMortgage?.label ||
+        pick(snapshot, ["bancoSugerido"]) ||
+        bestRoute?.tipo ||
+        pick(snapshot, ["productoElegido", "productoSugerido"]) ||
+        "Hipoteca viable hoy"
+      )
+    : useFutureAsPrimary
+    ? futureProductLabel
+    : useInventoryAsPrimary
+    ? (
+        inventoryFallbackProperty?._normalizedProjectName ||
+        inventoryFallbackProperty?.nombre ||
+        inventoryFallbackProperty?.title ||
+        inventoryFallbackProperty?.proyecto ||
+        "Alternativa cercana"
+      )
+    : "Sin ruta clara hoy";
+
+  const precioMaxVivienda = useImmediateAsPrimary
+    ? (
+        uiRecommendation?.immediate?.priceMax ??
+        bestMortgage?.precioMaxVivienda ??
+        pick(snapshot, [
+          "propertyPrice",
+          "precioMaxVivienda",
+          "precioMax",
+          "valorMaxVivienda",
+          "maxHomePrice",
+          "homePrice",
+        ])
+      )
+    : useFutureAsPrimary
+    ? futurePropertyPrice
+    : useInventoryAsPrimary
+    ? (
+        inventoryFallbackProperty?._normalizedPrice ??
+        inventoryFallbackProperty?.precio ??
+        inventoryFallbackProperty?.price ??
+        null
+      )
+    : null;
+
+  const cuotaEstimada = useImmediateAsPrimary
+    ? (
+        uiRecommendation?.immediate?.monthlyPayment ??
+        bestMortgage?.cuota ??
+        pick(snapshot, ["cuotaEstimada", "cuotaMensual", "monthlyPayment"]) ??
+        null
+      )
+    : useFutureAsPrimary
+    ? futureCuota
+    : null;
+
+  const mainRate = useImmediateAsPrimary
+    ? immediateRate
+    : useFutureAsPrimary
+    ? futureRate
+    : null;
+
+  const mainCuota = useImmediateAsPrimary
+    ? immediateCuota
+    : useFutureAsPrimary
+    ? futureCuota
+    : null;
+
+  const mainMonto = useImmediateAsPrimary
+    ? immediateMonto
+    : useFutureAsPrimary
+    ? futureMonto
+    : null;
+
+  const mainPlazo = useImmediateAsPrimary
+    ? immediatePlazo
+    : useFutureAsPrimary
+    ? futurePlazoMeses
+    : null;
+
+  const primaryMortgageTitle = useImmediateAsPrimary
+    ? "🏦 Tu mejor hipoteca hoy"
+    : useFutureAsPrimary
+    ? "🏦 Ruta hipotecaria futura viable"
+    : useInventoryAsPrimary
+    ? "🏘 Alternativa cercana hoy"
+    : "🏦 Sin ruta hipotecaria clara hoy";
+
+  const primaryMortgageName = useImmediateAsPrimary
+    ? (
+        uiRecommendation?.immediate?.bankName ||
+        primaryMortgageName ||
+        recommendedBank?.banco ||
+        pick(snapshot, ["bancoSugerido"]) ||
+        "Aún estamos calculando"
+      )
+    : useFutureAsPrimary
+    ? futureProductLabel
+    : useInventoryAsPrimary
+    ? (
+        inventoryFallbackProperty?._normalizedProjectName ||
+        inventoryFallbackProperty?.nombre ||
+        inventoryFallbackProperty?.title ||
+        inventoryFallbackProperty?.proyecto ||
+        "Alternativa concreta del marketplace"
+      )
+    : "Aún no vemos una ruta sólida";
+
+  const primaryMortgageSubtitle = useImmediateAsPrimary
+    ? (
+        recommendedBank
+          ? "Basado en tu perfil, esta es la mejor ruta para empezar tu solicitud."
+          : "Aquí verás tu mejor recomendación hipotecaria."
+      )
+    : useFutureAsPrimary
+    ? (
+        futureMesesConstruccion && futureMesesConstruccion > 0
+          ? `Podrías completar la estrategia en ${futureMesesConstruccion} meses y luego aplicar a hipoteca.`
+          : "Hoy no es compra inmediata, pero sí vemos una ruta futura viable."
+      )
+    : useInventoryAsPrimary
+    ? (
+        goalValue != null
+          ? `Hoy no vemos una hipoteca ideal para tu meta de ${moneyUSD(goalValue)}, pero sí una propiedad concreta cercana.`
+          : "Hoy no vemos una hipoteca ideal, pero sí una propiedad concreta cercana."
+      )
+    : "Con los datos actuales todavía no vemos una ruta clara de compra.";
+
+  const primaryMortgagePill = useImmediateAsPrimary
+    ? (
+        recommendedBank?.probLabel
+          ? `Prob ${recommendedBank.probLabel}`
+          : recommendedBank?.probScore != null
+          ? `Score ${recommendedBank.probScore}`
+          : "Top match"
+      )
+    : useFutureAsPrimary
+    ? "Ruta futura viable"
+    : useInventoryAsPrimary
+    ? "Alternativa cercana"
+    : "Sin ruta";
+
+  const primaryMortgagePillTone = useImmediateAsPrimary
+    ? probTone(recommendedBank?.probLabel || immediateProbLabel)
+    : useFutureAsPrimary
+    ? "green"
+    : useInventoryAsPrimary
+    ? "amber"
+    : "neutral";
+
+  const primaryReasons = useImmediateAsPrimary
+    ? getBankReasons(recommendedBank, snapshot, recommendedScenario, bestMortgage)
+    : useFutureAsPrimary
+    ? [
+        futurePropertyPrice != null ? `Meta o referencia ${moneyUSD(futurePropertyPrice)}` : null,
+        futureCuota != null && futureCuota > 0 ? `Cuota proyectada ${moneyUSD(futureCuota)}` : null,
+        futureMesesConstruccion != null && futureMesesConstruccion > 0
+          ? `Tiempo estimado ${futureMesesConstruccion} meses`
+          : null,
+      ].filter(Boolean)
+    : useInventoryAsPrimary
+    ? [
+        inventoryFallbackProperty?._normalizedPrice != null
+          ? `Propiedad cercana ${moneyUSD(inventoryFallbackProperty._normalizedPrice)}`
+          : null,
+        goalValue != null ? `Meta original ${moneyUSD(goalValue)}` : null,
+        "Fallback concreto del marketplace para tu escenario actual",
+      ].filter(Boolean)
+    : [
+        "Hoy no vemos una hipoteca viable ni una ruta futura suficientemente sólida.",
+        "Puedes ajustar ingreso, entrada o valor objetivo para recalcular tu match.",
+      ];
+
+  const strictProductIds =
+    Array.isArray(propertyRecommendationPolicy?.strictProductIds) &&
     propertyRecommendationPolicy.strictProductIds.length
-    ? propertyRecommendationPolicy.strictProductIds
-    : (() => {
-        const legacyId = getLegacyRecommendedProductId(snapshot);
-        return legacyId ? [legacyId] : [];
-      })();
+      ? propertyRecommendationPolicy.strictProductIds
+      : (() => {
+          const legacyId = getLegacyRecommendedProductId(snapshot);
+          return legacyId ? [legacyId] : [];
+        })();
 
-  const recommendedProductIds = Array.isArray(propertyRecommendationPolicy?.recommendedProductIds) &&
+  const recommendedProductIds =
+    Array.isArray(propertyRecommendationPolicy?.recommendedProductIds) &&
     propertyRecommendationPolicy.recommendedProductIds.length
-    ? propertyRecommendationPolicy.recommendedProductIds
-    : strictProductIds;
+      ? propertyRecommendationPolicy.recommendedProductIds
+      : strictProductIds;
 
   const allowedProductIds =
     propertyMode === "strict" ? strictProductIds : recommendedProductIds;
 
   const enrichedProps = useMemo(() => {
+    const matchedFromEngine = normalizeMatchedProperties(snapshot);
+
+    if (Array.isArray(matchedFromEngine) && matchedFromEngine.length) {
+      let list = matchedFromEngine
+        .map((p) => ({
+          ...p,
+          matchedProducts: [...new Set(deriveMatchedProductsFromEngine(p))],
+        }))
+        .filter((p) => cityMatchesProperty(p, zona));
+
+      if (recommendationType === "future_route") {
+        list = list.sort((a, b) => {
+          const aFuture = a?.evaluacionHipotecaFutura?.viable === true ? 1 : 0;
+          const bFuture = b?.evaluacionHipotecaFutura?.viable === true ? 1 : 0;
+          if (bFuture !== aFuture) return bFuture - aFuture;
+
+          const aScore =
+            n(a?.evaluacionHipotecaFutura?.score) ||
+            n(a?.evaluacionHipotecaHoy?.score) ||
+            n(a?.evaluacionHipoteca?.score);
+          const bScore =
+            n(b?.evaluacionHipotecaFutura?.score) ||
+            n(b?.evaluacionHipotecaHoy?.score) ||
+            n(b?.evaluacionHipoteca?.score);
+
+          if (bScore !== aScore) return bScore - aScore;
+
+          return n(a?.precio ?? a?.price, Number.MAX_SAFE_INTEGER) - n(
+            b?.precio ?? b?.price,
+            Number.MAX_SAFE_INTEGER
+          );
+        });
+      } else if (recommendationType === "inventory_fallback") {
+        const target = goalValue || 0;
+        list = list.sort((a, b) => {
+          const pa = n(a?.precio ?? a?.price, Number.MAX_SAFE_INTEGER);
+          const pb = n(b?.precio ?? b?.price, Number.MAX_SAFE_INTEGER);
+          if (target > 0) {
+            const da = Math.abs(pa - target);
+            const db = Math.abs(pb - target);
+            if (da !== db) return da - db;
+          }
+          return pa - pb;
+        });
+      } else {
+        list = list
+          .filter((p) => {
+            if (propertyMode !== "strict") return true;
+            if (!allowedProductIds.length) return true;
+
+            const matched = Array.isArray(p?.matchedProducts) ? p.matchedProducts : [];
+            const mortgageSelectedId =
+              p?.mortgageSelected?.mortgageId ||
+              p?.mortgageSelected?.id ||
+              p?.mortgageSelected?.productId ||
+              p?.evaluacionHipotecaFutura?.mortgageSelected?.mortgageId ||
+              p?.evaluacionHipotecaHoy?.mortgageSelected?.mortgageId ||
+              null;
+
+            const estado = String(p?.estadoCompra || "");
+
+            if (matched.some((id) => allowedProductIds.includes(id))) return true;
+            if (mortgageSelectedId && allowedProductIds.includes(mortgageSelectedId)) return true;
+
+            if (
+              estado === "top_match" ||
+              estado === "entrada_viable_hipoteca_futura_viable" ||
+              estado === "entrada_viable_hipoteca_futura_debil" ||
+              estado === "ruta_cercana"
+            ) {
+              return true;
+            }
+
+            return false;
+          })
+          .sort((a, b) => {
+            const viableA = !!a?.viableProyecto;
+            const viableB = !!b?.viableProyecto;
+            if (viableA && !viableB) return -1;
+            if (!viableA && viableB) return 1;
+
+            const estadoA = String(a?.estadoCompra || "");
+            const estadoB = String(b?.estadoCompra || "");
+
+            const rank = {
+              top_match: 1,
+              entrada_viable_hipoteca_futura_viable: 2,
+              entrada_viable_hipoteca_futura_debil: 3,
+              ruta_cercana: 4,
+              entrada_no_viable: 5,
+              fuera_de_reglas: 6,
+            };
+
+            const ra = rank[estadoA] || 99;
+            const rb = rank[estadoB] || 99;
+            if (ra !== rb) return ra - rb;
+
+            const scoreA =
+              n(a?.evaluacionHipotecaFutura?.score) ||
+              n(a?.evaluacionHipotecaHoy?.score) ||
+              n(a?.evaluacionHipoteca?.score);
+            const scoreB =
+              n(b?.evaluacionHipotecaFutura?.score) ||
+              n(b?.evaluacionHipotecaHoy?.score) ||
+              n(b?.evaluacionHipoteca?.score);
+            if (scoreB !== scoreA) return scoreB - scoreA;
+
+            const entradaA = n(
+              a?.evaluacionEntrada?.cuotaEntradaMensual,
+              Number.MAX_SAFE_INTEGER
+            );
+            const entradaB = n(
+              b?.evaluacionEntrada?.cuotaEntradaMensual,
+              Number.MAX_SAFE_INTEGER
+            );
+            if (entradaA !== entradaB) return entradaA - entradaB;
+
+            return n(a?.precio ?? a?.price, Number.MAX_SAFE_INTEGER) - n(
+              b?.precio ?? b?.price,
+              Number.MAX_SAFE_INTEGER
+            );
+          });
+      }
+
+      if (
+        recommendationType === "inventory_fallback" &&
+        inventoryFallbackProperty &&
+        !list.some((p) => (p.id || p._id) === (inventoryFallbackProperty.id || inventoryFallbackProperty._normalizedId))
+      ) {
+        list.unshift(inventoryFallbackProperty);
+      }
+
+      return list;
+    }
+
     return mockProperties
-      .filter((p) => (zona ? p.zona === zona : true))
+      .filter((p) => cityMatchesProperty(p, zona))
       .map((p) => ({
         ...p,
-        matchedProducts: getPropertyMatchProducts(p, eligibilityProducts, allowedProductIds),
+        matchedProducts: getPropertyMatchProducts(
+          p,
+          eligibilityProducts,
+          allowedProductIds
+        ),
       }))
       .filter((p) => p.matchedProducts.length > 0)
       .sort((a, b) => a.precio - b.precio);
-  }, [zona, eligibilityProducts, allowedProductIds]);
+  }, [
+    snapshot,
+    zona,
+    eligibilityProducts,
+    allowedProductIds,
+    propertyMode,
+    recommendationType,
+    goalValue,
+    inventoryFallbackProperty,
+  ]);
 
   const subtitle = unlocked
-    ? "Propiedades y rutas según tu precalificación"
+    ? recommendationType === "immediate"
+      ? "Propiedades y rutas según tu precalificación actual"
+      : recommendationType === "future_route"
+      ? "Propiedades y rutas según tu camino futuro viable"
+      : recommendationType === "inventory_fallback"
+      ? "Alternativas cercanas según tu escenario actual"
+      : "Aún no hay una ruta clara, pero aquí verás referencias útiles"
     : "Haz tu simulación para ver solo lo que realmente puedes comprar";
+
+  function handleChooseProperty(property) {
+    const normalizedProperty = {
+      ...property,
+      nombre:
+        property?.nombre ||
+        property?.title ||
+        property?.proyecto ||
+        property?._normalizedProjectName ||
+        "Propiedad seleccionada",
+      ciudad:
+        property?.ciudad ||
+        property?.city ||
+        property?.zona ||
+        property?._normalizedCity ||
+        journey?.form?.ciudadCompra ||
+        journey?.ciudadCompra ||
+        "Quito",
+      precio:
+        property?.precio ||
+        property?.price ||
+        property?._normalizedPrice ||
+        null,
+      cuotaEstimada:
+        property?.cuotaEstimada ||
+        property?.cuota ||
+        property?.evaluacionHipotecaFutura?.cuotaReferencia ||
+        property?.evaluacionHipotecaHoy?.cuotaReferencia ||
+        property?.evaluacionHipoteca?.cuotaReferencia ||
+        snapshot?.cuotaEstimada ||
+        snapshot?.cuotaMensual ||
+        snapshot?.bestMortgage?.cuota ||
+        null,
+      selectedAt: new Date().toISOString(),
+      source: "marketplace",
+    };
+
+    saveJSON(LS_SELECTED_PROPERTY, normalizedProperty);
+
+    saveJSON(LS_JOURNEY, {
+      ...(journey || {}),
+      propiedadElegida: true,
+      propiedadId: property?.id || property?._id || null,
+      propiedadSeleccionada: normalizedProperty,
+    });
+
+    navigate("/propiedad-ideal");
+  }
 
   return (
     <div
@@ -547,7 +1197,13 @@ export default function Marketplace() {
         paddingBottom: 28,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
         <div>
           <div style={{ fontSize: 13, opacity: 0.75 }}>🏘 Marketplace</div>
           <h2 style={{ margin: "6px 0 0 0" }}>Tu match hipotecario</h2>
@@ -564,14 +1220,38 @@ export default function Marketplace() {
       ) : (
         <>
           <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Pill tone="green">{String(productoElegido)}</Pill>
-            {typeof precioMaxVivienda === "number" ? (
-              <Pill>Máx {moneyUSD(precioMaxVivienda)}</Pill>
+            <Pill
+              tone={
+                recommendationType === "immediate"
+                  ? "green"
+                  : recommendationType === "future_route"
+                  ? "green"
+                  : recommendationType === "inventory_fallback"
+                  ? "amber"
+                  : "neutral"
+              }
+            >
+              {String(productoElegido)}
+            </Pill>
+
+            {typeof precioMaxVivienda === "number" && precioMaxVivienda > 0 ? (
+              <Pill>
+                {recommendationType === "immediate"
+                  ? `Máx ${moneyUSD(precioMaxVivienda)}`
+                  : recommendationType === "future_route"
+                  ? `Meta ${moneyUSD(precioMaxVivienda)}`
+                  : `Referencia ${moneyUSD(precioMaxVivienda)}`}
+              </Pill>
             ) : (
               <Pill>Máx —</Pill>
             )}
-            {typeof cuotaEstimada === "number" ? (
-              <Pill>Cuota {moneyUSD(cuotaEstimada)}</Pill>
+
+            {typeof cuotaEstimada === "number" && cuotaEstimada > 0 ? (
+              <Pill>
+                {recommendationType === "future_route"
+                  ? `Cuota proyectada ${moneyUSD(cuotaEstimada)}`
+                  : `Cuota ${moneyUSD(cuotaEstimada)}`}
+              </Pill>
             ) : null}
           </div>
 
@@ -604,11 +1284,30 @@ export default function Marketplace() {
                     <div style={{ marginTop: 6, fontWeight: 900, fontSize: 15 }}>
                       Zona donde quieres vivir
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 13, opacity: 0.78, lineHeight: 1.35 }}>
-                      Por defecto te mostramos solo propiedades alineadas con tu ruta recomendada.
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 13,
+                        opacity: 0.78,
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {recommendationType === "immediate"
+                        ? "Te mostramos primero propiedades alineadas con tu compra viable hoy."
+                        : recommendationType === "future_route"
+                        ? "Te mostramos primero propiedades que encajan mejor con tu ruta futura viable."
+                        : recommendationType === "inventory_fallback"
+                        ? "Te mostramos primero alternativas concretas cercanas a tu escenario actual."
+                        : "Aún no hay una ruta clara, pero puedes explorar referencias y ajustar tu escenario."}
                     </div>
                   </div>
-                  <Pill tone="green">Match</Pill>
+                  <Pill
+                    tone={
+                      recommendationType === "inventory_fallback" ? "amber" : "green"
+                    }
+                  >
+                    Match
+                  </Pill>
                 </div>
 
                 <SectionTitle>Zona</SectionTitle>
@@ -622,7 +1321,9 @@ export default function Marketplace() {
                       padding: "10px 12px",
                       borderRadius: 999,
                       border: `1px solid ${
-                        propertyMode === "strict" ? UI.greenBorder : "rgba(255,255,255,0.14)"
+                        propertyMode === "strict"
+                          ? UI.greenBorder
+                          : "rgba(255,255,255,0.14)"
                       }`,
                       background:
                         propertyMode === "strict"
@@ -632,7 +1333,9 @@ export default function Marketplace() {
                       fontWeight: 900,
                     }}
                   >
-                    Solo mi mejor ruta
+                    {recommendationType === "inventory_fallback"
+                      ? "Solo alternativas cercanas"
+                      : "Solo mi mejor ruta"}
                   </button>
 
                   <button
@@ -641,7 +1344,9 @@ export default function Marketplace() {
                       padding: "10px 12px",
                       borderRadius: 999,
                       border: `1px solid ${
-                        propertyMode === "flex" ? UI.greenBorder : "rgba(255,255,255,0.14)"
+                        propertyMode === "flex"
+                          ? UI.greenBorder
+                          : "rgba(255,255,255,0.14)"
                       }`,
                       background:
                         propertyMode === "flex"
@@ -656,28 +1361,136 @@ export default function Marketplace() {
                 </div>
               </div>
 
+              {recommendationType === "future_route" ? (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: 16,
+                    borderRadius: 22,
+                    background: UI.greenBg,
+                    border: `1px solid ${UI.greenBorder}`,
+                    boxShadow: UI.shadowSoft,
+                  }}
+                >
+                  <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>
+                    🎯 Ruta futura viable
+                  </div>
+                  <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
+                    {goalValue != null
+                      ? `Tu meta de ${moneyUSD(goalValue)} sí podría ser viable`
+                      : "Sí existe una ruta futura viable para ti"}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 13, opacity: 0.9, lineHeight: 1.35 }}>
+                    {futureMesesConstruccion != null && futureMesesConstruccion > 0
+                      ? `Hoy todavía no es compra inmediata, pero sí existe una estrategia seria para acercarte en ${futureMesesConstruccion} meses.`
+                      : "Hoy todavía no es compra inmediata, pero sí existe una ruta futura seria para acercarte a una compra."}
+                  </div>
+                </div>
+              ) : null}
+
+              {recommendationType === "inventory_fallback" ? (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: 16,
+                    borderRadius: 22,
+                    background: UI.amberBg,
+                    border: `1px solid ${UI.amberBorder}`,
+                    boxShadow: UI.shadowSoft,
+                  }}
+                >
+                  <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>
+                    🏘 Alternativa cercana
+                  </div>
+                  <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
+                    Hoy no vemos una hipoteca ideal, pero sí una propiedad cercana
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 13, opacity: 0.9, lineHeight: 1.35 }}>
+                    {goalValue != null
+                      ? `Tu meta original sigue siendo ${moneyUSD(goalValue)}, pero hoy vemos mejores opciones concretas cercanas como fallback.`
+                      : "Hoy no vemos una ruta sólida, pero sí una propiedad del marketplace relativamente cercana a tu escenario actual."}
+                  </div>
+                </div>
+              ) : null}
+
               <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
                 {enrichedProps.length ? (
-                  enrichedProps.map((p) => (
-                    <div key={p.id}>
-                      <PropertyCard
-                        property={p}
-                        onClick={() => navigate(`/property/${p.id}`)}
-                      />
+                  enrichedProps.map((p, idx) => {
+                    const propertyId =
+                      p.id || p._id || p._normalizedId || `prop-${idx}`;
 
-                      <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {p.matchedProducts.slice(0, 2).map((prodId) => (
-                          <Pill key={prodId} tone="green">
-                            Compatible con {getPropertyProgramLabel(prodId)}
-                          </Pill>
-                        ))}
+                    const propertyPrice =
+                      p.precio ?? p.price ?? p._normalizedPrice ?? null;
+
+                    const isClosestFallback =
+                      recommendationType === "inventory_fallback" &&
+                      inventoryFallbackProperty &&
+                      propertyId ===
+                        (inventoryFallbackProperty.id ||
+                          inventoryFallbackProperty._id ||
+                          inventoryFallbackProperty._normalizedId);
+
+                    return (
+                      <div key={propertyId}>
+                        <PropertyCard
+                          property={{
+                            ...p,
+                            id: propertyId,
+                            precio: propertyPrice,
+                            zona: p.zona ?? p.ciudad ?? p.city ?? p._normalizedCity ?? null,
+                            evaluacionHipoteca:
+                              p.evaluacionHipoteca ?? p.evaluacionHipotecaHoy ?? null,
+                            evaluacionHipotecaHoy:
+                              p.evaluacionHipotecaHoy ?? p.evaluacionHipoteca ?? null,
+                            evaluacionHipotecaFutura: p.evaluacionHipotecaFutura ?? null,
+                            evaluacionEntrada: p.evaluacionEntrada ?? null,
+                          }}
+                          onClick={() => navigate(`/property/${propertyId}`)}
+                        />
+
+                        {isClosestFallback ? (
+                          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <Pill tone="amber">Alternativa cercana principal</Pill>
+                            {goalValue != null ? (
+                              <Pill>Meta original {moneyUSD(goalValue)}</Pill>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {Array.isArray(p.matchedProducts) && p.matchedProducts.length ? (
+                          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {[...new Set(p.matchedProducts)].slice(0, 2).map((prodId, chipIdx) => (
+                              <Pill key={`${propertyId}-${prodId}-${chipIdx}`} tone="green">
+                                Compatible con {getPropertyProgramLabel(prodId)}
+                              </Pill>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                          <PrimaryButton onClick={() => handleChooseProperty(p)}>
+                            Elegir esta propiedad
+                          </PrimaryButton>
+
+                          <SecondaryButton onClick={() => navigate(`/property/${propertyId}`)}>
+                            Ver detalle
+                          </SecondaryButton>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <EmptyState
-                    title="No encontramos propiedades compatibles en esta zona"
-                    subtitle="Prueba otra zona o cambia a opciones ampliadas para ver más alternativas."
+                    title={
+                      recommendationType === "inventory_fallback"
+                        ? "No encontramos alternativas cercanas en esta zona"
+                        : "No encontramos propiedades compatibles en esta zona"
+                    }
+                    subtitle={
+                      recommendationType === "inventory_fallback"
+                        ? "Prueba otra zona o cambia a opciones ampliadas para ver más alternativas concretas."
+                        : "Prueba otra zona o cambia a opciones ampliadas para ver más alternativas."
+                    }
                     cta="Volver a simular"
                     onClick={() => navigate("/journey/full")}
                   />
@@ -706,106 +1519,181 @@ export default function Marketplace() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 900 }}>
-                      🏦 Tu mejor hipoteca hoy
+                      {primaryMortgageTitle}
                     </div>
+
                     <div style={{ marginTop: 6, fontWeight: 900, fontSize: 18 }}>
-                      {recommendedBank?.banco || pick(snapshot, ["bancoSugerido"]) || "Aún estamos calculando"}
+                      {primaryMortgageName}
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 13, opacity: 0.78, lineHeight: 1.35 }}>
-                      {recommendedBank
-                        ? "Basado en tu perfil, esta es la mejor ruta para empezar tu solicitud."
-                        : "Aquí verás tu mejor recomendación hipotecaria."}
+
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 13,
+                        opacity: 0.78,
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {primaryMortgageSubtitle}
                     </div>
                   </div>
 
-                  {recommendedBank ? (
-                    <Pill tone={probTone(recommendedBank?.probLabel)}>
-                      {recommendedBank?.probLabel
-                        ? `Prob ${recommendedBank.probLabel}`
-                        : recommendedBank?.probScore != null
-                          ? `Score ${recommendedBank.probScore}`
-                          : "Top match"}
-                    </Pill>
-                  ) : (
-                    <Pill>Estimando</Pill>
-                  )}
+                  <Pill tone={primaryMortgagePillTone}>
+                    {primaryMortgagePill}
+                  </Pill>
                 </div>
 
-                {(recommendedBank || mainRate != null || mainCuota != null || mainMonto != null) ? (
+                {useImmediateAsPrimary || useFutureAsPrimary ? (
                   <>
-                    <div
-                      style={{
-                        marginTop: 14,
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-                        gap: 10,
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: 12,
-                          borderRadius: 16,
-                          background: "rgba(0,0,0,0.18)",
-                          border: `1px solid ${UI.borderSoft}`,
-                        }}
-                      >
-                        <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>Tasa</div>
-                        <div style={{ marginTop: 4, fontWeight: 900, fontSize: 15 }}>
-                          {mainRate != null ? formatRate(mainRate) : "—"}
+                    {(mainRate != null || mainCuota != null || mainMonto != null) ? (
+                      <>
+                        <div
+                          style={{
+                            marginTop: 14,
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
+                            gap: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              padding: 12,
+                              borderRadius: 16,
+                              background: "rgba(0,0,0,0.18)",
+                              border: `1px solid ${UI.borderSoft}`,
+                            }}
+                          >
+                            <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
+                              Tasa
+                            </div>
+                            <div style={{ marginTop: 4, fontWeight: 900, fontSize: 15 }}>
+                              {mainRate != null ? formatRate(mainRate) : "—"}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              padding: 12,
+                              borderRadius: 16,
+                              background: "rgba(0,0,0,0.18)",
+                              border: `1px solid ${UI.borderSoft}`,
+                            }}
+                          >
+                            <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
+                              {useFutureAsPrimary ? "Cuota proyectada" : "Cuota"}
+                            </div>
+                            <div style={{ marginTop: 4, fontWeight: 900, fontSize: 15 }}>
+                              {mainCuota != null ? moneyUSD(mainCuota) : "—"}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              padding: 12,
+                              borderRadius: 16,
+                              background: "rgba(0,0,0,0.18)",
+                              border: `1px solid ${UI.borderSoft}`,
+                            }}
+                          >
+                            <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
+                              Monto
+                            </div>
+                            <div style={{ marginTop: 4, fontWeight: 900, fontSize: 15 }}>
+                              {mainMonto != null ? moneyUSD(mainMonto) : "—"}
+                            </div>
+                          </div>
                         </div>
-                      </div>
 
-                      <div
-                        style={{
-                          padding: 12,
-                          borderRadius: 16,
-                          background: "rgba(0,0,0,0.18)",
-                          border: `1px solid ${UI.borderSoft}`,
-                        }}
-                      >
-                        <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>Cuota</div>
-                        <div style={{ marginTop: 4, fontWeight: 900, fontSize: 15 }}>
-                          {mainCuota != null ? moneyUSD(mainCuota) : "—"}
+                        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {mainPlazo != null ? <Pill>{formatYearsFromMonths(mainPlazo)}</Pill> : null}
+                          {useFutureAsPrimary ? (
+                            <Pill>Proyección</Pill>
+                          ) : recommendedBank?.tipoProducto ? (
+                            <Pill>{String(recommendedBank.tipoProducto)}</Pill>
+                          ) : null}
+                          {useFutureAsPrimary && futureProbLabel ? (
+                            <Pill tone={probTone(futureProbLabel)}>
+                              Prob {futureProbLabel}
+                            </Pill>
+                          ) : null}
                         </div>
-                      </div>
 
-                      <div
-                        style={{
-                          padding: 12,
-                          borderRadius: 16,
-                          background: "rgba(0,0,0,0.18)",
-                          border: `1px solid ${UI.borderSoft}`,
-                        }}
-                      >
-                        <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>Monto</div>
-                        <div style={{ marginTop: 4, fontWeight: 900, fontSize: 15 }}>
-                          {mainMonto != null ? moneyUSD(mainMonto) : "—"}
+                        <div
+                          style={{
+                            marginTop: 14,
+                            padding: 14,
+                            borderRadius: 16,
+                            background: "rgba(37,211,166,0.08)",
+                            border: `1px solid ${UI.greenBorder}`,
+                          }}
+                        >
+                          <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>
+                            ¿Por qué te la recomendamos?
+                          </div>
+
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {primaryReasons.map((reason, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  fontSize: 13,
+                                  lineHeight: 1.35,
+                                  opacity: 0.92,
+                                }}
+                              >
+                                ✓ {reason}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {mainPlazo != null ? <Pill>{formatYearsFromMonths(mainPlazo)}</Pill> : null}
-                      {recommendedBank?.tipoProducto ? (
-                        <Pill>{String(recommendedBank.tipoProducto)}</Pill>
-                      ) : null}
-                    </div>
-
+                        <div style={{ marginTop: 14 }}>
+                          {useFutureAsPrimary ? (
+                            <PrimaryButton onClick={() => setTab("props")}>
+                              Ver mi ruta futura en propiedades
+                            </PrimaryButton>
+                          ) : (
+                            <PrimaryButton
+                              onClick={() =>
+                                navigate("/asesor", {
+                                  state: {
+                                    selectedBank: recommendedBank,
+                                    source: "match_hipotecas",
+                                  },
+                                })
+                              }
+                            >
+                              Iniciar solicitud con esta opción
+                            </PrimaryButton>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <EmptyState
+                        title="Aún no tenemos una hipoteca recomendada"
+                        subtitle="Vuelve a simular para recalcular tu match."
+                        cta="Volver a simular"
+                        onClick={() => navigate("/journey/full")}
+                      />
+                    )}
+                  </>
+                ) : useInventoryAsPrimary ? (
+                  <>
                     <div
                       style={{
                         marginTop: 14,
                         padding: 14,
                         borderRadius: 16,
-                        background: "rgba(37,211,166,0.08)",
-                        border: `1px solid ${UI.greenBorder}`,
+                        background: "rgba(245,158,11,0.08)",
+                        border: `1px solid ${UI.amberBorder}`,
                       }}
                     >
                       <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>
-                        ¿Por qué te la recomendamos?
+                        ¿Qué significa esto?
                       </div>
 
                       <div style={{ display: "grid", gap: 8 }}>
-                        {getBankReasons(recommendedBank, snapshot, recommendedScenario, bestMortgage).map((reason, idx) => (
+                        {primaryReasons.map((reason, idx) => (
                           <div
                             key={idx}
                             style={{
@@ -821,24 +1709,15 @@ export default function Marketplace() {
                     </div>
 
                     <div style={{ marginTop: 14 }}>
-                      <PrimaryButton
-                        onClick={() =>
-                          navigate("/asesor", {
-                            state: {
-                              selectedBank: recommendedBank,
-                              source: "match_hipotecas",
-                            },
-                          })
-                        }
-                      >
-                        Iniciar solicitud con esta opción
+                      <PrimaryButton onClick={() => setTab("props")}>
+                        Ver alternativas cercanas
                       </PrimaryButton>
                     </div>
                   </>
                 ) : (
                   <EmptyState
-                    title="Aún no tenemos una hipoteca recomendada"
-                    subtitle="Vuelve a simular para recalcular tu match."
+                    title="Hoy todavía no hay una ruta clara"
+                    subtitle="No vemos una hipoteca viable hoy, ni una ruta futura suficientemente sólida, ni una alternativa cercana fuerte en este momento."
                     cta="Volver a simular"
                     onClick={() => navigate("/journey/full")}
                   />
@@ -854,7 +1733,13 @@ export default function Marketplace() {
                   boxShadow: UI.shadowSoft,
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
                   <div>
                     <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 900 }}>
                       Otras opciones
@@ -891,8 +1776,8 @@ export default function Marketplace() {
                               {b?.probLabel
                                 ? `Prob ${b.probLabel}`
                                 : b?.probScore != null
-                                  ? `Score ${b.probScore}`
-                                  : "Estimación"}
+                                ? `Score ${b.probScore}`
+                                : "Estimación"}
                             </Pill>
                           </div>
 
@@ -901,7 +1786,7 @@ export default function Marketplace() {
                             {" • "}
                             {tasaAlt != null ? `Tasa: ${formatRate(tasaAlt)}` : "Tasa: —"}
                             {" • "}
-                            {cuotaAlt != null ? `Cuota: ${moneyUSD(cuotaAlt)}` : "Cuota: —"}
+                            {cuotaAlt != null && cuotaAlt > 0 ? `Cuota: ${moneyUSD(cuotaAlt)}` : "Cuota: —"}
                           </div>
                         </div>
                       );

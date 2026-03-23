@@ -13,6 +13,11 @@ export const mockProperties = [
     ciudadZona: "Centro de Quito",
     sector: "San Blas",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 24,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 1000,
     matchReason: "precio",
     matchBadge: "Entrada fácil",
     imagen:
@@ -26,6 +31,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_0b",
     titulo: "Departamento VIS Sol del Norte",
@@ -38,6 +44,11 @@ export const mockProperties = [
     ciudadZona: "Norte de Quito",
     sector: "Carcelén",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 24,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 1000,
     matchReason: "precio_entrada",
     matchBadge: "Recomendado",
     imagen:
@@ -51,6 +62,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_0c",
     titulo: "Departamento Primera Compra Quito",
@@ -63,6 +75,11 @@ export const mockProperties = [
     ciudadZona: "Norte de Quito",
     sector: "Ponceano",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 24,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 1000,
     matchReason: "precio_entrada",
     matchBadge: "Buen fit",
     imagen:
@@ -76,6 +93,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_0e",
     titulo: "Departamento Valle Inicial",
@@ -88,6 +106,11 @@ export const mockProperties = [
     ciudadZona: "Valle de Los Chillos",
     sector: "Conocoto",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 20,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 1200,
     matchReason: "entrada",
     matchBadge: "Familiar",
     imagen:
@@ -95,12 +118,13 @@ export const mockProperties = [
     descripcion:
       "Opción de primera vivienda con más metraje, ideal para quienes quieren equilibrio entre precio y espacio.",
     mortgageProfile: {
-      productIds: ["VIS", "PRIVATE"],
+      productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
       requiresNewConstruction: true,
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_2",
     titulo: "Suite Metropolitana",
@@ -113,6 +137,11 @@ export const mockProperties = [
     ciudadZona: "Centro Norte",
     sector: "La Mariscal",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 18,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 1500,
     matchReason: "precio",
     matchBadge: "Accesible",
     imagen:
@@ -120,12 +149,13 @@ export const mockProperties = [
     descripcion:
       "Suite funcional y bien ubicada para quienes buscan entrar rápido a su primera propiedad con una cuota manejable.",
     mortgageProfile: {
-      productIds: ["VIS", "PRIVATE"],
+      productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
       requiresNewConstruction: true,
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_1",
     titulo: "Departamento Aura Norte",
@@ -138,6 +168,11 @@ export const mockProperties = [
     ciudadZona: "Norte de Quito",
     sector: "La Carolina",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 24,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 2000,
     matchReason: "precio_entrada",
     matchBadge: "Buen match",
     imagen:
@@ -145,12 +180,13 @@ export const mockProperties = [
     descripcion:
       "Departamento moderno de 2 dormitorios en zona estratégica, ideal para primera vivienda.",
     mortgageProfile: {
-      productIds: ["VIS", "VIP", "PRIVATE"],
+      productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
       requiresNewConstruction: true,
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_5",
     titulo: "Residencias Parque Central",
@@ -163,6 +199,11 @@ export const mockProperties = [
     ciudadZona: "Centro Norte",
     sector: "Iñaquito",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 24,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 2500,
     matchReason: "precio_entrada",
     matchBadge: "Recomendado",
     imagen:
@@ -176,6 +217,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_11",
     titulo: "Departamento Mirador del Valle",
@@ -188,6 +230,11 @@ export const mockProperties = [
     ciudadZona: "Tumbaco",
     sector: "Intervalles",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 22,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 2200,
     matchReason: "precio_entrada",
     matchBadge: "Recomendado",
     imagen:
@@ -201,6 +248,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_4",
     titulo: "Conjunto Bosque Urbano",
@@ -213,6 +261,11 @@ export const mockProperties = [
     ciudadZona: "Norte de Quito",
     sector: "El Bosque",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 18,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 3000,
     matchReason: "programa",
     matchBadge: "Top match",
     imagen:
@@ -226,6 +279,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_0d",
     titulo: "Suite Urbana Norte",
@@ -238,6 +292,11 @@ export const mockProperties = [
     ciudadZona: "Centro Norte",
     sector: "Rumipamba",
     proyectoNuevo: false,
+    tipoEntrega: "inmediata",
+    permiteEntradaEnCuotas: false,
+    mesesConstruccionRestantes: 0,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 0,
     matchReason: "precio",
     matchBadge: "Accesible",
     imagen:
@@ -251,6 +310,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_10",
     titulo: "Loft Urbano Quito",
@@ -263,6 +323,11 @@ export const mockProperties = [
     ciudadZona: "Centro Norte",
     sector: "República del Salvador",
     proyectoNuevo: false,
+    tipoEntrega: "inmediata",
+    permiteEntradaEnCuotas: false,
+    mesesConstruccionRestantes: 0,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 0,
     matchReason: "precio",
     matchBadge: "Entrada fácil",
     imagen:
@@ -276,6 +341,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_3",
     titulo: "Departamento Valle View",
@@ -288,6 +354,11 @@ export const mockProperties = [
     ciudadZona: "Valle de Los Chillos",
     sector: "San Rafael",
     proyectoNuevo: false,
+    tipoEntrega: "inmediata",
+    permiteEntradaEnCuotas: false,
+    mesesConstruccionRestantes: 0,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 0,
     matchReason: "entrada",
     matchBadge: "Match familiar",
     imagen:
@@ -301,6 +372,7 @@ export const mockProperties = [
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_7",
     titulo: "Cumbayá Smart Suite",
@@ -313,6 +385,11 @@ export const mockProperties = [
     ciudadZona: "Cumbayá",
     sector: "San Juan",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 16,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 3000,
     matchReason: "precio",
     matchBadge: "Estilo de vida",
     imagen:
@@ -320,12 +397,13 @@ export const mockProperties = [
     descripcion:
       "Suite premium en Cumbayá para usuarios que priorizan zona, estilo de vida y potencial de renta futura.",
     mortgageProfile: {
-      productIds: ["BIESS_STD", "PRIVATE"],
+      productIds: ["PRIVATE"],
       requiresFirstHome: false,
       requiresNewConstruction: false,
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_8",
     titulo: "Departamento Terra Cumbayá",
@@ -338,6 +416,11 @@ export const mockProperties = [
     ciudadZona: "Cumbayá",
     sector: "Lumbisí",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 18,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 3500,
     matchReason: "entrada",
     matchBadge: "Premium",
     imagen:
@@ -345,12 +428,13 @@ export const mockProperties = [
     descripcion:
       "Departamento contemporáneo con excelente diseño, ideal para perfiles que buscan mejor calidad de vida en el valle.",
     mortgageProfile: {
-      productIds: ["BIESS_STD", "PRIVATE"],
+      productIds: ["PRIVATE"],
       requiresFirstHome: false,
       requiresNewConstruction: false,
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_6",
     titulo: "Casa Jardín Tumbaco",
@@ -363,6 +447,11 @@ export const mockProperties = [
     ciudadZona: "Tumbaco",
     sector: "La Morita",
     proyectoNuevo: false,
+    tipoEntrega: "inmediata",
+    permiteEntradaEnCuotas: false,
+    mesesConstruccionRestantes: 0,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 0,
     matchReason: "cuota",
     matchBadge: "Upsize",
     imagen:
@@ -370,12 +459,13 @@ export const mockProperties = [
     descripcion:
       "Casa cómoda con jardín y más espacio interior, pensada para familias que priorizan amplitud y tranquilidad.",
     mortgageProfile: {
-      productIds: ["BIESS_STD", "PRIVATE"],
+      productIds: ["PRIVATE"],
       requiresFirstHome: false,
       requiresNewConstruction: false,
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_9",
     titulo: "Casa Senderos de Tumbaco",
@@ -388,6 +478,11 @@ export const mockProperties = [
     ciudadZona: "Tumbaco",
     sector: "Hilacril",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 20,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 4000,
     matchReason: "cuota",
     matchBadge: "Familiar",
     imagen:
@@ -395,12 +490,13 @@ export const mockProperties = [
     descripcion:
       "Casa de proyecto nuevo en Tumbaco, ideal para familia que quiere más área y entorno residencial.",
     mortgageProfile: {
-      productIds: ["BIESS_STD", "PRIVATE"],
+      productIds: ["PRIVATE"],
       requiresFirstHome: false,
       requiresNewConstruction: false,
       requiresMiduviQualifiedProject: false,
     },
   },
+
   {
     id: "prop_12",
     titulo: "Edificio Panorama Bellavista",
@@ -413,6 +509,11 @@ export const mockProperties = [
     ciudadZona: "Norte de Quito",
     sector: "Bellavista",
     proyectoNuevo: true,
+    tipoEntrega: "construccion",
+    permiteEntradaEnCuotas: true,
+    mesesConstruccionRestantes: 18,
+    porcentajeEntradaRequerida: 0.10,
+    reservaMinima: 3000,
     matchReason: "programa",
     matchBadge: "Muy buen fit",
     imagen:

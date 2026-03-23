@@ -1,19 +1,35 @@
 // src/lib/api.js
 import { getCustomerToken } from "./customerSession.js";
 
-// ✅ Base URL del backend
-// - Prioridad 1: VITE_API_BASE (env)
-// - Prioridad 2: window.__HL_API_BASE (runtime)
-// - Default: Render
 function normalizePath(path) {
   const p = String(path || "").trim();
   if (!p) return "/";
   return p.startsWith("/") ? p : `/${p}`;
 }
 
-export const API_BASE = "http://127.0.0.1:4000";
-console.log("🚨 API FILE NUEVO CARGADO");
-console.log("🚨 API_BASE NUEVO =", API_BASE);
+function resolveApiBase() {
+  const envBase =
+    typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_API_BASE
+      ? String(import.meta.env.VITE_API_BASE).trim()
+      : "";
+
+  const runtimeBase =
+    typeof window !== "undefined" && window.__HL_API_BASE
+      ? String(window.__HL_API_BASE).trim()
+      : "";
+
+  if (envBase) return envBase.replace(/\/+$/, "");
+  if (runtimeBase) return runtimeBase.replace(/\/+$/, "");
+
+  return "https://habitalibre.com";
+}
+
+export const API_BASE = resolveApiBase();
+
+console.log("✅ API FILE CARGADO");
+console.log("✅ API_BASE =", API_BASE);
 
 // --------------------
 // Helpers
@@ -50,10 +66,8 @@ function isRetryableError(e) {
   const msg = String(e?.message || "").toLowerCase();
   const name = String(e?.name || "").toLowerCase();
 
-  // AbortController timeout -> reintentar
   if (name.includes("abort")) return true;
 
-  // Android WebView / red
   if (
     msg.includes("failed to fetch") ||
     msg.includes("load failed") ||
@@ -67,13 +81,9 @@ function isRetryableError(e) {
 }
 
 function isRetryableStatus(status) {
-  // 408/429 y 5xx suelen ser temporales
   return status === 408 || status === 429 || (status >= 500 && status <= 599);
 }
 
-// --------------------
-// fetch con timeout
-// --------------------
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -86,16 +96,12 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
-// --------------------
-// Request central
-// --------------------
 async function request(
   path,
   { method = "GET", body, headers = {}, token = "" } = {}
 ) {
   const url = `${API_BASE}${normalizePath(path)}`;
 
-  // ✅ AUTO-TOKEN: si no pasas token manual, usamos el de customerSession (hl_customer_token)
   const autoToken = token || getCustomerToken() || "";
 
   const finalHeaders = {
@@ -111,9 +117,6 @@ async function request(
     ...(body ? { body: JSON.stringify(body) } : {}),
   };
 
-  // ✅ Retries más “móviles”:
-  // - 3 intentos, timeout 15s por intento
-  // - Backoff ligero (0ms, 1200ms, 2500ms)
   const delays = [0, 1200, 2500];
   const timeoutPerAttempt = 15000;
 
@@ -136,7 +139,6 @@ async function request(
             data = { ok: false, raw: rawText };
           }
         } else {
-          // a veces Render/Cloudflare devuelven HTML o texto
           try {
             data = JSON.parse(rawText);
           } catch {
@@ -157,7 +159,6 @@ async function request(
         err.status = res.status;
         err.data = data;
 
-        // 🔁 Reintentar si status es temporal
         if (isRetryableStatus(res.status) && i < delays.length - 1) {
           lastErr = err;
           continue;
@@ -170,14 +171,12 @@ async function request(
     } catch (e) {
       lastErr = e;
 
-      // 🔁 Reintentar solo si parece fallo temporal de red/timeout
       if (isRetryableError(e) && i < delays.length - 1) continue;
 
       break;
     }
   }
 
-  // Mensaje final más útil
   const msg = String(lastErr?.message || "");
 
   if (
@@ -199,9 +198,6 @@ async function request(
   throw lastErr || new Error("Error de red");
 }
 
-// --------------------
-// API pública
-// --------------------
 export async function apiGet(path, token = "", headers = {}) {
   return request(path, { method: "GET", token, headers });
 }

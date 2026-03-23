@@ -165,13 +165,13 @@ export default function Ruta() {
     nextStepKey === "solicitudEnviada" ? "Enviar solicitud" :
     "Ver estado";
 
-  const goNext = () => {
-    if (nextStepKey === "matchExplorado") nav("/match");
-    else if (nextStepKey === "propiedadElegida") nav("/match");
-    else if (nextStepKey === "docsSubidos") nav("/documentos");
-    else if (nextStepKey === "solicitudEnviada") nav("/solicitud");
-    else nav("/estado");
-  };
+const goNext = () => {
+  if (nextStepKey === "matchExplorado") nav("/marketplace");
+  else if (nextStepKey === "propiedadElegida") nav("/marketplace");
+  else if (nextStepKey === "docsSubidos") nav("/ruta");
+  else if (nextStepKey === "solicitudEnviada") nav("/ruta");
+  else nav("/ruta");
+};
 
   return (
     <Screen>
@@ -225,7 +225,7 @@ export default function Ruta() {
             </>
           }
           ctaLabel="Ver mi resultado"
-          onClick={() => nav("/resultado")}
+          onClick={() => nav("/")}
           hint="Tip: este es el paso más importante. Lo demás es elegir la mejor opción."
         />
 
@@ -241,7 +241,7 @@ export default function Ruta() {
             </>
           }
           ctaLabel={propsCount ? `Ver ${propsCount} propiedades` : "Ir a Match"}
-          onClick={() => nav("/match")}
+          onClick={() => nav("/marketplace")}
           hint={
             cuota && maxCompra
               ? <>Tu rango: <b style={{ color: "rgba(226,232,240,0.95)" }}>{moneyUSD(maxCompra)}</b> · cuotas desde <b style={{ color: "rgba(226,232,240,0.95)" }}>{moneyUSD(cuota)}</b>.</>
@@ -256,7 +256,7 @@ export default function Ruta() {
           status={flags.propiedadElegida ? "done" : flags.matchExplorado ? "pending" : "locked"}
           rightChips={<Chip tone={flags.propiedadElegida ? "good" : "neutral"}>{flags.propiedadElegida ? "Elegida" : "Pendiente"}</Chip>}
           ctaLabel="Elegir en Match"
-          onClick={() => nav("/match")}
+          onClick={() => nav("/marketplace")}
           disabled={!flags.matchExplorado}
           hint="Elegir una propiedad acelera el proceso porque la solicitud se arma con datos exactos."
         />
@@ -268,7 +268,7 @@ export default function Ruta() {
           status={flags.docsSubidos ? "done" : flags.propiedadElegida ? "pending" : "locked"}
           rightChips={<Chip tone={flags.docsSubidos ? "good" : "neutral"}>{flags.docsSubidos ? "Listo" : "Bloqueado"}</Chip>}
           ctaLabel="Ir a Docs"
-          onClick={() => nav("/documentos")}
+          onClick={() => nav("/ruta")}
           disabled={!flags.propiedadElegida}
           hint="Mientras más completo esté esto, más rápido avanzas."
         />
@@ -280,7 +280,7 @@ export default function Ruta() {
           status={flags.solicitudEnviada ? "done" : flags.docsSubidos ? "pending" : "locked"}
           rightChips={<Chip tone={flags.solicitudEnviada ? "good" : "neutral"}>{flags.solicitudEnviada ? "Enviada" : "Bloqueado"}</Chip>}
           ctaLabel="Enviar"
-          onClick={() => nav("/solicitud")}
+          onClick={() => nav("/ruta")}
           disabled={!flags.docsSubidos}
           hint="Aquí empieza el proceso real. Te guiamos paso a paso."
         />
@@ -292,7 +292,7 @@ export default function Ruta() {
           status={flags.aprobacion ? "done" : flags.solicitudEnviada ? "pending" : "locked"}
           rightChips={<Chip tone={flags.aprobacion ? "good" : "neutral"}>{flags.aprobacion ? "Aprobado" : "Bloqueado"}</Chip>}
           ctaLabel="Ver estado"
-          onClick={() => nav("/estado")}
+          onClick={() => nav("/ruta")}
           disabled={!flags.solicitudEnviada}
           hint="Te mostramos el estado para que no tengas que perseguir a nadie."
         />

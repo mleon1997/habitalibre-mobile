@@ -74,22 +74,31 @@ const onlyDigits = (v) => String(v ?? "").replace(/[^\d]/g, "");
 function normalizePhone(raw) {
   const d = onlyDigits(raw);
   if (!d) return "";
-  // +5939xxxxxxx -> 5939xxxxxxx
   if (d.startsWith("593")) return d;
-  // 09xxxxxxxx -> 09xxxxxxxx
   if (d.startsWith("09") && d.length === 10) return d;
-  // si el usuario pone 9xxxxxxxx (sin 0), lo convertimos a 09xxxxxxxx
   if (d.length === 9 && d.startsWith("9")) return `0${d}`;
   return d;
 }
 
 function isValidEcPhone(norm) {
-  // formatos típicos:
-  // 09xxxxxxxx (10) o 5939xxxxxxx (12 aprox)
   if (!norm) return false;
   if (norm.startsWith("09") && norm.length === 10) return true;
   if (norm.startsWith("593") && norm.length >= 11 && norm.length <= 13) return true;
   return false;
+}
+
+const LEGAL_LINKS = {
+  privacidad: "https://www.habitalibre.com/#/privacidad",
+  terminos: "https://www.habitalibre.com/#/terminos",
+  cookies: "https://www.habitalibre.com/#/cookies",
+};
+
+function openExternal(url) {
+  try {
+    window.open(url, "_blank", "noopener,noreferrer");
+  } catch {
+    window.location.href = url;
+  }
 }
 
 export default function Register() {
@@ -97,12 +106,12 @@ export default function Register() {
   const location = useLocation();
 
   const [nombre, setNombre] = useState("");
-  const [apellido, setApellido] = useState(""); // ✅ nuevo para backend
-  const [telefono, setTelefono] = useState(""); // ✅ obligatorio
+  const [apellido, setApellido] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [accepted, setAccepted] = useState(false); // ✅ política privacidad
+  const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -134,7 +143,7 @@ export default function Register() {
       const payload = {
         nombre: nombre.trim(),
         apellido: apellido.trim(),
-        telefono: phoneNormalized, // obligatorio
+        telefono: phoneNormalized,
         email: email.trim().toLowerCase(),
         password,
         acceptedPrivacy: true,
@@ -156,10 +165,6 @@ export default function Register() {
       setBusy(false);
     }
   }
-
-  function openPrivacy() {
-  window.open("https://habitalibre.com/#/privacidad", "_blank");
-}
 
   return (
     <div
@@ -254,7 +259,6 @@ export default function Register() {
           type="password"
         />
 
-        {/* ✅ Checkbox privacidad */}
         <div
           style={{
             marginTop: 14,
@@ -273,11 +277,27 @@ export default function Register() {
             onChange={(e) => setAccepted(e.target.checked)}
             style={{ marginTop: 3 }}
           />
-          <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.35 }}>
-            Acepto la{" "}
+          <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.45 }}>
+            Acepto los{" "}
             <button
               type="button"
-              onClick={openPrivacy}
+              onClick={() => openExternal(LEGAL_LINKS.terminos)}
+              style={{
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                color: "#25d3a6",
+                fontWeight: 900,
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              términos de uso
+            </button>{" "}
+            y la{" "}
+            <button
+              type="button"
+              onClick={() => openExternal(LEGAL_LINKS.privacidad)}
               style={{
                 padding: 0,
                 border: "none",
@@ -290,8 +310,29 @@ export default function Register() {
             >
               política de privacidad
             </button>
-            .
+            . Entiendo que HabitaLibre usa esta información para ayudarme a explorar
+            opciones de precalificación y acompañar mi proceso hipotecario.
           </div>
+        </div>
+
+        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.62, lineHeight: 1.4 }}>
+          También puedes revisar nuestra{" "}
+          <button
+            type="button"
+            onClick={() => openExternal(LEGAL_LINKS.cookies)}
+            style={{
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              color: "#9ad7c4",
+              fontWeight: 800,
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            política de cookies
+          </button>
+          .
         </div>
 
         {!!err && (
@@ -347,8 +388,10 @@ export default function Register() {
           Ya tengo cuenta
         </button>
 
-        <div style={{ marginTop: 12, fontSize: 11, opacity: 0.65, lineHeight: 1.35 }}>
-          Usamos tu WhatsApp solo para ayudarte con tu proceso hipotecario.
+        <div style={{ marginTop: 12, fontSize: 11, opacity: 0.65, lineHeight: 1.45 }}>
+          Usamos tu WhatsApp y tus datos de perfil únicamente para ayudarte con tu
+          proceso hipotecario, mostrarte resultados referenciales y acompañarte mejor
+          en tu camino hacia tu vivienda.
         </div>
       </Card>
     </div>

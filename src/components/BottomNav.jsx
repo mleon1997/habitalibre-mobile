@@ -25,10 +25,10 @@ export default function BottomNav({ docsBadge = 0 }) {
 
   const tabs = [
     { path: "/", label: "Home", icon: "🏠" },
-    { path: "/journey", label: "Simular", icon: "🧮" },
+    { path: "/journey", label: "Mi Capacidad", icon: "🧮" },
     { path: "/marketplace", label: "Match", icon: "🏘️" },
-    // ✅ Ruta canónica
-    { path: "/ruta", label: "Ruta", icon: "🧭", badge: docsBadge, protected: true },
+    { path: "/propiedad-ideal", label: "Mi casa", icon: "🏡", protected: true },
+    { path: "/perfil", label: "Perfil", icon: "👤", protected: true },
   ];
 
   return (
@@ -53,7 +53,7 @@ export default function BottomNav({ docsBadge = 0 }) {
           background: "rgba(255,255,255,0.06)",
           border: "1px solid rgba(255,255,255,0.10)",
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(5, 1fr)",
           alignItems: "center",
           boxShadow: "0 12px 34px rgba(0,0,0,0.35)",
           overflow: "hidden",
@@ -93,14 +93,16 @@ export default function BottomNav({ docsBadge = 0 }) {
                     flexDirection: "column",
                     alignItems: "center",
                     gap: 4,
-                    padding: "8px 10px",
+                    padding: "8px 8px",
                     borderRadius: 14,
                     transition: "all 160ms ease",
                     background: active ? "rgba(37,211,166,0.14)" : "transparent",
-                    border: active ? "1px solid rgba(37,211,166,0.28)" : "1px solid transparent",
+                    border: active
+                      ? "1px solid rgba(37,211,166,0.28)"
+                      : "1px solid transparent",
                     boxShadow: active ? "0 8px 18px rgba(37,211,166,0.14)" : "none",
                     transform: active ? "translateY(-1px)" : "translateY(0px)",
-                    minWidth: 72,
+                    minWidth: 58,
                     position: "relative",
                     opacity: locked ? 0.85 : 1,
                   }}
@@ -121,7 +123,7 @@ export default function BottomNav({ docsBadge = 0 }) {
                       </span>
                     ) : null}
 
-                    {!!tab.badge && tab.badge > 0 ? (
+                    {tab.path === "/perfil" && !!docsBadge && docsBadge > 0 ? (
                       <span
                         style={{
                           position: "absolute",
@@ -141,17 +143,19 @@ export default function BottomNav({ docsBadge = 0 }) {
                           border: "1px solid rgba(0,0,0,0.25)",
                         }}
                       >
-                        {tab.badge > 9 ? "9+" : tab.badge}
+                        {docsBadge > 9 ? "9+" : docsBadge}
                       </span>
                     ) : null}
                   </div>
 
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: 10.5,
                       fontWeight: active ? 900 : 700,
                       color: active ? "#25d3a6" : "rgba(255,255,255,0.62)",
                       letterSpacing: -0.2,
+                      textAlign: "center",
+                      lineHeight: 1.1,
                     }}
                   >
                     {tab.label}

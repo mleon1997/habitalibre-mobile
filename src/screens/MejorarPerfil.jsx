@@ -26,10 +26,41 @@ function saveJSON(key, val) {
 /* ---------------- ui primitives ---------------- */
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
-function Pill({ children }) {
-  // ✅ evita crash si children es objeto (Score/Prob)
+const UI = {
+  bg: "radial-gradient(1200px 600px at 30% 0%, #123a7a 0%, #071024 45%, #0b1a35 100%)",
+  card: "rgba(255,255,255,0.06)",
+  cardSoft: "rgba(255,255,255,0.05)",
+  border: "rgba(255,255,255,0.10)",
+  borderSoft: "rgba(255,255,255,0.08)",
+  green: "#25d3a6",
+  greenBg: "rgba(37,211,166,0.10)",
+  greenBorder: "rgba(37,211,166,0.28)",
+  amberBg: "rgba(255,193,7,0.10)",
+  amberBorder: "rgba(255,193,7,0.25)",
+  redBg: "rgba(244,63,94,0.10)",
+  redBorder: "rgba(244,63,94,0.25)",
+  shadow: "0 10px 30px rgba(0,0,0,0.25)",
+};
+
+function Pill({ children, tone = "neutral" }) {
   const safe =
-    typeof children === "object" && children !== null ? JSON.stringify(children) : children;
+    typeof children === "object" && children !== null
+      ? JSON.stringify(children)
+      : children;
+
+  const bg =
+    tone === "green"
+      ? "rgba(37,211,166,0.12)"
+      : tone === "amber"
+      ? "rgba(255,193,7,0.12)"
+      : "rgba(255,255,255,0.08)";
+
+  const border =
+    tone === "green"
+      ? "1px solid rgba(37,211,166,0.25)"
+      : tone === "amber"
+      ? "1px solid rgba(255,193,7,0.25)"
+      : "1px solid rgba(255,255,255,0.10)";
 
   return (
     <span
@@ -37,9 +68,10 @@ function Pill({ children }) {
         fontSize: 12,
         padding: "6px 10px",
         borderRadius: 999,
-        background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        background: bg,
+        border,
         whiteSpace: "nowrap",
+        fontWeight: 800,
       }}
     >
       {safe}
@@ -47,16 +79,17 @@ function Pill({ children }) {
   );
 }
 
-function Card({ children }) {
+function Card({ children, style }) {
   return (
     <div
       style={{
         marginTop: 14,
         padding: 16,
         borderRadius: 22,
-        background: "rgba(255,255,255,0.06)",
-        border: "1px solid rgba(255,255,255,0.10)",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+        background: UI.card,
+        border: `1px solid ${UI.border}`,
+        boxShadow: UI.shadow,
+        ...style,
       }}
     >
       {children}
@@ -73,7 +106,7 @@ function TabButton({ active, children, onClick }) {
         padding: 12,
         borderRadius: 14,
         border: active
-          ? "1px solid rgba(37,211,166,0.35)"
+          ? `1px solid ${UI.greenBorder}`
           : "1px solid rgba(255,255,255,0.14)",
         background: active ? "rgba(37,211,166,0.14)" : "rgba(255,255,255,0.06)",
         color: "white",
@@ -90,6 +123,61 @@ function fmtUSD(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return "—";
   return `$${Math.round(x).toLocaleString("es-EC")}`;
+}
+
+function SectionTitle({ title, subtitle }) {
+  return (
+    <div>
+      <div style={{ fontWeight: 900, fontSize: 15 }}>{title}</div>
+      {subtitle ? (
+        <div
+          style={{
+            marginTop: 6,
+            opacity: 0.8,
+            fontSize: 13,
+            lineHeight: 1.35,
+          }}
+        >
+          {subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function KpiBox({ label, value, helper, tone = "neutral" }) {
+  const bg =
+    tone === "green"
+      ? "rgba(37,211,166,0.10)"
+      : tone === "amber"
+      ? "rgba(255,193,7,0.10)"
+      : "rgba(255,255,255,0.06)";
+
+  const border =
+    tone === "green"
+      ? "1px solid rgba(37,211,166,0.22)"
+      : tone === "amber"
+      ? "1px solid rgba(255,193,7,0.22)"
+      : "1px solid rgba(255,255,255,0.10)";
+
+  return (
+    <div
+      style={{
+        padding: 12,
+        borderRadius: 18,
+        background: bg,
+        border,
+      }}
+    >
+      <div style={{ fontSize: 12, opacity: 0.72 }}>{label}</div>
+      <div style={{ marginTop: 6, fontSize: 20, fontWeight: 900 }}>{value}</div>
+      {helper ? (
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.68, lineHeight: 1.3 }}>
+          {helper}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /* ---------------- helpers (data) ---------------- */
@@ -118,11 +206,11 @@ function safeMoney(n) {
 }
 
 /**
- * ✅ Normaliza "probability" venga como:
- * - number (0.64 o 64)
- * - string ("64%" o "0.64")
- * - object ({ total, bandas } u otros)
- * - array (tomamos el primer valor útil)
+ * Soporta probability como:
+ * - number
+ * - string
+ * - object
+ * - array
  */
 function normalizeProbability(prob) {
   const clampPct = (p) => {
@@ -157,7 +245,7 @@ function normalizeProbability(prob) {
       const direct =
         parseAnyToPct(x.pct, depth + 1) ??
         parseAnyToPct(x.value, depth + 1) ??
-        parseAnyToPct(x.total, depth + 1) ?? // ✅ tu caso { total, bandas }
+        parseAnyToPct(x.total, depth + 1) ??
         parseAnyToPct(x.prob, depth + 1) ??
         parseAnyToPct(x.probabilidad, depth + 1) ??
         parseAnyToPct(x.aprobacion, depth + 1) ??
@@ -184,8 +272,24 @@ function normalizeProbability(prob) {
     : { label: `${Math.round(pctValue)}%`, pct: pctValue };
 }
 
+function probabilityTone(pct) {
+  if (pct == null) return "neutral";
+  if (pct >= 75) return "green";
+  if (pct >= 50) return "amber";
+  return "neutral";
+}
+
+function probabilityHint(pct) {
+  if (pct == null) return "Todavía no tenemos suficiente información para interpretar esta probabilidad.";
+  if (pct >= 75) return "Tu perfil va bien. Ahora el enfoque es optimizar cuota, entrada y documentos.";
+  if (pct >= 50) return "Tienes potencial, pero todavía hay palancas claras para fortalecer tu perfil.";
+  return "Tu perfil necesita mejoras antes de tener una ruta fuerte de aprobación.";
+}
+
 function ProbabilityBar({ valuePct, hint }) {
-  const v = valuePct == null ? null : Math.max(0, Math.min(100, Number(valuePct)));
+  const v =
+    valuePct == null ? null : Math.max(0, Math.min(100, Number(valuePct)));
+
   return (
     <div
       style={{
@@ -220,14 +324,21 @@ function ProbabilityBar({ valuePct, hint }) {
             height: "100%",
             width: v == null ? "0%" : `${v}%`,
             borderRadius: 999,
-            background: "#25d3a6",
+            background: UI.green,
             transition: "width 250ms ease",
           }}
         />
       </div>
 
       {hint ? (
-        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75, lineHeight: 1.25 }}>
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 12,
+            opacity: 0.75,
+            lineHeight: 1.25,
+          }}
+        >
           {hint}
         </div>
       ) : null}
@@ -236,9 +347,7 @@ function ProbabilityBar({ valuePct, hint }) {
 }
 
 /**
- * Slider fintech “usable”:
- * - rango default configurable
- * - step dinámico para apuntar exacto en rangos bajos
+ * Slider fintech usable
  */
 function SliderMoney({
   label,
@@ -315,7 +424,7 @@ function SliderMoney({
       </div>
 
       <div style={{ marginTop: 10, fontSize: 11, opacity: 0.65 }}>
-        Tip: cerca de valores bajos el slider usa pasos finos para apuntar exacto.
+        Tip: cerca de valores bajos el slider usa pasos finos para apuntar mejor.
       </div>
     </div>
   );
@@ -333,7 +442,6 @@ export default function MejorarPerfil() {
   const [journey, setJourney] = useState(() => loadJSON(LS_JOURNEY));
   const [snapshot, setSnapshot] = useState(() => loadJSON(LS_SNAPSHOT));
 
-  // ✅ sliders (default: lo que haya en journey o valores razonables)
   const [ingreso, setIngreso] = useState(() => {
     const j = loadJSON(LS_JOURNEY);
     const f = j?.form || {};
@@ -374,21 +482,23 @@ export default function MejorarPerfil() {
   const [err, setErr] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
 
-  // ✅ salida resumida para mostrar impacto
   const cuotaEstimada = pick(snapshot, ["cuotaEstimada"]);
-  const precioMaxVivienda = pick(snapshot, ["precioMaxVivienda", "precioMax", "valorMaxVivienda"]);
+  const precioMaxVivienda = pick(snapshot, [
+    "precioMaxVivienda",
+    "precioMax",
+    "valorMaxVivienda",
+  ]);
   const dti = pick(snapshot, ["dtiConHipoteca", "dti"]);
   const scoreRaw = pick(snapshot, ["score", "hlScore", "scoreHL"]);
 
-  // ✅ score seguro (evita [object Object])
   const score = useMemo(() => {
     if (scoreRaw == null) return null;
     if (typeof scoreRaw === "number" || typeof scoreRaw === "string") return scoreRaw;
-    if (typeof scoreRaw === "object") return scoreRaw?.total ?? scoreRaw?.value ?? null;
+    if (typeof scoreRaw === "object")
+      return scoreRaw?.total ?? scoreRaw?.value ?? scoreRaw?.score ?? null;
     return null;
   }, [scoreRaw]);
 
-  // ✅ label DTI (arreglo el bug de "dtiLabel is not defined")
   const dtiLabel = useMemo(() => {
     const x = Number(dti);
     if (!Number.isFinite(x)) return "—";
@@ -397,7 +507,6 @@ export default function MejorarPerfil() {
     return "Riesgoso";
   }, [dti]);
 
-  // ✅ probabilidad (puede venir objeto/array/string/number)
   const probabilityRaw =
     pick(snapshot, [
       "probability",
@@ -415,9 +524,12 @@ export default function MejorarPerfil() {
     const p = normalizeProbability(probabilityRaw);
     if (p.pct != null) return p;
 
-    // fallback: usar score.total si existe y parece porcentaje
     const scoreObj = pick(snapshot, ["score", "hlScore", "scoreHL"]);
-    const maybe = scoreObj && typeof scoreObj === "object" ? scoreObj?.total : null;
+    const maybe =
+      scoreObj && typeof scoreObj === "object"
+        ? scoreObj?.total ?? scoreObj?.score
+        : null;
+
     if (typeof maybe === "number" && Number.isFinite(maybe)) {
       const pct = Math.max(0, Math.min(100, maybe));
       return { label: `${Math.round(pct)}%`, pct };
@@ -426,7 +538,6 @@ export default function MejorarPerfil() {
     return { label: "—", pct: null };
   }, [probabilityRaw, snapshot]);
 
-  // payload builder: usa journey.form si existe y pisa solo 3 cosas
   function buildEntradaPayload() {
     const f = journey?.form || {};
     const base = {
@@ -461,7 +572,6 @@ export default function MejorarPerfil() {
     };
   }
 
-  // ✅ Debounce recalculo (no spamear backend mientras arrastras)
   const debounceRef = useRef(null);
 
   async function recalcular() {
@@ -517,7 +627,6 @@ export default function MejorarPerfil() {
 
   const unlocked = isLoggedIn;
 
-  // ✅ "Qué me falta" — brecha vs vivienda objetivo
   const valorViviendaObjetivo = useMemo(() => {
     const f = journey?.form || {};
     return (
@@ -538,7 +647,7 @@ export default function MejorarPerfil() {
     const gap = Math.max(0, obj - maxV);
     const ok = gap <= 0;
 
-    const monthlySave = 300; // default; luego lo hacemos editable
+    const monthlySave = 300;
     const months = monthlySave > 0 ? Math.ceil(gap / monthlySave) : null;
 
     return {
@@ -551,12 +660,19 @@ export default function MejorarPerfil() {
     };
   }, [precioMaxVivienda, valorViviendaObjetivo]);
 
+  const insightPrincipal = useMemo(() => {
+    if (!unlocked) return "Inicia sesión para ver cómo cambian tus resultados en tiempo real.";
+    if (falta?.ok) return "Ya estás dentro del rango para tu vivienda objetivo con tu perfil actual.";
+    if (falta && falta.gap > 0)
+      return `Hoy tu brecha estimada es de ${fmtUSD(falta.gap)} frente a tu objetivo.`;
+    return "Ajusta ingresos, deudas y entrada para ver el impacto en tu capacidad de compra.";
+  }, [unlocked, falta]);
+
   return (
     <div
       style={{
         minHeight: "100vh",
-        background:
-          "radial-gradient(1200px 600px at 30% 0%, #123a7a 0%, #071024 45%, #0b1a35 100%)",
+        background: UI.bg,
         color: "white",
         padding: 22,
         fontFamily: "system-ui",
@@ -590,8 +706,12 @@ export default function MejorarPerfil() {
             justifyContent: "flex-end",
           }}
         >
-          <Pill>{unlocked ? "Perfil activo ✅" : "Explorar"}</Pill>
-          {valorViviendaObjetivo != null ? <Pill>Vivienda: {fmtUSD(valorViviendaObjetivo)}</Pill> : null}
+          <Pill tone={unlocked ? "green" : "neutral"}>
+            {unlocked ? "Perfil activo" : "Modo exploración"}
+          </Pill>
+          {valorViviendaObjetivo != null ? (
+            <Pill>Objetivo: {fmtUSD(valorViviendaObjetivo)}</Pill>
+          ) : null}
         </div>
       </div>
 
@@ -600,78 +720,115 @@ export default function MejorarPerfil() {
         <div style={{ fontSize: 12, opacity: 0.75, letterSpacing: 2, fontWeight: 900 }}>
           HABITALIBRE
         </div>
-        <div style={{ marginTop: 8, fontSize: 22, fontWeight: 900, letterSpacing: -0.3 }}>
-          Mejorar mi perfil
+        <div style={{ marginTop: 8, fontSize: 24, fontWeight: 900, letterSpacing: -0.4 }}>
+          Sube tu capacidad de compra
         </div>
-        <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13, lineHeight: 1.35 }}>
-          Ajusta tus palancas y mira el impacto. (API: {API_BASE})
+        <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13, lineHeight: 1.4 }}>
+          Ajusta tus palancas financieras y mira cómo cambia tu capacidad, cuota y probabilidad de aprobación.
         </div>
       </div>
+
+      {/* insight hero */}
+      <Card
+        style={{
+          background: "linear-gradient(180deg, rgba(37,211,166,0.12) 0%, rgba(255,255,255,0.05) 100%)",
+          border: "1px solid rgba(37,211,166,0.18)",
+        }}
+      >
+        <div style={{ fontSize: 12, opacity: 0.78, fontWeight: 900 }}>Lectura rápida</div>
+        <div style={{ marginTop: 8, fontSize: 18, fontWeight: 900, lineHeight: 1.25 }}>
+          {insightPrincipal}
+        </div>
+        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Pill tone={probabilityTone(prob?.pct)}>Prob: {prob?.label ?? "—"}</Pill>
+          <Pill>Capacidad: {unlocked ? safeMoney(precioMaxVivienda) : "—"}</Pill>
+          <Pill>Cuota: {unlocked ? safeMoney(cuotaEstimada) : "—"}</Pill>
+        </div>
+      </Card>
 
       {/* tabs */}
       <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
         <TabButton active={tab === "palancas"} onClick={() => setTab("palancas")}>
-          Palancas
+          Ajustar escenario
         </TabButton>
         <TabButton active={tab === "falta"} onClick={() => setTab("falta")}>
-          Qué me falta
+          Mi brecha
         </TabButton>
       </div>
 
-      {/* RESUMEN (siempre visible) */}
+      {/* resumen principal */}
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <div style={{ fontSize: 13, opacity: 0.75 }}>Tu resultado</div>
+          <SectionTitle
+            title="Tu panel de mejora"
+            subtitle="Este bloque resume dónde estás hoy versus lo que quieres comprar."
+          />
           <Pill>{busy ? "Recalculando…" : lastUpdatedAt ? `Actualizado: ${lastUpdatedAt}` : "Listo"}</Pill>
         </div>
 
-        <ProbabilityBar
-          valuePct={prob?.pct}
-          hint="Este % viene del motor. Tu meta: subirlo bajando DTI o aumentando entrada."
-        />
+        <ProbabilityBar valuePct={prob?.pct} hint={probabilityHint(prob?.pct)} />
 
-        <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <div
-            style={{
-              padding: 12,
-              borderRadius: 16,
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.06)",
-            }}
-          >
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Precio máx recomendado</div>
-            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>
-              {unlocked ? safeMoney(precioMaxVivienda) : "—"}
-            </div>
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.65, lineHeight: 1.25 }}>
-              Es el número más importante.
-            </div>
-          </div>
+        <div
+          style={{
+            marginTop: 14,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+          }}
+        >
+          <KpiBox
+            label="Vivienda objetivo"
+            value={valorViviendaObjetivo != null ? fmtUSD(valorViviendaObjetivo) : "—"}
+            helper="El valor de la vivienda que vienes persiguiendo en tu journey."
+          />
+          <KpiBox
+            label="Capacidad actual"
+            value={unlocked ? safeMoney(precioMaxVivienda) : "—"}
+            helper="Precio máximo estimado que el motor considera alcanzable hoy."
+            tone="green"
+          />
+        </div>
 
-          <div
-            style={{
-              padding: 12,
-              borderRadius: 16,
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.06)",
-            }}
-          >
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Cuota estimada</div>
-            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>
-              {unlocked ? safeMoney(cuotaEstimada) : "—"}
-            </div>
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.65 }}>
-              DTI: {unlocked ? dtiLabel : "—"}
-            </div>
-          </div>
+        <div
+          style={{
+            marginTop: 10,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+          }}
+        >
+          <KpiBox
+            label="Cuota estimada"
+            value={unlocked ? safeMoney(cuotaEstimada) : "—"}
+            helper="Pago mensual estimado con tu escenario actual."
+          />
+          <KpiBox
+            label="Brecha actual"
+            value={
+              falta
+                ? falta.ok
+                  ? "Sin brecha"
+                  : fmtUSD(falta.gap)
+                : "—"
+            }
+            helper={
+              falta
+                ? falta.ok
+                  ? "Tu capacidad ya cubre tu objetivo."
+                  : "Lo que te falta cerrar frente a tu vivienda objetivo."
+                : "Necesitamos tu objetivo para calcularla."
+            }
+            tone={falta?.ok ? "green" : "amber"}
+          />
         </div>
 
         <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Pill>Score: {unlocked ? (score ?? "—") : "—"}</Pill>
-          <Pill>Prob: {prob?.label ?? "—"}</Pill>
-          <Pill>Entrada: {fmtUSD(Number(toNum(entrada) ?? 0))}</Pill>
-          <Pill>Ingresos: {fmtUSD(Number(toNum(ingreso) ?? 0))}</Pill>
+          <Pill>Score: {unlocked ? score ?? "—" : "—"}</Pill>
+          <Pill tone={probabilityTone(prob?.pct)}>Probabilidad: {prob?.label ?? "—"}</Pill>
+          <Pill>DTI: {unlocked ? dtiLabel : "—"}</Pill>
+          <Pill>Ingreso: {fmtUSD(Number(toNum(ingreso) ?? 0))}</Pill>
           <Pill>Deudas: {fmtUSD(Number(toNum(deudas) ?? 0))}</Pill>
+          <Pill>Entrada: {fmtUSD(Number(toNum(entrada) ?? 0))}</Pill>
         </div>
 
         {!unlocked ? (
@@ -683,7 +840,7 @@ export default function MejorarPerfil() {
               padding: 12,
               borderRadius: 14,
               border: "none",
-              background: "#25d3a6",
+              background: UI.green,
               fontWeight: 900,
               color: "#052019",
             }}
@@ -696,14 +853,14 @@ export default function MejorarPerfil() {
       {/* TAB: PALANCAS */}
       {tab === "palancas" ? (
         <Card>
-          <div style={{ fontWeight: 900, fontSize: 14 }}>Ajusta tus palancas</div>
-          <div style={{ marginTop: 6, opacity: 0.8, fontSize: 13, lineHeight: 1.35 }}>
-            Esto recalcula automáticamente mientras ajustas.
-          </div>
+          <SectionTitle
+            title="Ajusta tus palancas"
+            subtitle="Estas son las variables que más rápido suelen mover tu capacidad de compra."
+          />
 
           <SliderMoney
             label="Ingreso neto mensual"
-            helper="Subir ingresos demostrables suele mejorar aprobación y tasa."
+            helper="Subir ingresos demostrables suele mejorar capacidad, score y probabilidad."
             value={ingreso}
             onChange={setIngreso}
             max={20000}
@@ -713,8 +870,8 @@ export default function MejorarPerfil() {
           />
 
           <SliderMoney
-            label="Deudas mensuales (tarjetas, préstamos, etc.)"
-            helper="Bajar esto mejora tu DTI (la palanca #1)."
+            label="Deudas mensuales"
+            helper="Bajar deudas mejora tu DTI. Suele ser la palanca más poderosa."
             value={deudas}
             onChange={setDeudas}
             max={15000}
@@ -725,7 +882,7 @@ export default function MejorarPerfil() {
 
           <SliderMoney
             label="Entrada disponible"
-            helper="Incluye ahorros, cesantía y fondos de reserva."
+            helper="Incluye ahorros, cesantía, fondos de reserva u otras fuentes reales."
             value={entrada}
             onChange={setEntrada}
             max={
@@ -738,14 +895,31 @@ export default function MejorarPerfil() {
             stepCoarse={200}
           />
 
+          <div
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 16,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div style={{ fontWeight: 900, fontSize: 13 }}>Orden recomendado para mejorar</div>
+            <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+              <div style={{ fontSize: 13, opacity: 0.9 }}>1. Baja deudas para mejorar DTI.</div>
+              <div style={{ fontSize: 13, opacity: 0.9 }}>2. Sube entrada para mejorar LTV y cuota.</div>
+              <div style={{ fontSize: 13, opacity: 0.9 }}>3. Fortalece ingreso demostrable.</div>
+            </div>
+          </div>
+
           {!!err && (
             <div
               style={{
                 marginTop: 12,
                 padding: 12,
                 borderRadius: 16,
-                background: "rgba(244,63,94,0.10)",
-                border: "1px solid rgba(244,63,94,0.25)",
+                background: UI.redBg,
+                border: `1px solid ${UI.redBorder}`,
                 fontSize: 13,
                 lineHeight: 1.35,
               }}
@@ -763,7 +937,7 @@ export default function MejorarPerfil() {
               padding: 12,
               borderRadius: 14,
               border: "none",
-              background: busy ? "rgba(37,211,166,0.35)" : "#25d3a6",
+              background: busy ? "rgba(37,211,166,0.35)" : UI.green,
               fontWeight: 900,
               color: "#052019",
               cursor: busy ? "not-allowed" : "pointer",
@@ -790,46 +964,36 @@ export default function MejorarPerfil() {
         </Card>
       ) : null}
 
-      {/* TAB: QUÉ ME FALTA */}
+      {/* TAB: BRECHA */}
       {tab === "falta" ? (
         <Card>
-          <div style={{ fontWeight: 900, fontSize: 14 }}>Qué me falta</div>
-          <div style={{ marginTop: 6, opacity: 0.8, fontSize: 13, lineHeight: 1.35 }}>
-            Te mostramos la brecha entre tu vivienda objetivo y tu capacidad actual.
-          </div>
+          <SectionTitle
+            title="Tu brecha hacia la vivienda objetivo"
+            subtitle="Aquí aterrizamos la distancia entre lo que quieres comprar y lo que hoy soporta tu perfil."
+          />
 
           {falta ? (
             <>
-              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div
-                  style={{
-                    padding: 12,
-                    borderRadius: 16,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(255,255,255,0.06)",
-                  }}
-                >
-                  <div style={{ fontSize: 12, opacity: 0.7 }}>Tu objetivo</div>
-                  <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>{moneyUSD(falta.obj)}</div>
-                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.65 }}>
-                    Valor de la vivienda que quieres.
-                  </div>
-                </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                }}
+              >
+                <KpiBox
+                  label="Tu objetivo"
+                  value={moneyUSD(falta.obj)}
+                  helper="Valor de la vivienda que quieres alcanzar."
+                />
 
-                <div
-                  style={{
-                    padding: 12,
-                    borderRadius: 16,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(255,255,255,0.06)",
-                  }}
-                >
-                  <div style={{ fontSize: 12, opacity: 0.7 }}>Tu capacidad hoy</div>
-                  <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>{moneyUSD(falta.maxV)}</div>
-                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.65 }}>
-                    Precio máx recomendado por el motor.
-                  </div>
-                </div>
+                <KpiBox
+                  label="Tu capacidad hoy"
+                  value={moneyUSD(falta.maxV)}
+                  helper="Precio máximo estimado hoy por el motor."
+                  tone="green"
+                />
               </div>
 
               <div
@@ -837,23 +1001,26 @@ export default function MejorarPerfil() {
                   marginTop: 12,
                   padding: 12,
                   borderRadius: 16,
-                  background: falta.ok ? "rgba(37,211,166,0.10)" : "rgba(255,193,7,0.10)",
-                  border: falta.ok ? "1px solid rgba(37,211,166,0.25)" : "1px solid rgba(255,193,7,0.25)",
+                  background: falta.ok ? UI.greenBg : UI.amberBg,
+                  border: falta.ok
+                    ? `1px solid ${UI.greenBorder}`
+                    : `1px solid ${UI.amberBorder}`,
                 }}
               >
                 <div style={{ fontWeight: 900 }}>
-                  {falta.ok ? "✅ Ya te alcanza (según tu perfil)" : "📉 Te falta cerrar una brecha"}
+                  {falta.ok ? "✅ Ya estás dentro del rango" : "📉 Todavía hay una brecha"}
                 </div>
-                <div style={{ marginTop: 6, opacity: 0.9, lineHeight: 1.35, fontSize: 13 }}>
+
+                <div style={{ marginTop: 6, opacity: 0.92, lineHeight: 1.35, fontSize: 13 }}>
                   {falta.ok
-                    ? "Siguiente paso: prepara documentos y elige producto/banco."
-                    : `Brecha estimada: ${moneyUSD(falta.gap)}.`}
+                    ? "Con tu perfil actual ya estás dentro del rango estimado para tu vivienda objetivo."
+                    : `Te faltan aproximadamente ${moneyUSD(falta.gap)} para cerrar la brecha frente a tu objetivo.`}
                 </div>
 
                 {!falta.ok ? (
                   <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-                    Si ahorras {moneyUSD(falta.monthlySave)} / mes, te tomaría aprox.{" "}
-                    <b>{falta.months ?? "—"} meses</b> (estimación simple).
+                    Si ahorras {moneyUSD(falta.monthlySave)} por mes, te tomaría aprox.{" "}
+                    <b>{falta.months ?? "—"} meses</b> cerrar esa brecha en una estimación simple.
                   </div>
                 ) : null}
               </div>
@@ -869,9 +1036,9 @@ export default function MejorarPerfil() {
                     lineHeight: 1.25,
                   }}
                 >
-                  <div style={{ fontWeight: 900 }}>1) Palanca #1: baja deudas</div>
+                  <div style={{ fontWeight: 900 }}>1) Reducir deudas</div>
                   <div style={{ marginTop: 4, opacity: 0.75, fontSize: 12 }}>
-                    Bajar deudas mejora DTI y sube probabilidad rápido.
+                    Esto suele mejorar la capacidad más rápido que cualquier otra palanca.
                   </div>
                 </div>
 
@@ -885,9 +1052,9 @@ export default function MejorarPerfil() {
                     lineHeight: 1.25,
                   }}
                 >
-                  <div style={{ fontWeight: 900 }}>2) Palanca #2: aumenta entrada</div>
+                  <div style={{ fontWeight: 900 }}>2) Subir entrada</div>
                   <div style={{ marginTop: 4, opacity: 0.75, fontSize: 12 }}>
-                    Más entrada mejora LTV y abre mejores tasas.
+                    Te ayuda a bajar cuota, mejorar LTV y abrir mejores rutas.
                   </div>
                 </div>
 
@@ -901,9 +1068,9 @@ export default function MejorarPerfil() {
                     lineHeight: 1.25,
                   }}
                 >
-                  <div style={{ fontWeight: 900 }}>3) Palanca #3: sube ingreso demostrable</div>
+                  <div style={{ fontWeight: 900 }}>3) Mejorar ingreso demostrable</div>
                   <div style={{ marginTop: 4, opacity: 0.75, fontSize: 12 }}>
-                    Mejor ingreso mejora capacidad y estabilidad.
+                    Más ingreso formal mejora capacidad, score y probabilidad.
                   </div>
                 </div>
               </div>
@@ -916,12 +1083,12 @@ export default function MejorarPerfil() {
                   padding: 12,
                   borderRadius: 14,
                   border: "none",
-                  background: "#25d3a6",
+                  background: UI.green,
                   fontWeight: 900,
                   color: "#052019",
                 }}
               >
-                Ajustar mis palancas
+                Ajustar mi escenario
               </button>
             </>
           ) : (
@@ -937,15 +1104,15 @@ export default function MejorarPerfil() {
                 opacity: 0.9,
               }}
             >
-              Para mostrar esta sección necesito que tengamos un <b>valor de vivienda objetivo</b> guardado en tu
-              journey (ej: valorVivienda). Por ahora puedes ir a <b>Simular</b> y definirlo.
+              Para mostrar esta sección necesitamos un <b>valor de vivienda objetivo</b> guardado en tu journey.
+              Puedes volver a <b>Simular</b> y definirlo.
             </div>
           )}
         </Card>
       ) : null}
 
       <div style={{ marginTop: 14, fontSize: 12, opacity: 0.65, lineHeight: 1.35 }}>
-        Nota: esto es una estimación. La aprobación real depende de documentos, políticas del banco y verificación.
+        Nota: esta es una estimación referencial. La aprobación final depende de documentos, validaciones y políticas vigentes de cada entidad.
       </div>
     </div>
   );
