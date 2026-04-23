@@ -1,73 +1,43 @@
 // src/screens/Register.jsx
 import React, { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import {
+  Screen,
+  Card,
+  PrimaryButton,
+  SecondaryButton,
+} from "../ui/kit.jsx";
 import { apiPost } from "../lib/api.js";
 import { setCustomerSession } from "../lib/customerSession.js";
 
-function Card({ children }) {
-  return (
-    <div
-      style={{
-        marginTop: 16,
-        padding: 18,
-        borderRadius: 24,
-        background: "rgba(255,255,255,0.06)",
-        border: "1px solid rgba(255,255,255,0.10)",
-        boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
-        backdropFilter: "blur(12px)",
-      }}
-    >
-      {children}
-    </div>
-  );
+const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
+const LS_JOURNEY = "hl_mobile_journey_v1";
+const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
+
+function clearLocalScenarioState() {
+  try {
+    localStorage.removeItem(LS_SNAPSHOT);
+    localStorage.removeItem(LS_JOURNEY);
+    localStorage.removeItem(LS_SELECTED_PROPERTY);
+  } catch {}
 }
 
-function Input({ label, value, onChange, placeholder, type = "text" }) {
-  return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>{label}</div>
-      <input
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        type={type}
-        autoCapitalize="none"
-        autoCorrect="off"
-        style={{
-          width: "100%",
-          marginTop: 8,
-          padding: 14,
-          borderRadius: 16,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: "rgba(255,255,255,0.06)",
-          color: "white",
-          outline: "none",
-          fontSize: 14,
-        }}
-      />
-    </div>
-  );
-}
+const COLORS = {
+  text: "rgba(226,232,240,0.98)",
+  textSoft: "rgba(226,232,240,0.82)",
+  subtext: "rgba(148,163,184,0.95)",
+  borderSoft: "rgba(148,163,184,0.18)",
+  inputBg: "rgba(255,255,255,0.06)",
+  dangerBg: "rgba(244,63,94,0.10)",
+  dangerBorder: "rgba(244,63,94,0.25)",
+  dangerText: "#fca5a5",
+};
 
-function Chip({ children }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "8px 12px",
-        borderRadius: 999,
-        background: "rgba(255,255,255,0.07)",
-        border: "1px solid rgba(255,255,255,0.10)",
-        fontSize: 12,
-        opacity: 0.92,
-      }}
-    >
-      {children}
-    </span>
-  );
-}
+const LEGAL_LINKS = {
+  privacidad: "https://www.habitalibre.com/#/privacidad",
+  terminos: "https://www.habitalibre.com/#/terminos",
+  cookies: "https://www.habitalibre.com/#/cookies",
+};
 
 const onlyDigits = (v) => String(v ?? "").replace(/[^\d]/g, "");
 
@@ -83,15 +53,10 @@ function normalizePhone(raw) {
 function isValidEcPhone(norm) {
   if (!norm) return false;
   if (norm.startsWith("09") && norm.length === 10) return true;
-  if (norm.startsWith("593") && norm.length >= 11 && norm.length <= 13) return true;
+  if (norm.startsWith("593") && norm.length >= 11 && norm.length <= 13)
+    return true;
   return false;
 }
-
-const LEGAL_LINKS = {
-  privacidad: "https://www.habitalibre.com/#/privacidad",
-  terminos: "https://www.habitalibre.com/#/terminos",
-  cookies: "https://www.habitalibre.com/#/cookies",
-};
 
 function openExternal(url) {
   try {
@@ -99,6 +64,121 @@ function openExternal(url) {
   } catch {
     window.location.href = url;
   }
+}
+
+function niceMsg(err) {
+  const raw =
+    err?.data?.error ||
+    err?.data?.message ||
+    err?.message ||
+    "No se pudo crear la cuenta.";
+
+  const msg = String(raw).toLowerCase();
+
+  if (msg.includes("failed to fetch") || msg.includes("load failed")) {
+    return "Ups… no pudimos conectarnos en este momento. Intenta de nuevo en unos segundos.";
+  }
+
+  if (msg.includes("email") && msg.includes("exists")) {
+    return "Ese email ya tiene una cuenta. Puedes iniciar sesión directamente.";
+  }
+
+  if (msg.includes("duplicate")) {
+    return "Ya existe una cuenta con esos datos. Intenta iniciar sesión.";
+  }
+
+  return raw;
+}
+
+function setFocusedInputStyle(el) {
+  if (!el) return;
+  el.style.border = "1px solid rgba(45,212,191,0.55)";
+  el.style.boxShadow = "0 0 0 3px rgba(45,212,191,0.14)";
+  el.style.background = "rgba(255,255,255,0.08)";
+}
+
+function resetInputStyle(el) {
+  if (!el) return;
+  el.style.border = `1px solid ${COLORS.borderSoft}`;
+  el.style.boxShadow = "none";
+  el.style.background = COLORS.inputBg;
+}
+
+function inputBaseStyle(hasValue = false) {
+  return {
+    width: "100%",
+    height: 56,
+    borderRadius: 18,
+    border: `1px solid ${COLORS.borderSoft}`,
+    background: COLORS.inputBg,
+    padding: "0 16px",
+    color: "white",
+    fontSize: 16,
+    outline: "none",
+    boxSizing: "border-box",
+    transition: "all 0.18s ease",
+    boxShadow: hasValue ? "0 6px 18px rgba(0,0,0,0.08)" : "none",
+  };
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  autoComplete,
+  autoCapitalize = "none",
+  inputMode,
+}) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div
+        style={{
+          marginBottom: 8,
+          fontSize: 14,
+          fontWeight: 800,
+          color: "rgba(226,232,240,0.95)",
+        }}
+      >
+        {label}
+      </div>
+
+      <input
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        type={type}
+        autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        autoCorrect="off"
+        inputMode={inputMode}
+        onFocus={(e) => setFocusedInputStyle(e.target)}
+        onBlur={(e) => resetInputStyle(e.target)}
+        style={inputBaseStyle(Boolean(value))}
+      />
+    </div>
+  );
+}
+
+function InlineLink({ children, onClick, tone = "accent" }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: 0,
+        border: "none",
+        background: "transparent",
+        color: tone === "accent" ? "#25d3a6" : "#9ad7c4",
+        fontWeight: 900,
+        cursor: "pointer",
+        textDecoration: "underline",
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function Register() {
@@ -121,7 +201,10 @@ export default function Register() {
   }, [location.search]);
 
   const phoneNormalized = useMemo(() => normalizePhone(telefono), [telefono]);
-  const phoneOk = useMemo(() => isValidEcPhone(phoneNormalized), [phoneNormalized]);
+  const phoneOk = useMemo(
+    () => isValidEcPhone(phoneNormalized),
+    [phoneNormalized]
+  );
 
   const canSubmit = useMemo(() => {
     return (
@@ -136,15 +219,18 @@ export default function Register() {
 
   async function onRegister() {
     if (!canSubmit || busy) return;
+
     setBusy(true);
     setErr("");
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const payload = {
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         telefono: phoneNormalized,
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
         acceptedPrivacy: true,
         privacyVersion: "v1",
@@ -155,245 +241,306 @@ export default function Register() {
       const token = data?.token || data?.accessToken || data?.jwt;
       const customer = data?.customer || data?.user || null;
 
-      if (!token) throw new Error("No pudimos crear tu cuenta. Intenta de nuevo.");
+      if (!token) {
+        throw new Error("No pudimos crear tu cuenta. Intenta de nuevo.");
+      }
 
-      setCustomerSession({ token, customer });
+      clearLocalScenarioState();
+      setCustomerSession({
+        token,
+        customer,
+        email: normalizedEmail,
+      });
+
       nav(next, { replace: true });
     } catch (e) {
-      setErr(e?.message || "No se pudo crear la cuenta.");
+      setErr(niceMsg(e));
     } finally {
       setBusy(false);
     }
   }
 
+  function handlePrimaryPressDown(e) {
+    e.currentTarget.style.transform = "scale(0.985)";
+  }
+
+  function handlePrimaryPressUp(e) {
+    e.currentTarget.style.transform = "scale(1)";
+  }
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(1200px 600px at 30% 0%, #123a7a 0%, #071024 45%, #0b1a35 100%)",
-        color: "white",
-        padding: 22,
-        fontFamily: "system-ui",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <button
-          onClick={() => nav(-1)}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            border: "1px solid rgba(255,255,255,0.14)",
-            background: "rgba(255,255,255,0.06)",
-            color: "white",
-            fontSize: 18,
-            cursor: "pointer",
-          }}
-          aria-label="Volver"
-        >
-          ←
-        </button>
-
-        <Chip>🔒 Sesión segura</Chip>
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 12, opacity: 0.75, letterSpacing: 2, fontWeight: 900 }}>
-          HABITALIBRE
-        </div>
-        <div style={{ marginTop: 8, fontSize: 22, fontWeight: 900 }}>
-          Crea tu cuenta
-        </div>
-        <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13, lineHeight: 1.35 }}>
-          Guarda tu score y retoma tu camino cuando quieras.
-        </div>
-
-        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8, lineHeight: 1.35 }}>
-          💬 WhatsApp obligatorio para poder ayudarte con tu ruta y documentación.
-        </div>
-      </div>
-
-      <Card>
-        <Input
-          label="Nombre"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          placeholder="Ej: Mateo"
-        />
-
-        <Input
-          label="Apellido"
-          value={apellido}
-          onChange={(e) => setApellido(e.target.value)}
-          placeholder="Ej: Leon"
-        />
-
-        <Input
-          label="Teléfono (WhatsApp) — obligatorio"
-          value={telefono}
-          onChange={(e) => setTelefono(e.target.value)}
-          placeholder="Ej: 09XXXXXXXX o +5939XXXXXXX"
-          type="tel"
-        />
-
-        {!phoneOk && telefono ? (
-          <div style={{ marginTop: 10, fontSize: 12, color: "salmon", opacity: 0.95 }}>
-            Formato sugerido: 09XXXXXXXX o +5939XXXXXXX
-          </div>
-        ) : null}
-
-        <Input
-          label="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Ej: mateo@correo.com"
-          type="email"
-        />
-
-        <Input
-          label="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Mínimo 6 caracteres"
-          type="password"
-        />
-
-        <div
-          style={{
-            marginTop: 14,
-            padding: 12,
-            borderRadius: 16,
-            border: "1px solid rgba(255,255,255,0.10)",
-            background: "rgba(255,255,255,0.04)",
-            display: "flex",
-            gap: 10,
-            alignItems: "flex-start",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={accepted}
-            onChange={(e) => setAccepted(e.target.checked)}
-            style={{ marginTop: 3 }}
-          />
-          <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.45 }}>
-            Acepto los{" "}
-            <button
-              type="button"
-              onClick={() => openExternal(LEGAL_LINKS.terminos)}
-              style={{
-                padding: 0,
-                border: "none",
-                background: "transparent",
-                color: "#25d3a6",
-                fontWeight: 900,
-                cursor: "pointer",
-                textDecoration: "underline",
-              }}
-            >
-              términos de uso
-            </button>{" "}
-            y la{" "}
-            <button
-              type="button"
-              onClick={() => openExternal(LEGAL_LINKS.privacidad)}
-              style={{
-                padding: 0,
-                border: "none",
-                background: "transparent",
-                color: "#25d3a6",
-                fontWeight: 900,
-                cursor: "pointer",
-                textDecoration: "underline",
-              }}
-            >
-              política de privacidad
-            </button>
-            . Entiendo que HabitaLibre usa esta información para ayudarme a explorar
-            opciones de precalificación y acompañar mi proceso hipotecario.
-          </div>
-        </div>
-
-        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.62, lineHeight: 1.4 }}>
-          También puedes revisar nuestra{" "}
-          <button
-            type="button"
-            onClick={() => openExternal(LEGAL_LINKS.cookies)}
+    <Screen>
+      <div
+        style={{
+          maxWidth: 430,
+          margin: "0 auto",
+          paddingTop: 48,
+          paddingBottom: 8,
+        }}
+      >
+        <div style={{ marginBottom: 18 }}>
+          <img
+            src="/LOGOHL.png"
+            alt="HabitaLibre"
             style={{
-              padding: 0,
-              border: "none",
-              background: "transparent",
-              color: "#9ad7c4",
-              fontWeight: 800,
-              cursor: "pointer",
-              textDecoration: "underline",
+              height: 34,
+              marginBottom: 14,
+              display: "block",
+              filter: "drop-shadow(0 8px 18px rgba(45,212,191,0.20))",
             }}
-          >
-            política de cookies
-          </button>
-          .
-        </div>
+          />
 
-        {!!err && (
           <div
             style={{
-              marginTop: 14,
-              padding: 12,
-              borderRadius: 16,
-              background: "rgba(244,63,94,0.10)",
-              border: "1px solid rgba(244,63,94,0.25)",
-              fontSize: 13,
-              lineHeight: 1.35,
+              fontSize: 11,
+              fontWeight: 900,
+              letterSpacing: 3.2,
+              color: "rgba(226,232,240,0.68)",
+              marginBottom: 10,
             }}
           >
-            {err}
+            HABITALIBRE
           </div>
-        )}
 
-        <button
-          onClick={onRegister}
-          disabled={!canSubmit || busy}
-          style={{
-            marginTop: 16,
-            width: "100%",
-            padding: 14,
-            borderRadius: 16,
-            border: "none",
-            background: !canSubmit || busy ? "rgba(37,211,166,0.35)" : "#25d3a6",
-            fontWeight: 900,
-            fontSize: 15,
-            color: "#052019",
-            cursor: !canSubmit || busy ? "not-allowed" : "pointer",
-          }}
-        >
-          {busy ? "Creando..." : "Crear cuenta"}
-        </button>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 30,
+              lineHeight: 1.06,
+              fontWeight: 950,
+              color: COLORS.text,
+              letterSpacing: -1.0,
+              maxWidth: 350,
+              textWrap: "balance",
+            }}
+          >
+            Crea tu cuenta
+          </h1>
 
-        <button
-          onClick={() => nav(`/login?next=${encodeURIComponent(next)}`)}
-          disabled={busy}
-          style={{
-            marginTop: 10,
-            width: "100%",
-            padding: 12,
-            borderRadius: 16,
-            border: "1px solid rgba(255,255,255,0.16)",
-            background: "rgba(255,255,255,0.04)",
-            color: "white",
-            fontWeight: 900,
-            cursor: busy ? "not-allowed" : "pointer",
-          }}
-        >
-          Ya tengo cuenta
-        </button>
-
-        <div style={{ marginTop: 12, fontSize: 11, opacity: 0.65, lineHeight: 1.45 }}>
-          Usamos tu WhatsApp y tus datos de perfil únicamente para ayudarte con tu
-          proceso hipotecario, mostrarte resultados referenciales y acompañarte mejor
-          en tu camino hacia tu vivienda.
+          <div
+            style={{
+              marginTop: 12,
+              fontSize: 16,
+              lineHeight: 1.42,
+              color: COLORS.subtext,
+              maxWidth: 360,
+            }}
+          >
+            Guarda tu progreso, tus resultados y tu camino a casa.
+          </div>
         </div>
-      </Card>
-    </div>
+
+        <Card
+          soft
+          style={{
+            marginTop: 14,
+            padding: 18,
+            borderRadius: 28,
+            border: "1px solid rgba(255,255,255,0.08)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            boxShadow: "0 18px 50px rgba(0,0,0,0.18)",
+          }}
+        >
+          <Field
+            label="Nombre"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Tu nombre"
+            autoComplete="given-name"
+            autoCapitalize="words"
+          />
+
+          <Field
+            label="Apellido"
+            value={apellido}
+            onChange={(e) => setApellido(e.target.value)}
+            placeholder="Tu apellido"
+            autoComplete="family-name"
+            autoCapitalize="words"
+          />
+
+          <Field
+            label="Teléfono"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            placeholder="09XXXXXXXX o +5939XXXXXXX"
+            type="tel"
+            autoComplete="tel"
+            inputMode="tel"
+          />
+
+          {!phoneOk && telefono ? (
+            <div
+              style={{
+                marginTop: -6,
+                marginBottom: 12,
+                fontSize: 12,
+                color: COLORS.dangerText,
+                lineHeight: 1.4,
+              }}
+            >
+              Usa un formato como 09XXXXXXXX o +5939XXXXXXX.
+            </div>
+          ) : null}
+
+          <Field
+            label="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Tu email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+          />
+
+          <Field
+            label="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Mínimo 6 caracteres"
+            type="password"
+            autoComplete="new-password"
+          />
+
+          <div
+            style={{
+              marginTop: 6,
+              padding: 14,
+              borderRadius: 18,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(255,255,255,0.04)",
+              display: "flex",
+              gap: 12,
+              alignItems: "flex-start",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              style={{
+                marginTop: 4,
+                width: 18,
+                height: 18,
+                accentColor: "#25d3a6",
+                flexShrink: 0,
+              }}
+            />
+
+            <div
+              style={{
+                fontSize: 13,
+                color: COLORS.textSoft,
+                lineHeight: 1.5,
+              }}
+            >
+              Acepto los{" "}
+              <InlineLink onClick={() => openExternal(LEGAL_LINKS.terminos)}>
+                términos de uso
+              </InlineLink>{" "}
+              y la{" "}
+              <InlineLink onClick={() => openExternal(LEGAL_LINKS.privacidad)}>
+                política de privacidad
+              </InlineLink>
+              .
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              fontSize: 11,
+              color: "rgba(148,163,184,0.82)",
+              lineHeight: 1.45,
+            }}
+          >
+            También puedes revisar nuestra{" "}
+            <InlineLink
+              onClick={() => openExternal(LEGAL_LINKS.cookies)}
+              tone="soft"
+            >
+              política de cookies
+            </InlineLink>
+            .
+          </div>
+
+          {!!err && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 16,
+                background: COLORS.dangerBg,
+                border: `1px solid ${COLORS.dangerBorder}`,
+                fontSize: 13,
+                lineHeight: 1.4,
+                color: COLORS.dangerText,
+              }}
+            >
+              {err}
+            </div>
+          )}
+
+          <PrimaryButton
+            onClick={onRegister}
+            disabled={!canSubmit || busy}
+            onMouseDown={handlePrimaryPressDown}
+            onMouseUp={handlePrimaryPressUp}
+            onMouseLeave={handlePrimaryPressUp}
+            style={{
+              marginTop: 16,
+              height: 58,
+              borderRadius: 22,
+              fontSize: 16,
+              fontWeight: 900,
+              transition: "all 0.2s ease",
+              boxShadow: "0 18px 40px rgba(45,212,191,0.32)",
+            }}
+          >
+            {busy ? "Creando tu cuenta..." : "Crear cuenta y continuar"}
+          </PrimaryButton>
+
+          <div
+            style={{
+              marginTop: 12,
+              textAlign: "center",
+              fontSize: 13,
+              fontWeight: 800,
+              color: "rgba(226,232,240,0.72)",
+            }}
+          >
+            Te tomará menos de 2 minutos
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              textAlign: "center",
+              fontSize: 12,
+              lineHeight: 1.45,
+              color: "rgba(148,163,184,0.78)",
+            }}
+          >
+            Tus datos están protegidos. No compartimos tu información sin tu
+            consentimiento.
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <SecondaryButton
+              onClick={() => nav(`/login?next=${encodeURIComponent(next)}`)}
+              disabled={busy}
+              style={{
+                height: 48,
+                borderRadius: 16,
+                fontWeight: 850,
+              }}
+            >
+              Ya tengo cuenta
+            </SecondaryButton>
+          </div>
+        </Card>
+      </div>
+    </Screen>
   );
 }

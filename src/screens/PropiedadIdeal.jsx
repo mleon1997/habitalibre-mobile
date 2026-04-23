@@ -1,25 +1,161 @@
-// src/screens/PropiedadIdeal.jsx
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Screen, Card, Chip, PrimaryButton, SecondaryButton, UI } from "../ui/kit.jsx";
+import {
+  Screen,
+  Card,
+  Chip,
+  PrimaryButton,
+  SecondaryButton,
+  UI,
+} from "../ui/kit.jsx";
+import { getCustomer } from "../lib/customerSession.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
-function readJSON(key, fallback = null) {
+function safeParseLS(key) {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    return fallback;
+    return null;
   }
+}
+
+function getStorageOwnerEmail() {
+  try {
+    const email = String(getCustomer()?.email || "").trim().toLowerCase();
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
+function loadOwnedData(key) {
+  const ownerEmail = getStorageOwnerEmail();
+  const envelope = safeParseLS(key);
+
+  if (!envelope) return null;
+
+  if (envelope?.ownerEmail && "data" in envelope) {
+    if (
+      ownerEmail &&
+      String(envelope.ownerEmail).trim().toLowerCase() === ownerEmail
+    ) {
+      return envelope.data ?? null;
+    }
+
+    if (!ownerEmail) return envelope.data ?? null;
+
+    return null;
+  }
+
+  return envelope;
 }
 
 function money(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return "—";
   return `$${Math.round(x).toLocaleString("en-US")}`;
+}
+
+function normalizeProperty(raw, fallbackCity = "Quito") {
+  if (!raw || typeof raw !== "object") return null;
+
+  const id =
+    raw?.id ||
+    raw?._id ||
+    raw?.propertyId ||
+    raw?._normalizedId ||
+    null;
+
+  const nombre =
+    raw?.nombre ||
+    raw?.titulo ||
+    raw?.title ||
+    raw?.name ||
+    raw?.proyecto ||
+    raw?._normalizedProjectName ||
+    "Propiedad elegida";
+
+  const ciudad =
+    raw?.ciudad ||
+    raw?.city ||
+    raw?.zona ||
+    raw?.sector ||
+    raw?.location ||
+    raw?._normalizedCity ||
+    fallbackCity ||
+    "Ubicación pendiente";
+
+  const precioRaw =
+    raw?.precio ??
+    raw?.price ??
+    raw?.valor ??
+    raw?.valorVivienda ??
+    raw?.listPrice ??
+    raw?._normalizedPrice ??
+    null;
+
+  const precio = Number.isFinite(Number(precioRaw))
+    ? Number(precioRaw)
+    : null;
+
+  const cuotaEstimadaRaw =
+    raw?.cuotaEstimada ??
+    raw?.cuota ??
+    raw?.evaluacionHipotecaFutura?.cuotaReferencia ??
+    raw?.evaluacionHipotecaHoy?.cuotaReferencia ??
+    raw?.evaluacionHipoteca?.cuotaReferencia ??
+    null;
+
+  const cuotaEstimada = Number.isFinite(Number(cuotaEstimadaRaw))
+    ? Number(cuotaEstimadaRaw)
+    : null;
+
+  const entradaMinimaRaw =
+    raw?.entradaMinima ??
+    raw?.entrada ??
+    raw?.entradaRequerida ??
+    null;
+
+  const entradaMinima = Number.isFinite(Number(entradaMinimaRaw))
+    ? Number(entradaMinimaRaw)
+    : null;
+
+  const imagen =
+    raw?.imagen ||
+    raw?.image ||
+    raw?.imageUrl ||
+    raw?.foto ||
+    raw?.cover ||
+    null;
+
+  const descripcion =
+    raw?.descripcion ||
+    raw?.description ||
+    "Una opción alineada con tu perfil y tu capacidad estimada de compra.";
+
+  if (!id && !nombre) return null;
+
+  return {
+    id,
+    _id: id,
+    propertyId: id,
+    nombre,
+    titulo: nombre,
+    proyecto: nombre,
+    ciudad,
+    sector: ciudad,
+    precio,
+    price: precio,
+    cuotaEstimada,
+    entradaMinima,
+    imagen,
+    descripcion,
+    raw,
+  };
 }
 
 function pickRecommendedProperty(snapshot, journey) {
@@ -31,7 +167,10 @@ function pickRecommendedProperty(snapshot, journey) {
     [];
 
   if (Array.isArray(market) && market.length > 0) {
-    return market[0];
+    return normalizeProperty(
+      market[0],
+      journey?.form?.ciudadCompra || journey?.ciudadCompra || "Quito"
+    );
   }
 
   const ciudad = journey?.form?.ciudadCompra || journey?.ciudadCompra || "Quito";
@@ -41,7 +180,11 @@ function pickRecommendedProperty(snapshot, journey) {
     snapshot?.montoMaximo ||
     90000;
 
-  const precio = Math.max(30000, Math.round(Number(capacidadVivienda || 90000) * 0.92));
+  const precio = Math.max(
+    30000,
+    Math.round(Number(capacidadVivienda || 90000) * 0.92)
+  );
+
   const cuota =
     snapshot?.cuotaEstimada ||
     snapshot?.cuotaMensual ||
@@ -50,10 +193,14 @@ function pickRecommendedProperty(snapshot, journey) {
 
   return {
     id: "demo-prop-1",
+    _id: "demo-prop-1",
+    propertyId: "demo-prop-1",
     nombre: "Proyecto recomendado para ti",
+    titulo: "Proyecto recomendado para ti",
     ciudad,
     sector: ciudad,
     precio,
+    price: precio,
     cuotaEstimada: cuota,
     entradaMinima: Math.round(precio * 0.1),
     imagen:
@@ -66,12 +213,22 @@ function pickRecommendedProperty(snapshot, journey) {
 export default function PropiedadIdeal() {
   const navigate = useNavigate();
 
-  const snapshot = readJSON(LS_SNAPSHOT, {}) || {};
-  const journey = readJSON(LS_JOURNEY, {}) || {};
-  const selectedProperty = readJSON(LS_SELECTED_PROPERTY, null);
+  const snapshot = loadOwnedData(LS_SNAPSHOT) || {};
+  const journey = loadOwnedData(LS_JOURNEY) || {};
+  const selectedPropertyRaw = loadOwnedData(LS_SELECTED_PROPERTY);
+
+  const selectedProperty = useMemo(() => {
+    return normalizeProperty(
+      selectedPropertyRaw,
+      journey?.form?.ciudadCompra || journey?.ciudadCompra || "Quito"
+    );
+  }, [selectedPropertyRaw, journey]);
 
   const property = useMemo(() => {
-    return selectedProperty || pickRecommendedProperty(snapshot, journey);
+    return (
+      selectedProperty ||
+      pickRecommendedProperty(snapshot, journey)
+    );
   }, [selectedProperty, snapshot, journey]);
 
   const isUserSelected = !!selectedProperty;
@@ -116,8 +273,7 @@ export default function PropiedadIdeal() {
     journey?.entrada ??
     null;
 
-  const valorViviendaPropiedad =
-    property?.precio ?? null;
+  const valorViviendaPropiedad = property?.precio ?? null;
 
   const ciudadMostrar =
     property?.sector ||
@@ -205,9 +361,10 @@ Veo que esta opción podría encajar con mi perfil:
             style={{
               width: "100%",
               height: 220,
-              backgroundImage: `url(${property?.imagen})`,
+              backgroundImage: property?.imagen ? `url(${property.imagen})` : "none",
               backgroundSize: "cover",
               backgroundPosition: "center",
+              backgroundColor: property?.imagen ? undefined : "rgba(255,255,255,0.04)",
               borderBottom: UI.border,
             }}
           />

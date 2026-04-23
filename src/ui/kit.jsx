@@ -30,22 +30,34 @@ export function Screen({ children, style }) {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        padding: 16,
-        paddingBottom: 28,
+        minHeight: "100dvh",
+        width: "100%",
         background:
           "radial-gradient(1200px 800px at 20% 10%, rgba(45,212,191,0.10), transparent 55%)," +
           "radial-gradient(1000px 700px at 80% 10%, rgba(59,130,246,0.10), transparent 60%)," +
           "linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(15,23,42,1) 100%)",
         color: UI.text,
         fontFamily: "system-ui",
+        overflowX: "hidden",
         ...style,
       }}
     >
-      {children}
+      <div
+        style={{
+          width: "100%",
+          paddingLeft: 20,
+          paddingRight: 20,
+          paddingTop: 8,
+          paddingBottom: 10,
+          boxSizing: "border-box",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
+
 
 export function Card({ children, soft = false, style }) {
   return (

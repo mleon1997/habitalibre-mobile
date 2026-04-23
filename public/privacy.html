@@ -4,46 +4,163 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Política de Privacidad | HabitaLibre</title>
+  <meta
+    name="description"
+    content="Política de Privacidad de HabitaLibre."
+  />
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    :root {
+      --bg: #04122d;
+      --card: rgba(255, 255, 255, 0.05);
+      --border: rgba(148, 163, 184, 0.16);
+      --text: #e5eefc;
+      --muted: rgba(229, 238, 252, 0.72);
+      --accent: #46e0cf;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
       margin: 0;
-      background: #071226;
-      color: #e5eefc;
-      line-height: 1.6;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+        Inter, Helvetica, Arial, sans-serif;
+      line-height: 1.65;
     }
+
     .wrap {
-      max-width: 860px;
+      max-width: 980px;
       margin: 0 auto;
-      padding: 32px 20px 60px;
+      padding: 28px 20px 60px;
     }
-    h1, h2 {
-      color: white;
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
     }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 56px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .updated {
+      margin-top: 24px;
+      font-size: 16px;
+      color: var(--muted);
+    }
+
     .card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(148,163,184,0.16);
-      border-radius: 18px;
-      padding: 24px;
-      margin-top: 18px;
+      margin-top: 22px;
+      padding: 28px 24px;
+      border-radius: 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(8px);
     }
-    a { color: #46e0cf; }
-    .muted { color: rgba(229,238,252,0.75); }
+
+    h2 {
+      margin-top: 26px;
+      margin-bottom: 10px;
+      font-size: 24px;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    p {
+      margin: 0 0 16px;
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    ul {
+      margin: 8px 0 20px 22px;
+      padding: 0 0 0 18px;
+    }
+
+    li {
+      margin-bottom: 8px;
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    .important {
+      margin-top: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .wrap {
+        padding: 22px 16px 40px;
+      }
+
+      h1 {
+        font-size: 40px;
+      }
+
+      .card {
+        padding: 22px 18px;
+        border-radius: 18px;
+      }
+
+      h2 {
+        font-size: 20px;
+      }
+
+      p, li {
+        font-size: 15px;
+      }
+
+      .updated {
+        font-size: 15px;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
+    <a class="back-link" href="https://www.habitalibre.com">
+      ← Volver a HabitaLibre
+    </a>
+
     <h1>Política de Privacidad</h1>
-    <p class="muted">Última actualización: 2026</p>
+    <div class="updated">Última actualización: 2026</div>
 
     <div class="card">
       <p>
-        HabitaLibre es una aplicación de orientación financiera e inmobiliaria que ayuda a los usuarios
-        a explorar rutas posibles para la compra de vivienda.
+        HabitaLibre es una aplicación de orientación financiera e inmobiliaria
+        que ayuda a los usuarios a explorar rutas posibles para la compra de vivienda.
+      </p>
+
+      <p>
+        HabitaLibre es operado desde Ecuador y cumple con principios generales
+        de protección de datos personales aplicables.
       </p>
 
       <h2>Información que podemos recopilar</h2>
-      <p>Podemos recopilar información ingresada directamente por el usuario, como:</p>
+      <p>
+        Podemos recopilar información ingresada directamente por el usuario, como:
+      </p>
       <ul>
         <li>Ingresos mensuales</li>
         <li>Ingresos del hogar o de la pareja</li>
@@ -68,22 +185,32 @@
 
       <h2>Almacenamiento</h2>
       <p>
-        Algunos datos pueden almacenarse temporalmente para mejorar la experiencia del usuario,
-        mantener continuidad entre sesiones y mostrar resultados previos.
+        Algunos datos pueden almacenarse temporalmente para mejorar la experiencia
+        del usuario, mantener continuidad entre sesiones y mostrar resultados previos.
       </p>
 
       <h2>Servicios de terceros</h2>
       <p>
-        HabitaLibre puede utilizar infraestructura tecnológica y backend para procesar cálculos
-        y almacenar resultados de forma segura. No utilizamos los datos ingresados para tracking
-        publicitario.
+        HabitaLibre puede utilizar infraestructura tecnológica y backend para
+        procesar cálculos y almacenar resultados de forma segura.
+      </p>
+      <p>
+        Podemos utilizar servicios de terceros para infraestructura y funcionamiento
+        de la aplicación. Estos proveedores no utilizan la información para fines publicitarios.
+      </p>
+      <p>
+        No utilizamos los datos ingresados para tracking publicitario.
+      </p>
+      <p>
+        HabitaLibre no realiza seguimiento del usuario con fines de publicidad
+        ni comparte datos con redes publicitarias.
       </p>
 
       <h2>Control del usuario</h2>
       <p>
-        El usuario puede dejar de utilizar la aplicación en cualquier momento. Las simulaciones
-        son opcionales y la aprobación final de cualquier producto financiero dependerá de la
-        evaluación de cada institución.
+        El usuario puede dejar de utilizar la aplicación en cualquier momento.
+        Las simulaciones son opcionales y la aprobación final de cualquier producto
+        financiero dependerá de la evaluación de cada institución.
       </p>
 
       <h2>Contacto</h2>
@@ -93,9 +220,9 @@
       </p>
 
       <h2>Importante</h2>
-      <p>
-        HabitaLibre no es una entidad financiera ni otorga créditos directamente. Los resultados
-        mostrados son informativos y referenciales.
+      <p class="important">
+        HabitaLibre no es una entidad financiera ni otorga créditos directamente.
+        Los resultados mostrados son informativos y referenciales.
       </p>
     </div>
   </div>

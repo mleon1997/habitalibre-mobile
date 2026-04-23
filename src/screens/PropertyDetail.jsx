@@ -1,11 +1,14 @@
 // src/screens/PropertyDetail.jsx
 import React, { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, MapPin } from "lucide-react";
 import { moneyUSD } from "../lib/money";
 import mockProperties from "../data/mockProperties.js";
+import { getCustomer } from "../lib/customerSession.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
+const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
 /* ---------------- storage ---------------- */
 function loadJSON(key) {
@@ -15,6 +18,53 @@ function loadJSON(key) {
   } catch {
     return null;
   }
+}
+
+function saveJSON(key, val) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
+function getStorageOwnerEmail() {
+  try {
+    const email = String(getCustomer()?.email || "").trim().toLowerCase();
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
+function loadOwnedData(key) {
+  const ownerEmail = getStorageOwnerEmail();
+  const envelope = loadJSON(key);
+
+  if (!envelope) return null;
+
+  // Formato nuevo: { ownerEmail, data }
+  if (envelope?.ownerEmail && "data" in envelope) {
+    if (
+      ownerEmail &&
+      String(envelope.ownerEmail).trim().toLowerCase() === ownerEmail
+    ) {
+      return envelope.data ?? null;
+    }
+
+    // si no hay owner actual, permitir leer igual
+    if (!ownerEmail) {
+      return envelope.data ?? null;
+    }
+
+    return null;
+  }
+
+  // Formato viejo / legacy
+  return envelope;
+}
+
+function saveOwnedData(key, data) {
+  const ownerEmail = getStorageOwnerEmail();
+  saveJSON(key, { ownerEmail, data });
 }
 
 function pick(snapshot, keys) {
@@ -29,6 +79,12 @@ function pick(snapshot, keys) {
 function n(v, def = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : def;
+}
+
+function maybeNum(v) {
+  if (v == null || v === "") return null;
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
 }
 
 function formatMoney(v) {
@@ -54,25 +110,27 @@ function formatProbability(prob) {
 
 function formatMatchReason(reason) {
   const map = {
-    precio: "precio",
-    entrada: "entrada",
-    precio_entrada: "precio + entrada",
-    cuota: "cuota",
-    programa: "programa",
+    precio: "Precio",
+    entrada: "Entrada",
+    precio_entrada: "Precio + entrada",
+    cuota: "Cuota",
+    programa: "Programa",
   };
-  return map[reason] || reason || "precio";
+  return map[reason] || reason || "Precio";
 }
 
 function formatEstadoCompra(estado) {
   const map = {
     top_match: "Top match",
-    entrada_viable_hipoteca_futura_viable: "Entrada viable + hipoteca futura viable",
-    entrada_viable_hipoteca_futura_debil: "Entrada viable, hipoteca por fortalecer",
+    entrada_viable_hipoteca_futura_viable:
+      "Entrada viable + hipoteca futura viable",
+    entrada_viable_hipoteca_futura_debil:
+      "Entrada viable, hipoteca por fortalecer",
     entrada_no_viable: "Entrada no viable",
     ruta_cercana: "Ruta cercana",
     fuera_de_reglas: "Fuera de reglas",
   };
-  return map[estado] || "Análisis disponible";
+  return map[estado] || "Pendiente de análisis";
 }
 
 const UI = {
@@ -116,7 +174,7 @@ function Pill({ children, tone = "neutral" }) {
     <span
       style={{
         fontSize: 12,
-        padding: "6px 10px",
+        padding: "7px 11px",
         borderRadius: 999,
         background: bg,
         border: `1px solid ${br}`,
@@ -134,8 +192,8 @@ function PrimaryButton({ children, onClick, style }) {
       onClick={onClick}
       style={{
         width: "100%",
-        padding: 13,
-        borderRadius: 14,
+        padding: 14,
+        borderRadius: 16,
         border: "none",
         background: UI.green,
         color: "#052019",
@@ -155,8 +213,8 @@ function SecondaryButton({ children, onClick, style }) {
       onClick={onClick}
       style={{
         width: "100%",
-        padding: 13,
-        borderRadius: 14,
+        padding: 14,
+        borderRadius: 16,
         border: `1px solid rgba(255,255,255,0.16)`,
         background: "rgba(255,255,255,0.06)",
         color: "white",
@@ -170,36 +228,48 @@ function SecondaryButton({ children, onClick, style }) {
   );
 }
 
-function StatChip({ label, value }) {
+function StatCard({ label, value }) {
   return (
     <div
       style={{
-        padding: 12,
-        borderRadius: 16,
+        padding: 14,
+        borderRadius: 18,
         background: UI.cardSoft,
         border: `1px solid ${UI.borderSoft}`,
       }}
     >
       <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>{label}</div>
-      <div style={{ marginTop: 4, fontSize: 15, fontWeight: 900 }}>{value}</div>
+      <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>{value}</div>
     </div>
   );
 }
 
-function InfoCard({ title, children }) {
+function InfoCard({ title, subtitle, children }) {
   return (
     <div
       style={{
         marginTop: 14,
-        padding: 16,
+        padding: 18,
         borderRadius: 22,
         background: UI.card,
         border: `1px solid ${UI.border}`,
         boxShadow: UI.shadowSoft,
       }}
     >
-      <div style={{ fontWeight: 900, fontSize: 15 }}>{title}</div>
-      <div style={{ marginTop: 10 }}>{children}</div>
+      <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
+      {subtitle ? (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            lineHeight: 1.4,
+            color: UI.textDim,
+          }}
+        >
+          {subtitle}
+        </div>
+      ) : null}
+      <div style={{ marginTop: 12 }}>{children}</div>
     </div>
   );
 }
@@ -222,11 +292,11 @@ function ToneBox({ tone = "neutral", children }) {
   return (
     <div
       style={{
-        padding: 12,
-        borderRadius: 16,
+        padding: 14,
+        borderRadius: 18,
         background,
         border: `1px solid ${border}`,
-        fontSize: 13,
+        fontSize: 14,
         lineHeight: 1.45,
       }}
     >
@@ -248,22 +318,22 @@ function NotFound({ onBack }) {
     >
       <div
         style={{
-          marginTop: 40,
-          padding: 18,
-          borderRadius: 22,
+          marginTop: 60,
+          padding: 20,
+          borderRadius: 24,
           background: UI.card,
           border: `1px solid ${UI.border}`,
         }}
       >
-        <div style={{ fontSize: 14, opacity: 0.8 }}>🏘 Propiedad</div>
-        <div style={{ marginTop: 8, fontSize: 18, fontWeight: 900 }}>
+        <div style={{ fontSize: 14, opacity: 0.8 }}>Propiedad</div>
+        <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900 }}>
           No encontramos esta propiedad
         </div>
-        <div style={{ marginTop: 8, fontSize: 13, opacity: 0.78, lineHeight: 1.4 }}>
+        <div style={{ marginTop: 8, fontSize: 13, opacity: 0.78, lineHeight: 1.45 }}>
           Puede que el id no exista o que todavía no esté cargada en tu inventario.
         </div>
         <div style={{ marginTop: 14 }}>
-          <PrimaryButton onClick={onBack}>Volver al marketplace</PrimaryButton>
+          <PrimaryButton onClick={onBack}>Volver a propiedades</PrimaryButton>
         </div>
       </div>
     </div>
@@ -274,11 +344,16 @@ export default function PropertyDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  const snapshot = useMemo(() => loadJSON(LS_SNAPSHOT), []);
-  const journey = useMemo(() => loadJSON(LS_JOURNEY), []);
+  const snapshot = useMemo(() => loadOwnedData(LS_SNAPSHOT), []);
+  const journey = useMemo(() => loadOwnedData(LS_JOURNEY), []);
 
   const matchedProperties =
     pick(snapshot, ["matchedProperties"]) ||
+    snapshot?.plan?.routeSignals?.matchedProperties ||
+    snapshot?.routeSignals?.matchedProperties ||
+    snapshot?.output?.routeSignals?.matchedProperties ||
+    journey?.match?.propiedades ||
+    journey?.match?.items ||
     pick(snapshot, ["propiedades"]) ||
     [];
 
@@ -299,21 +374,42 @@ export default function PropertyDetail() {
   }
 
   const precio = n(property?.precio);
-  const entradaDisponible =
-    n(pick(snapshot, ["entradaDisponible"])) ||
-    n(journey?.form?.entrada) ||
-    n(journey?.entrada) ||
-    0;
 
-  const precioMaxVivienda =
-    n(pick(snapshot, ["precioMaxVivienda"])) ||
-    n(pick(snapshot, ["precioMaxPerfil"])) ||
-    n(pick(snapshot, ["precioMax"])) ||
-    0;
+  const entradaDisponibleRaw =
+    pick(snapshot, ["entradaDisponible"]) ??
+    snapshot?.plan?.currentEntry ??
+    snapshot?.financialCapacity?.plannedEntry?.currentEntry ??
+    journey?.form?.entradaDisponible ??
+    journey?.form?.entrada ??
+    journey?.entrada ??
+    property?.evaluacionEntrada?.entradaDisponibleHoy ??
+    null;
 
-  const productoElegido = pick(snapshot, ["productoElegido", "productoSugerido"]);
+  const entradaDisponible = maybeNum(entradaDisponibleRaw);
+
+  const precioMaxViviendaRaw =
+    pick(snapshot, ["precioMaxVivienda"]) ??
+    pick(snapshot, ["precioMaxPerfil"]) ??
+    pick(snapshot, ["precioMax"]) ??
+    snapshot?.financialCapacity?.estimatedMaxPropertyValue ??
+    snapshot?.homeRecommendation?.profileProgramsThatCouldWorkIfRangeAdjusted?.[0]?.priceMax ??
+    property?.evaluacionHipotecaHoy?.precioMaxVivienda ??
+    property?.evaluacionHipotecaFutura?.precioMaxVivienda ??
+    null;
+
+  const precioMaxVivienda = maybeNum(precioMaxViviendaRaw);
+
+  const productoElegido =
+    pick(snapshot, ["productoElegido", "productoSugerido"]) ||
+    property?.evaluacionHipotecaHoy?.productoSugerido ||
+    property?.evaluacionHipotecaFutura?.productoSugerido ||
+    null;
+
   const bancosTop3 =
-    pick(snapshot, ["bancosTop3"]) || pick(snapshot, ["bancosProbabilidad"]) || [];
+    pick(snapshot, ["bancosTop3"]) ||
+    pick(snapshot, ["bancosProbabilidad"]) ||
+    snapshot?.rankedMortgages ||
+    [];
 
   const bankSuggested =
     Array.isArray(bancosTop3) && bancosTop3.length ? bancosTop3[0] : null;
@@ -324,23 +420,185 @@ export default function PropertyDetail() {
   const evaluacionHipotecaFutura = property?.evaluacionHipotecaFutura || null;
   const estadoCompra = property?.estadoCompra || null;
 
-  const calzaPrecio = precioMaxVivienda > 0 ? precio <= precioMaxVivienda : true;
-  const gapPrecio = precioMaxVivienda > 0 ? Math.max(0, precio - precioMaxVivienda) : 0;
-  const entradaPct = precio > 0 ? (entradaDisponible / precio) * 100 : 0;
+  const hasPrecioMax = precioMaxVivienda != null && precioMaxVivienda > 0;
+  const hasEntradaDisponible = entradaDisponible != null;
+  const hasEvaluacionEntrada = !!evaluacionEntrada;
+  const hasHipotecaData =
+    !!evaluacionHipotecaHoy || !!evaluacionHipotecaFutura || !!bankSuggested;
 
-  const toneEstado =
-    estadoCompra === "top_match" ||
-    estadoCompra === "entrada_viable_hipoteca_futura_viable"
-      ? "green"
-      : estadoCompra === "entrada_viable_hipoteca_futura_debil" ||
-        estadoCompra === "ruta_cercana"
-      ? "amber"
-      : "red";
+  const calzaPrecio = hasPrecioMax ? precio <= precioMaxVivienda : null;
+  const gapPrecio = hasPrecioMax ? Math.max(0, precio - precioMaxVivienda) : null;
+  const entradaPct =
+    hasEntradaDisponible && precio > 0 ? (entradaDisponible / precio) * 100 : null;
 
-  const entradaRequerida = n(evaluacionEntrada?.entradaRequerida);
-  const faltanteEntrada = n(evaluacionEntrada?.faltanteEntrada);
-  const cuotaEntradaMensual = evaluacionEntrada?.cuotaEntradaMensual;
-  const mesesConstruccion = n(evaluacionEntrada?.mesesConstruccionRestantes);
+  const entradaRequerida =
+    evaluacionEntrada?.entradaRequerida == null
+      ? null
+      : maybeNum(evaluacionEntrada?.entradaRequerida);
+
+  const faltanteEntrada =
+    evaluacionEntrada?.faltanteEntrada == null
+      ? null
+      : maybeNum(evaluacionEntrada?.faltanteEntrada);
+
+  const cuotaEntradaMensual =
+    evaluacionEntrada?.cuotaEntradaMensual == null
+      ? null
+      : maybeNum(evaluacionEntrada?.cuotaEntradaMensual);
+
+  const mesesConstruccion =
+    evaluacionEntrada?.mesesConstruccionRestantes == null
+      ? null
+      : maybeNum(evaluacionEntrada?.mesesConstruccionRestantes);
+
+  const hasAnalisisCompletoMinimo =
+    hasPrecioMax && hasEntradaDisponible && (hasEvaluacionEntrada || hasHipotecaData);
+
+  let toneEstado = "neutral";
+  if (hasAnalisisCompletoMinimo) {
+    toneEstado =
+      estadoCompra === "top_match" ||
+      estadoCompra === "entrada_viable_hipoteca_futura_viable"
+        ? "green"
+        : estadoCompra === "entrada_viable_hipoteca_futura_debil" ||
+          estadoCompra === "ruta_cercana"
+        ? "amber"
+        : "red";
+  } else {
+    toneEstado = "amber";
+  }
+
+  const heroTitle =
+    property.titulo || property.nombre || property.proyecto || "Propiedad";
+  const heroLocation =
+    property.sector || property.zona || property.ciudadZona || property.ciudad || "Quito";
+
+  const descripcionReal =
+    property.descripcion ||
+    `${heroTitle} es una propiedad orientada a primera vivienda, ubicada en ${heroLocation}. Esta opción se muestra porque se alinea con tu perfil actual y con una ruta estimada de compra dentro de la app.`;
+
+  const mainBadgeLabel = hasAnalisisCompletoMinimo
+    ? property?.matchBadgeCalculado || property?.matchBadge || formatEstadoCompra(estadoCompra)
+    : "Pendiente de análisis";
+
+  const estadoLabel = hasAnalisisCompletoMinimo
+    ? formatEstadoCompra(estadoCompra)
+    : "Análisis parcial";
+
+  const futureReasonText =
+    evaluacionHipotecaFutura?.viable
+      ? faltanteEntrada === 0
+        ? "Con la entrada requerida ya cubierta, esta propiedad podría calzar con tu ruta hipotecaria al momento de la entrega."
+        : evaluacionHipotecaFutura?.razon || "No disponible"
+      : evaluacionHipotecaFutura?.razon || "No disponible";
+
+function handleSelectProperty() {
+  const propertyId =
+    property?.id ||
+    property?._id ||
+    property?.propertyId ||
+    id ||
+    null;
+
+  const propertyTitle =
+    property?.titulo ||
+    property?.nombre ||
+    property?.title ||
+    property?.name ||
+    property?.proyecto ||
+    "Propiedad elegida";
+
+  const propertyCity =
+    property?.ciudad ||
+    property?.zona ||
+    property?.ciudadZona ||
+    property?.sector ||
+    journey?.form?.ciudadCompra ||
+    journey?.ciudadCompra ||
+    "Ubicación pendiente";
+
+  const propertyPriceRaw =
+    property?.precio ??
+    property?.price ??
+    property?.valor ??
+    property?.listPrice ??
+    null;
+
+  const propertyPrice = Number.isFinite(Number(propertyPriceRaw))
+    ? Number(propertyPriceRaw)
+    : null;
+
+  const propertyImage =
+    property?.imagen ||
+    property?.image ||
+    property?.imageUrl ||
+    property?.foto ||
+    property?.cover ||
+    null;
+
+  const normalizedProperty = {
+    // ids
+    id: propertyId,
+    _id: propertyId,
+    propertyId: propertyId,
+
+    // naming estándar
+    titulo: propertyTitle,
+    nombre: propertyTitle,
+    proyecto: propertyTitle,
+
+    // location estándar
+    ciudad: propertyCity,
+    zona: propertyCity,
+    sector: property?.sector || propertyCity,
+    ciudadZona: property?.ciudadZona || propertyCity,
+
+    // price estándar
+    precio: propertyPrice,
+    price: propertyPrice,
+
+    // media
+    imagen: propertyImage,
+    image: propertyImage,
+
+    // detalles útiles
+    cuotaEstimada:
+      property?.cuotaEstimada ||
+      property?.cuota ||
+      property?.evaluacionHipotecaFutura?.cuotaReferencia ||
+      property?.evaluacionHipotecaHoy?.cuotaReferencia ||
+      snapshot?.cuotaEstimada ||
+      snapshot?.cuotaMensual ||
+      snapshot?.bestMortgage?.cuota ||
+      null,
+
+    entradaMinima:
+      property?.entradaMinima ??
+      property?.entradaRequerida ??
+      property?.evaluacionEntrada?.entradaRequerida ??
+      null,
+
+    descripcion:
+      property?.descripcion ||
+      `${propertyTitle} es una propiedad que hoy se alinea con tu ruta estimada dentro de HabitaLibre.`,
+
+    source: "property_detail",
+    selectedAt: new Date().toISOString(),
+
+    raw: property,
+  };
+
+  saveOwnedData(LS_SELECTED_PROPERTY, normalizedProperty);
+
+  saveOwnedData(LS_JOURNEY, {
+    ...(journey || {}),
+    propiedadElegida: true,
+    propiedadId: propertyId,
+    propiedadSeleccionada: normalizedProperty,
+  });
+
+  navigate("/ruta");
+}
 
   return (
     <div
@@ -349,126 +607,164 @@ export default function PropertyDetail() {
         background: UI.bg,
         color: "white",
         fontFamily: "system-ui",
-        paddingBottom: 28,
+        paddingBottom: 150,
       }}
     >
       <div
         style={{
-          height: 280,
+          height: 300,
           width: "100%",
           background: property.imagen
-            ? `linear-gradient(rgba(0,0,0,0.12), rgba(7,16,36,0.48)), url(${property.imagen}) center/cover`
+            ? `linear-gradient(rgba(0,0,0,0.16), rgba(7,16,36,0.52)), url(${property.imagen}) center/cover`
             : "linear-gradient(135deg, rgba(37,211,166,0.18), rgba(255,255,255,0.06))",
           position: "relative",
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate("/marketplace");
+            }
+          }}
+          aria-label="Volver"
           style={{
-            position: "absolute",
-            top: 18,
-            left: 18,
-            border: `1px solid rgba(255,255,255,0.16)`,
-            background: "rgba(7,16,36,0.45)",
+            position: "fixed",
+            top: "calc(env(safe-area-inset-top, 0px) + 18px)",
+            left: 16,
+            width: 56,
+            height: 56,
+            border: "1px solid rgba(255,255,255,0.18)",
+            background: "rgba(9, 18, 38, 0.88)",
             color: "white",
             borderRadius: 999,
-            padding: "10px 12px",
             cursor: "pointer",
-            fontWeight: 900,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999,
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
           }}
         >
-          ← Volver
+          <ArrowLeft size={20} />
         </button>
       </div>
 
-      <div style={{ marginTop: -28, padding: "0 22px" }}>
+      <div style={{ marginTop: -36, padding: "0 22px" }}>
         <div
           style={{
-            padding: 18,
-            borderRadius: 24,
-            background: "rgba(7,16,36,0.86)",
+            padding: 20,
+            borderRadius: 26,
+            background: "rgba(7,16,36,0.88)",
             border: `1px solid ${UI.border}`,
             boxShadow: UI.shadow,
             backdropFilter: "blur(10px)",
           }}
         >
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Pill tone={toneEstado}>
-              {property?.matchBadgeCalculado || property?.matchBadge || "Match"}
-            </Pill>
+            <Pill tone={toneEstado}>{mainBadgeLabel}</Pill>
 
-            <Pill>{formatEstadoCompra(estadoCompra)}</Pill>
-
-            {property.proyectoNuevo ? (
-              <Pill>Proyecto nuevo</Pill>
-            ) : (
-              <Pill>Entrega inmediata</Pill>
-            )}
+            {property.proyectoNuevo ? <Pill>Proyecto nuevo</Pill> : <Pill>Entrega inmediata</Pill>}
 
             <Pill>{formatMatchReason(property.matchReason)}</Pill>
           </div>
 
-          <div style={{ marginTop: 10, fontSize: 24, fontWeight: 900 }}>
-            {property.titulo}
-          </div>
-
-          <div style={{ marginTop: 8, fontSize: 14, opacity: 0.78 }}>
-            {property.sector || property.zona} • {property.ciudadZona || property.zona}
-          </div>
-
-          <div style={{ marginTop: 12, fontSize: 28, fontWeight: 900 }}>
-            {moneyUSD(precio)}
+          <div style={{ marginTop: 14, fontSize: 30, fontWeight: 980, lineHeight: 1.02 }}>
+            {heroTitle}
           </div>
 
           <div
             style={{
-              marginTop: 14,
+              marginTop: 10,
+              fontSize: 15,
+              color: "rgba(255,255,255,0.78)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <MapPin size={14} />
+            {heroLocation}
+          </div>
+
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 12, color: UI.textDim, fontWeight: 800 }}>
+                Precio
+              </div>
+              <div style={{ marginTop: 4, fontSize: 40, fontWeight: 980, lineHeight: 1 }}>
+                {moneyUSD(precio)}
+              </div>
+            </div>
+
+            <Pill tone={toneEstado}>{estadoLabel}</Pill>
+          </div>
+
+          <div
+            style={{
+              marginTop: 16,
               display: "grid",
               gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: 10,
             }}
           >
-            <StatChip label="Área" value={property.m2 != null ? `${property.m2} m²` : "—"} />
-            <StatChip
+            <StatCard label="Área" value={property.m2 != null ? `${property.m2} m²` : "—"} />
+            <StatCard
               label="Dormitorios"
               value={property.dormitorios != null ? String(property.dormitorios) : "—"}
             />
-            <StatChip
+            <StatCard
               label="Baños"
               value={property.banos != null ? String(property.banos) : "—"}
             />
-            <StatChip
+            <StatCard
               label="Parqueaderos"
               value={property.parqueaderos != null ? String(property.parqueaderos) : "—"}
             />
           </div>
         </div>
 
-        <InfoCard title="¿Cómo calza con tu perfil?">
+        <InfoCard
+          title="Cómo se alinea con tu perfil"
+          subtitle="Aquí resumimos cómo se alinea esta propiedad con tu perfil actual y qué podrías ajustar."
+        >
           <div style={{ display: "grid", gap: 10 }}>
             <ToneBox tone={toneEstado}>
-              <strong>{formatEstadoCompra(estadoCompra)}</strong>
+              <strong>{estadoLabel}</strong>
               <div style={{ marginTop: 6 }}>
-                {property?.matchReasonCalculado ||
-                  "Analizamos esta propiedad con base en tu perfil y en el esquema financiero del proyecto."}
+                {hasAnalisisCompletoMinimo
+                  ? property?.matchReasonCalculado ||
+                    "Analizamos esta propiedad con base en tu perfil y en el esquema financiero del proyecto."
+                  : "Todavía no tenemos suficiente información para confirmar el encaje completo de esta propiedad con tu perfil."}
               </div>
             </ToneBox>
 
             <ToneBox>
-              Esta propiedad hace match principalmente por{" "}
+              Esta propiedad se alinea principalmente por{" "}
               <strong>{formatMatchReason(property.matchReason)}</strong>.
             </ToneBox>
 
             <ToneBox>
-              {precioMaxVivienda > 0 ? (
+              {hasPrecioMax ? (
                 <>
                   Tu precio máximo estimado hoy es <strong>{moneyUSD(precioMaxVivienda)}</strong>.
                   {calzaPrecio ? (
                     <> Esta propiedad <strong>sí entra</strong> dentro de ese rango.</>
                   ) : (
                     <>
-                      {" "}
-                      Esta propiedad queda <strong>{moneyUSD(gapPrecio)}</strong> por encima de tu
+                      {" "}Esta propiedad queda <strong>{moneyUSD(gapPrecio)}</strong> por encima de tu
                       rango hipotecario actual.
                     </>
                   )}
@@ -479,13 +775,22 @@ export default function PropertyDetail() {
             </ToneBox>
 
             <ToneBox>
-              Tu entrada registrada es <strong>{moneyUSD(entradaDisponible)}</strong>, equivalente a{" "}
-              <strong>{formatPct(entradaPct)}</strong> del valor de esta propiedad.
+              {hasEntradaDisponible ? (
+                <>
+                  Tu entrada registrada es <strong>{moneyUSD(entradaDisponible)}</strong>, equivalente a{" "}
+                  <strong>{formatPct(entradaPct)}</strong> del valor de esta propiedad.
+                </>
+              ) : (
+                <>Aún no tenemos una entrada registrada para esta propiedad.</>
+              )}
             </ToneBox>
           </div>
         </InfoCard>
 
-        <InfoCard title="Entrada al proyecto">
+        <InfoCard
+          title="Entrada al proyecto"
+          subtitle="Te mostramos cuánto pide el proyecto, cuánto te faltaría y cómo se ve esa entrada para tu situación."
+        >
           <div style={{ display: "grid", gap: 10 }}>
             <div
               style={{
@@ -494,36 +799,72 @@ export default function PropertyDetail() {
                 gap: 10,
               }}
             >
-              <StatChip label="Entrada requerida" value={formatMoney(entradaRequerida)} />
-              <StatChip label="Faltante de entrada" value={formatMoney(faltanteEntrada)} />
-              <StatChip
-                label="Cuota entrada"
+              <StatCard label="Entrada requerida" value={formatMoney(entradaRequerida)} />
+
+              <StatCard
+                label="Faltante de entrada"
+                value={
+                  faltanteEntrada == null
+                    ? "—"
+                    : faltanteEntrada === 0
+                    ? "$0 (completo)"
+                    : formatMoney(faltanteEntrada)
+                }
+              />
+
+              <StatCard
+                label="Cuota mensual de entrada"
                 value={
                   cuotaEntradaMensual == null
-                    ? "Pago inmediato"
+                    ? "No disponible"
+                    : cuotaEntradaMensual === 0
+                    ? "No requerida"
                     : formatMonthly(cuotaEntradaMensual)
                 }
               />
-              <StatChip
+
+              <StatCard
                 label="Meses de construcción"
-                value={mesesConstruccion > 0 ? `${mesesConstruccion} meses` : "—"}
+                value={
+                  mesesConstruccion != null && mesesConstruccion > 0
+                    ? `${mesesConstruccion} meses`
+                    : "—"
+                }
               />
             </div>
 
-            <ToneBox tone={evaluacionEntrada?.viableEntrada ? "green" : "red"}>
-              <strong>
-                {evaluacionEntrada?.viableEntrada
-                  ? "La entrada se ve viable para ti."
-                  : "La entrada todavía no se ve viable para ti."}
-              </strong>
-              <div style={{ marginTop: 6 }}>
-                {evaluacionEntrada?.razon || "No tenemos todavía el análisis de entrada."}
-              </div>
-            </ToneBox>
+            {hasEvaluacionEntrada ? (
+              <ToneBox tone={evaluacionEntrada?.viableEntrada ? "green" : "red"}>
+                <strong>
+                  {evaluacionEntrada?.viableEntrada
+                    ? faltanteEntrada === 0
+                      ? "Ya cumples la entrada requerida para este proyecto."
+                      : "La entrada se ve viable para ti."
+                    : "La entrada todavía no se ve viable para ti."}
+                </strong>
+                <div style={{ marginTop: 6 }}>
+                  {evaluacionEntrada?.viableEntrada
+                    ? faltanteEntrada === 0
+                      ? "No necesitas completar una cuota mensual de entrada en esta etapa."
+                      : evaluacionEntrada?.razon || "La entrada podría completarse dentro del plazo estimado."
+                    : evaluacionEntrada?.razon || "No tenemos todavía el análisis de entrada."}
+                </div>
+              </ToneBox>
+            ) : (
+              <ToneBox tone="amber">
+                <strong>Entrada pendiente de análisis</strong>
+                <div style={{ marginTop: 6 }}>
+                  Todavía no tenemos suficiente información para calcular la entrada de esta propiedad.
+                </div>
+              </ToneBox>
+            )}
           </div>
         </InfoCard>
 
-        <InfoCard title="Ruta hipotecaria">
+        <InfoCard
+          title="Ruta hipotecaria"
+          subtitle="Aquí ves si esta propiedad se alinea con una hipoteca hoy, una hipoteca futura o una recomendación general de tu perfil."
+        >
           <div style={{ display: "grid", gap: 10 }}>
             {evaluacionHipotecaHoy ? (
               <ToneBox tone={evaluacionHipotecaHoy?.viable ? "green" : "amber"}>
@@ -531,7 +872,7 @@ export default function PropertyDetail() {
                 <div style={{ marginTop: 6 }}>
                   {evaluacionHipotecaHoy?.razon || "No disponible"}
                 </div>
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.82 }}>
+                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.82, lineHeight: 1.45 }}>
                   Producto: <strong>{evaluacionHipotecaHoy?.productoSugerido || "—"}</strong>
                   {" • "}Probabilidad:{" "}
                   <strong>{formatProbability(evaluacionHipotecaHoy?.probabilidad)}</strong>
@@ -544,7 +885,7 @@ export default function PropertyDetail() {
               <ToneBox tone={evaluacionHipotecaFutura?.viable ? "green" : "amber"}>
                 <strong>Hipoteca futura al momento de entrega</strong>
                 <div style={{ marginTop: 6 }}>
-                  {evaluacionHipotecaFutura?.razon || "No disponible"}
+                  {futureReasonText}
                 </div>
                 <div style={{ marginTop: 8, fontSize: 12, opacity: 0.82, lineHeight: 1.45 }}>
                   Monto hipotecario proyectado:{" "}
@@ -559,7 +900,7 @@ export default function PropertyDetail() {
             ) : null}
 
             {!evaluacionHipotecaHoy && !evaluacionHipotecaFutura && bankSuggested ? (
-              <ToneBox>
+              <ToneBox tone="amber">
                 <strong>Mejor ruta estimada</strong>
                 <div style={{ marginTop: 6 }}>
                   {bankSuggested.banco || "Hipoteca sugerida"}
@@ -580,6 +921,15 @@ export default function PropertyDetail() {
               </ToneBox>
             ) : null}
 
+            {!hasHipotecaData ? (
+              <ToneBox tone="amber">
+                <strong>Ruta hipotecaria pendiente</strong>
+                <div style={{ marginTop: 6 }}>
+                  Todavía no hay una ruta hipotecaria calculada para esta propiedad.
+                </div>
+              </ToneBox>
+            ) : null}
+
             {productoElegido ? (
               <ToneBox>
                 Tu producto sugerido general actual es <strong>{String(productoElegido)}</strong>.
@@ -588,30 +938,26 @@ export default function PropertyDetail() {
           </div>
         </InfoCard>
 
-        <InfoCard title="Descripción">
-          <div style={{ fontSize: 13, opacity: 0.82, lineHeight: 1.5 }}>
-            {property.descripcion ||
-              "Proyecto recomendado dentro de tu marketplace inicial. Luego aquí podrás mostrar descripción real, amenidades, promotor, fotos, ubicación y CTA directo para aplicar."}
+        <InfoCard
+          title="Descripción"
+          subtitle="Resumen de la propiedad y de su encaje estimado dentro de tu escenario actual."
+        >
+          <div style={{ fontSize: 14, color: UI.textDim, lineHeight: 1.5 }}>
+            {descripcionReal}
           </div>
         </InfoCard>
 
-        <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
-          <PrimaryButton
-            onClick={() =>
-              navigate("/asesor", {
-                state: {
-                  selectedProperty: property,
-                },
-              })
-            }
-          >
-            Quiero aplicar a esta propiedad
+        <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
+          <PrimaryButton onClick={handleSelectProperty}>
+            Seleccionar esta propiedad
           </PrimaryButton>
 
           <SecondaryButton onClick={() => navigate("/marketplace")}>
             Ver más propiedades
           </SecondaryButton>
         </div>
+
+        <div style={{ height: 140 }} />
       </div>
     </div>
   );

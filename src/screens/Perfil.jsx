@@ -19,6 +19,7 @@ import {
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 
+
 const LEGAL_LINKS = {
   privacidad: "https://www.habitalibre.com/privacy.html",
   terminos: "https://www.habitalibre.com/terms.html",
@@ -34,12 +35,92 @@ function readJSON(key, fallback = null) {
   }
 }
 
+
 function openExternal(url) {
   try {
     window.open(url, "_blank", "noopener,noreferrer");
   } catch {
     window.location.href = url;
   }
+}
+
+function isFiniteNum(v) {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+function toNum(v) {
+  if (isFiniteNum(v)) return v;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function snapshotLooksValid(snap) {
+  return Boolean(
+    snap?.unlocked === true ||
+      snap?.output?.unlocked === true ||
+      snap?.ok === true ||
+      snap?.output?.ok === true ||
+      snap?.score != null ||
+      snap?.output?.score != null ||
+      snap?.financialCapacity?.estimatedMaxPropertyValue != null ||
+      snap?.output?.financialCapacity?.estimatedMaxPropertyValue != null
+  );
+}
+
+function journeyLooksMeaningful(rawJourney) {
+  if (!rawJourney || typeof rawJourney !== "object") return false;
+
+  const form = rawJourney?.form || {};
+  const source = Object.keys(form).length ? form : rawJourney;
+
+  const meaningfulKeys = [
+    "ciudadCompra",
+    "horizonteCompra",
+    "tipoVivienda",
+    "ingreso",
+    "entrada",
+    "primeraVivienda",
+    "edad",
+    "estadoCivil",
+    "tipoIngreso",
+    "aniosEstabilidad",
+    "deudas",
+  ];
+
+  return meaningfulKeys.some((k) => {
+    const v = source?.[k];
+    return v !== undefined && v !== null && String(v).trim() !== "";
+  });
+}
+
+function formatMoney(v) {
+  const n = toNum(v);
+  if (n == null) return "No definido";
+  return `$${n}`;
+}
+
+function normalizeProbabilityLabel(v) {
+  if (v == null || String(v).trim() === "") return null;
+  const s = String(v).trim().toLowerCase();
+
+  if (s === "alta") return "Alta";
+  if (s === "media") return "Media";
+  if (s === "baja") return "Baja";
+  if (s.includes("%")) return String(v).trim();
+
+  return String(v).trim();
+}
+
+function pickProfileField(journey, form, snapshot, keys = []) {
+  for (const k of keys) {
+    if (journey?.[k] != null && String(journey[k]).trim() !== "") return journey[k];
+    if (form?.[k] != null && String(form[k]).trim() !== "") return form[k];
+    if (snapshot?.input?.[k] != null && String(snapshot.input[k]).trim() !== "") return snapshot.input[k];
+    if (snapshot?.perfilInput?.[k] != null && String(snapshot.perfilInput[k]).trim() !== "") return snapshot.perfilInput[k];
+    if (snapshot?.__entrada?.[k] != null && String(snapshot.__entrada[k]).trim() !== "") return snapshot.__entrada[k];
+    if (snapshot?.legacy?._echo?.[k] != null && String(snapshot.legacy._echo[k]).trim() !== "") return snapshot.legacy._echo[k];
+  }
+  return null;
 }
 
 function SectionTitle({ children, right }) {
@@ -50,13 +131,13 @@ function SectionTitle({ children, right }) {
         alignItems: "center",
         justifyContent: "space-between",
         gap: 12,
-        marginBottom: 10,
+        marginBottom: 12,
         paddingLeft: 2,
       }}
     >
       <div
         style={{
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: 900,
           color: UI.subtext,
           letterSpacing: 0.1,
@@ -73,7 +154,7 @@ function SectionTitle({ children, right }) {
             border: "none",
             background: "transparent",
             color: UI.accent || "#5eead4",
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 900,
             cursor: "pointer",
             padding: 0,
@@ -91,7 +172,7 @@ function MetricCard({ label, value }) {
     <div
       style={{
         minWidth: 0,
-        padding: 14,
+        padding: 16,
         borderRadius: UI.radiusInner,
         background: UI.innerBg,
         border: UI.borderSoft,
@@ -231,6 +312,67 @@ function InlineInfo({ label, value }) {
   );
 }
 
+function PrimaryActionCard({ eyebrow, title, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: "100%",
+        padding: "18px 18px",
+        borderRadius: UI.radiusCard,
+        border: UI.border,
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.04))",
+        color: UI.text,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        cursor: "pointer",
+        boxShadow: UI.shadowSoft,
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+      }}
+    >
+      <div style={{ textAlign: "left", minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontSize: 13,
+            color: UI.subtext,
+            marginBottom: 6,
+            lineHeight: 1.2,
+          }}
+        >
+          {eyebrow}
+        </div>
+        <div
+          style={{
+            fontSize: 17,
+            fontWeight: 900,
+            color: UI.text,
+            lineHeight: 1.22,
+            wordBreak: "break-word",
+          }}
+        >
+          {title}
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginLeft: 14,
+          fontSize: 22,
+          lineHeight: 1,
+          color: "rgba(148,163,184,0.9)",
+          flexShrink: 0,
+        }}
+      >
+        ›
+      </div>
+    </button>
+  );
+}
+
 export default function Perfil() {
   const navigate = useNavigate();
 
@@ -238,25 +380,64 @@ export default function Perfil() {
   const isLoggedIn = !!token;
   const customer = getCustomer();
 
-  const rawJourney = readJSON(LS_JOURNEY, {}) || {};
-  const snapshot = readJSON(LS_SNAPSHOT, {}) || {};
+  const currentOwnerEmail = String(customer?.email || "").trim().toLowerCase();
 
+  const rawJourneyEnvelope = readJSON(LS_JOURNEY, null);
+  const rawSnapshotEnvelope = readJSON(LS_SNAPSHOT, null);
+
+  const rawJourneyStored =
+    rawJourneyEnvelope?.ownerEmail &&
+    rawJourneyEnvelope.ownerEmail === currentOwnerEmail
+      ? rawJourneyEnvelope.data
+      : null;
+
+  const rawSnapshotStored =
+    rawSnapshotEnvelope?.ownerEmail &&
+    rawSnapshotEnvelope.ownerEmail === currentOwnerEmail
+      ? rawSnapshotEnvelope.data
+      : null;
+
+  const snapshot = snapshotLooksValid(rawSnapshotStored) ? rawSnapshotStored : null;
+
+  const hasMeaningfulJourney = journeyLooksMeaningful(rawJourneyStored);
+
+  const rawJourney = hasMeaningfulJourney ? rawJourneyStored : null;
   const form = rawJourney?.form || {};
-  const journey = Object.keys(form).length ? form : rawJourney;
+  const journey = Object.keys(form).length ? form : rawJourney || {};
+
+  const edadValue = pickProfileField(journey, form, snapshot, ["edad"]);
+  const estadoCivilValue = pickProfileField(journey, form, snapshot, ["estadoCivil"]);
+  const ingresoValue = pickProfileField(journey, form, snapshot, ["ingreso", "ingresoNetoMensual"]);
+  const entradaValue = pickProfileField(journey, form, snapshot, ["entrada", "entradaDisponible"]);
+  const primeraViviendaValue = pickProfileField(journey, form, snapshot, ["primeraVivienda"]);
+  const ciudadCompraValue = pickProfileField(journey, form, snapshot, ["ciudadCompra"]);
+  const horizonteCompraValue = pickProfileField(journey, form, snapshot, ["horizonteCompra", "tiempoCompra"]);
+  const tipoViviendaValue = pickProfileField(journey, form, snapshot, ["tipoVivienda"]);
+
+  const hasScenarioInfo = Boolean(
+    edadValue ||
+      estadoCivilValue ||
+      ingresoValue ||
+      entradaValue ||
+      primeraViviendaValue ||
+      ciudadCompraValue ||
+      horizonteCompraValue ||
+      tipoViviendaValue
+  );
 
   const user = useMemo(() => {
     const nombre =
-      journey.nombre ||
-      form.nombre ||
       customer?.nombre ||
       customer?.name ||
+      journey?.nombre ||
+      form?.nombre ||
       "";
 
     const apellido =
-      journey.apellido ||
-      form.apellido ||
       customer?.apellido ||
       customer?.lastName ||
+      journey?.apellido ||
+      form?.apellido ||
       "";
 
     const fullNameFromCustomer =
@@ -272,12 +453,12 @@ export default function Perfil() {
       nombre: String(nombre || "").trim(),
       apellido: String(apellido || "").trim(),
       nombreCompleto,
-      email: customer?.email || journey.email || form.email || "No registrado",
+      email: customer?.email || journey?.email || form?.email || "No registrado",
       telefono:
-        journey.telefono ||
-        form.telefono ||
         customer?.telefono ||
         customer?.phone ||
+        journey?.telefono ||
+        form?.telefono ||
         "",
     };
   }, [journey, form, customer]);
@@ -288,21 +469,36 @@ export default function Perfil() {
       user.apellido,
       user.email !== "No registrado" ? user.email : "",
       user.telefono,
-      journey.edad,
-      journey.estadoCivil,
-      journey.ingreso,
-      journey.tipoIngreso,
-      journey.aniosEstabilidad,
-      journey.deudas,
-      journey.entrada,
-      journey.primeraVivienda,
-      journey.horizonteCompra,
-      journey.tipoVivienda,
+      edadValue,
+      estadoCivilValue,
+      ingresoValue,
+      pickProfileField(journey, form, snapshot, ["tipoIngreso"]),
+      pickProfileField(journey, form, snapshot, ["aniosEstabilidad", "mesesActividad"]),
+      pickProfileField(journey, form, snapshot, ["deudas", "otrasDeudasMensuales"]),
+      entradaValue,
+      primeraViviendaValue,
+      horizonteCompraValue,
+      tipoViviendaValue,
     ];
 
-    const complete = checks.filter(Boolean).length;
+    const complete = checks.filter((v) => {
+      return v !== undefined && v !== null && String(v).trim() !== "";
+    }).length;
+
     return Math.round((complete / checks.length) * 100);
-  }, [journey, user]);
+  }, [
+    user,
+    edadValue,
+    estadoCivilValue,
+    ingresoValue,
+    entradaValue,
+    primeraViviendaValue,
+    horizonteCompraValue,
+    tipoViviendaValue,
+    journey,
+    form,
+    snapshot,
+  ]);
 
   const estadoPerfil = useMemo(() => {
     if (profileCompletion >= 85) return "Muy completo";
@@ -310,12 +506,23 @@ export default function Perfil() {
     return "Por completar";
   }, [profileCompletion]);
 
-  const score = snapshot?.score ?? snapshot?.hlScore ?? 100;
-  const estadoActual =
-    snapshot?.probabilidadLabel ||
-    snapshot?.probabilidad ||
-    snapshot?.perfilLabel ||
-    "Alta";
+  const score = useMemo(() => {
+    if (!snapshot) return "—";
+    return snapshot?.score ?? snapshot?.output?.score ?? snapshot?.hlScore ?? "—";
+  }, [snapshot]);
+
+  const estadoActual = useMemo(() => {
+    if (!snapshot) return "Sin resultado aún";
+
+    return (
+      normalizeProbabilityLabel(
+        snapshot?.probabilidadLabel ||
+          snapshot?.probabilidad ||
+          snapshot?.output?.probabilidad ||
+          snapshot?.perfilLabel
+      ) || "Sin resultado aún"
+    );
+  }, [snapshot]);
 
   const completionTone =
     profileCompletion >= 85
@@ -325,30 +532,39 @@ export default function Perfil() {
       : "neutral";
 
   const resumenRuta = useMemo(() => {
+    if (!hasScenarioInfo) return "Aún no completas tu ruta";
+
     const partes = [];
 
-    if (journey.ciudadCompra) partes.push(journey.ciudadCompra);
-    if (journey.horizonteCompra) partes.push(`${journey.horizonteCompra} meses`);
-    if (journey.tipoVivienda) partes.push(journey.tipoVivienda);
+    if (ciudadCompraValue) partes.push(ciudadCompraValue);
+    if (horizonteCompraValue) partes.push(`${horizonteCompraValue} meses`);
+    if (tipoViviendaValue) partes.push(tipoViviendaValue);
 
     return partes.length ? partes.join(" · ") : "Aún no completas tu ruta";
-  }, [journey]);
+  }, [hasScenarioInfo, ciudadCompraValue, horizonteCompraValue, tipoViviendaValue]);
 
-  const ingresoLabel = journey.ingreso ? `$${journey.ingreso}` : "No definido";
-  const entradaLabel = journey.entrada ? `$${journey.entrada}` : "No definido";
-  const viviendaLabel = journey.primeraVivienda || "No definido";
+  const ingresoLabel = ingresoValue != null ? formatMoney(ingresoValue) : "No definido";
+  const entradaLabel = entradaValue != null ? formatMoney(entradaValue) : "No definido";
+  const viviendaLabel = primeraViviendaValue != null ? String(primeraViviendaValue) : "No definido";
 
-  function handleLogout() {
-    clearCustomerSession();
-    navigate("/login", { replace: true });
-  }
+function handleLogout() {
+  clearCustomerSession();
+  navigate("/login", { replace: true });
+}
 
   function goEditarPerfil() {
     navigate("/perfil/editar");
   }
 
+  const shouldShowJourneyBlock = hasScenarioInfo || !!snapshot;
+
   return (
-    <Screen style={{ paddingBottom: 110 }}>
+   <Screen
+  style={{
+    paddingTop: 78,
+    paddingBottom: 110,
+  }}
+>
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <div
           style={{
@@ -356,7 +572,7 @@ export default function Perfil() {
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: 16,
-            marginBottom: 16,
+          marginBottom: 20,
           }}
         >
           <div>
@@ -387,8 +603,8 @@ export default function Perfil() {
 
           <div
             style={{
-              width: 58,
-              height: 58,
+              width: 56,
+              height: 56,
               borderRadius: "50%",
               background:
                 "linear-gradient(180deg, rgba(45,212,191,0.16), rgba(59,130,246,0.12))",
@@ -396,31 +612,32 @@ export default function Perfil() {
               boxShadow: UI.shadowSoft,
               display: "grid",
               placeItems: "center",
-              fontSize: 24,
+              fontSize: 23,
               flexShrink: 0,
+              opacity: 0.9,
             }}
           >
             {(user.nombreCompleto || "U").slice(0, 1).toUpperCase()}
           </div>
         </div>
 
-        <Card style={{ marginBottom: 18, padding: 16 }}>
+        <Card style={{ marginBottom: 20, padding: 18 }}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 14,
+              gap: 16,
               marginBottom: 14,
             }}
           >
             <div
               style={{
-                width: 58,
-                height: 58,
+                width: 64,
+                height: 64,
                 borderRadius: "50%",
                 display: "grid",
                 placeItems: "center",
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: 950,
                 color: UI.text,
                 background:
@@ -435,12 +652,13 @@ export default function Perfil() {
             <div style={{ minWidth: 0, flex: 1 }}>
               <div
                 style={{
-                  fontSize: 22,
+                  fontSize: 24,
                   fontWeight: 950,
                   color: UI.text,
                   lineHeight: 1.05,
-                  marginBottom: 4,
+                  marginBottom: 5,
                   wordBreak: "break-word",
+                  letterSpacing: -0.4,
                 }}
               >
                 {user.nombreCompleto}
@@ -450,9 +668,9 @@ export default function Perfil() {
                 style={{
                   fontSize: 13,
                   color: UI.subtext,
-                  lineHeight: 1.3,
+                  lineHeight: 1.35,
                   wordBreak: "break-word",
-                  marginBottom: 8,
+                  marginBottom: 10,
                 }}
               >
                 {user.email}
@@ -464,7 +682,7 @@ export default function Perfil() {
             </div>
           </div>
 
-          <InnerCard style={{ marginTop: 0 }}>
+          <InnerCard style={{ marginTop: 2 }}>
             <div
               style={{
                 display: "flex",
@@ -533,7 +751,7 @@ export default function Perfil() {
           </div>
         </Card>
 
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 20 }}>
           <SectionTitle right={{ label: "Editar", onClick: goEditarPerfil }}>
             Datos personales
           </SectionTitle>
@@ -568,27 +786,25 @@ export default function Perfil() {
             >
               <InlineInfo
                 label="Edad"
-                value={journey.edad ? `${journey.edad} años` : "No definido"}
+                value={edadValue ? `${edadValue} años` : "No definido"}
               />
               <InlineInfo
                 label="Estado civil"
-                value={journey.estadoCivil || "No definido"}
+                value={estadoCivilValue || "No definido"}
               />
             </div>
           </div>
         </div>
 
-        <div style={{ marginBottom: 18 }}>
-          <SectionTitle
-            right={{ label: "Ver ruta", onClick: () => navigate("/ruta") }}
-          >
+        <div style={{ marginBottom: 20 }}>
+          <SectionTitle right={{ label: "Ver ruta", onClick: () => navigate("/ruta") }}>
             Tu ruta hipotecaria
           </SectionTitle>
 
-          <Card style={{ padding: 14 }}>
+          <Card style={{ padding: 16 }}>
             <div
               style={{
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 900,
                 color: UI.text,
                 marginBottom: 6,
@@ -626,7 +842,7 @@ export default function Perfil() {
               style={{
                 marginTop: 14,
                 width: "100%",
-                padding: 14,
+                padding: 15,
                 borderRadius: 16,
                 border: UI.border,
                 background: "rgba(255,255,255,0.04)",
@@ -636,33 +852,33 @@ export default function Perfil() {
                 cursor: "pointer",
               }}
             >
-              Actualizar mi ruta
+              {shouldShowJourneyBlock ? "Actualizar mi ruta" : "Completar mi ruta"}
             </button>
           </Card>
         </div>
 
-        <div style={{ marginBottom: 18 }}>
-          <SectionTitle>Cuenta y soporte</SectionTitle>
+        <div style={{ marginBottom: 20 }}>
+          <SectionTitle>Acciones principales</SectionTitle>
           <div style={{ display: "grid", gap: 10 }}>
-            <ListRow
-              label="Editar mis datos"
-              value="Actualizar información personal"
+            <PrimaryActionCard
+              eyebrow="Editar mis datos"
+              title="Actualizar información personal"
               onClick={goEditarPerfil}
             />
-            <ListRow
-              label="Mi ruta"
-              value="Ver mi camino a casa"
-              onClick={() => navigate("/ruta")}
+            <PrimaryActionCard
+              eyebrow="Mi ruta"
+              title={shouldShowJourneyBlock ? "Ver mi camino a casa" : "Completar mi capacidad"}
+              onClick={() => navigate(shouldShowJourneyBlock ? "/ruta" : "/journey")}
             />
-            <ListRow
-              label="Ayuda"
-              value="Hablar con un asesor"
+            <PrimaryActionCard
+              eyebrow="Ayuda"
+              title="Hablar con un asesor"
               onClick={() => navigate("/asesor")}
             />
           </div>
         </div>
 
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 20 }}>
           <SectionTitle>Legal</SectionTitle>
           <div style={{ display: "grid", gap: 10 }}>
             <ListRow
@@ -686,7 +902,7 @@ export default function Perfil() {
           </div>
         </div>
 
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 20 }}>
           <SectionTitle>Seguridad</SectionTitle>
           <div style={{ display: "grid", gap: 10 }}>
             <ListRow
@@ -700,24 +916,24 @@ export default function Perfil() {
 
         <div
           style={{
-            marginBottom: 18,
+            marginBottom: 14,
             padding: "0 2px",
             fontSize: 12,
-            color: UI.subtext,
-            lineHeight: 1.5,
+            color: "rgba(148,163,184,0.8)",
+            lineHeight: 1.55,
           }}
         >
-          Las simulaciones y resultados mostrados en HabitaLibre son
-          referenciales y pueden variar según la evaluación y verificación final
-          de cada entidad financiera.
+          Los resultados mostrados en HabitaLibre son referenciales
+          y pueden variar según la evaluación y verificación final de cada entidad
+          financiera.
         </div>
 
         <SecondaryButton
           onClick={handleLogout}
           style={{
-            height: 50,
+            height: 52,
             borderRadius: 16,
-            marginTop: 4,
+            marginTop: 2,
             marginBottom: 8,
           }}
         >

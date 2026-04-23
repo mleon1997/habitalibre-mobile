@@ -36,8 +36,15 @@ export async function customerLogin({ email, password }) {
 
   if (!token) throw new Error("Login OK pero no recibí token");
 
-  setCustomerSession({ token, customer });
-  return { token, customer };
+const normalizedEmail = String(email || "").trim().toLowerCase();
+
+setCustomerSession({
+  token,
+  customer,
+  email: normalizedEmail,
+});
+
+return { token, customer };
 }
 
 export async function customerRegister({ email, password, nombre }) {
@@ -51,8 +58,15 @@ export async function customerRegister({ email, password, nombre }) {
 
   if (!token) throw new Error("Registro OK pero no recibí token");
 
-  setCustomerSession({ token, customer });
-  return { token, customer };
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+setCustomerSession({
+  token,
+  customer,
+  email: normalizedEmail,
+});
+
+return { token, customer };
 }
 
 export async function forgotPassword({ email }) {

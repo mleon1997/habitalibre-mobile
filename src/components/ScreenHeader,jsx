@@ -1,0 +1,94 @@
+// src/components/ScreenHeader.jsx
+import React from "react";
+import { Chip } from "../ui/kit.jsx";
+
+export default function ScreenHeader({
+  eyebrow,
+  title,
+  subtitle,
+  rightChip,
+  rightChipTone = "neutral",
+  style,
+}) {
+  return (
+    <div
+      style={{
+        paddingTop: 78,
+        marginBottom: 22,
+        ...style,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 12,
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {eyebrow ? (
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 850,
+                color: "rgba(148,163,184,0.95)",
+                marginBottom: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              {eyebrow}
+            </div>
+          ) : null}
+
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 32,
+              lineHeight: 1.02,
+              fontWeight: 980,
+              letterSpacing: -1,
+              color: "rgba(226,232,240,0.98)",
+              maxWidth: 320,
+              textWrap: "balance",
+            }}
+          >
+            {title}
+          </h1>
+
+          {subtitle ? (
+            <div
+              style={{
+                marginTop: 14,
+                maxWidth: 320,
+                fontSize: 16,
+                lineHeight: 1.4,
+                color: "rgba(148,163,184,0.95)",
+              }}
+            >
+              {subtitle}
+            </div>
+          ) : null}
+        </div>
+
+        {rightChip ? (
+          <Chip
+            tone={rightChipTone}
+            style={{
+              flexShrink: 0,
+              padding: "8px 12px",
+              fontSize: 12,
+              fontWeight: 900,
+              alignSelf: "flex-start",
+              marginTop: 2,
+            }}
+          >
+            {rightChip}
+          </Chip>
+        ) : null}
+      </div>
+    </div>
+  );
+}

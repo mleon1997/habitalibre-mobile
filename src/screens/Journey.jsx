@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Edit3 } from "lucide-react"
 import { API_BASE } from "../lib/api";
-import { getCustomerToken } from "../lib/customerSession.js";
+import { getCustomerToken, getCustomer } from "../lib/customerSession.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
@@ -21,18 +22,15 @@ const HORIZONTE_OPCIONES = [
 
 const CIUDADES_COMPRA = [
   { value: "", label: "Selecciona una ciudad" },
-
   { value: "Quito", label: "Quito" },
   { value: "Cumbayá", label: "Cumbayá" },
   { value: "Tumbaco", label: "Tumbaco" },
   { value: "Los Chillos", label: "Los Chillos" },
   { value: "Sangolquí", label: "Sangolquí" },
-
   { value: "Guayaquil", label: "Guayaquil" },
   { value: "Samborondón", label: "Samborondón" },
   { value: "Daule", label: "Daule" },
   { value: "Vía a la Costa", label: "Vía a la Costa" },
-
   { value: "Cuenca", label: "Cuenca" },
   { value: "Manta", label: "Manta" },
   { value: "Portoviejo", label: "Portoviejo" },
@@ -46,7 +44,6 @@ const CIUDADES_COMPRA = [
   { value: "Babahoyo", label: "Babahoyo" },
   { value: "Quevedo", label: "Quevedo" },
   { value: "Esmeraldas", label: "Esmeraldas" },
-
   { value: "Otra", label: "Otra ciudad" },
 ];
 
@@ -71,6 +68,142 @@ function removeStorage(key) {
   } catch {}
 }
 
+function normalizeSelectedProperty(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const id =
+    raw.id ||
+    raw._id ||
+    raw.propertyId ||
+    raw._normalizedId ||
+    null;
+
+  const titulo =
+    raw.titulo ||
+    raw.nombre ||
+    raw.title ||
+    raw.name ||
+    raw.proyecto ||
+    raw._normalizedProjectName ||
+    "Propiedad elegida";
+
+  const ciudad =
+    raw.ciudad ||
+    raw.city ||
+    raw.zona ||
+    raw.sector ||
+    raw.ciudadZona ||
+    raw._normalizedCity ||
+    "Ubicación pendiente";
+
+  const precioRaw =
+    raw.precio ??
+    raw.price ??
+    raw.valor ??
+    raw.listPrice ??
+    raw._normalizedPrice ??
+    null;
+
+  const precio = Number.isFinite(Number(precioRaw))
+    ? Number(precioRaw)
+    : null;
+
+  const imagen =
+    raw.imagen ||
+    raw.image ||
+    raw.imageUrl ||
+    raw.foto ||
+    raw.cover ||
+    null;
+
+  return {
+    id,
+    _id: id,
+    propertyId: id,
+    titulo,
+    nombre: titulo,
+    proyecto: titulo,
+    ciudad,
+    zona: ciudad,
+    sector: raw?.sector || ciudad,
+    ciudadZona: raw?.ciudadZona || ciudad,
+    precio,
+    price: precio,
+    imagen,
+    image: imagen,
+    cuotaEstimada:
+      raw?.cuotaEstimada ||
+      raw?.cuota ||
+      raw?.evaluacionHipotecaFutura?.cuotaReferencia ||
+      raw?.evaluacionHipotecaHoy?.cuotaReferencia ||
+      raw?.evaluacionHipoteca?.cuotaReferencia ||
+      null,
+    entradaMinima:
+      raw?.entradaMinima ??
+      raw?.entradaRequerida ??
+      raw?.evaluacionEntrada?.entradaRequerida ??
+      null,
+    descripcion:
+      raw?.descripcion ||
+      `${titulo} se mantiene como referencia dentro de tu ruta.`,
+    source: raw?.source || "journey_recalc",
+    selectedAt: raw?.selectedAt || new Date().toISOString(),
+    raw,
+  };
+}
+
+function getSelectedPropertyStatus(property) {
+  if (!property) return null;
+
+  const estado = String(property?.estadoCompra || "");
+
+  if (
+    property?.evaluacionHipotecaHoy?.viable === true ||
+    estado === "top_match"
+  ) {
+    return "selected_viable_now";
+  }
+
+  if (
+    property?.evaluacionHipotecaFutura?.viable === true ||
+    estado === "entrada_viable_hipoteca_futura_viable"
+  ) {
+    return "selected_future_viable";
+  }
+
+  if (
+    estado === "entrada_viable_hipoteca_futura_debil" ||
+    estado === "ruta_cercana"
+  ) {
+    return "selected_near_route";
+  }
+
+  return "selected_no_longer_viable";
+}
+
+function findMatchedPropertyById(matchedProperties = [], selectedProperty = null) {
+  if (!Array.isArray(matchedProperties) || !selectedProperty?.id) return null;
+
+  return (
+    matchedProperties.find(
+      (p) =>
+        String(p?.id) === String(selectedProperty.id) ||
+        String(p?._id) === String(selectedProperty.id) ||
+        String(p?.propertyId) === String(selectedProperty.id) ||
+        String(p?._normalizedId) === String(selectedProperty.id)
+    ) || null
+  );
+}
+
+function getStorageOwnerEmail() {
+  try {
+    const email = String(getCustomer()?.email || "").trim().toLowerCase();
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
@@ -81,9 +214,6 @@ function money(n) {
   return `$${Math.round(x).toLocaleString("en-US")}`;
 }
 
-/* ===========================================================
-   Helpers de compatibilidad snapshot
-=========================================================== */
 function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
   const bestMortgage = resultado?.bestMortgage || null;
   const bestOption = resultado?.bestOption || null;
@@ -265,15 +395,12 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
     plazoMeses: bestPlazo,
     montoMaximo: bestMonto,
     precioMaxVivienda: bestPrecioMax,
-
     productoElegido: productoSugerido,
     productoSugerido,
     bancoSugerido,
-
     bancosTop3,
     bancosProbabilidad: bancosTop3,
     mejorBanco: bancosTop3?.[0] || null,
-
     bestMortgage,
     bestOption,
     fallbackRecommendation: fallbackRanked,
@@ -283,25 +410,18 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
       resultado?.recommendationExplanation || null,
     eligibilityProducts,
     propertyRecommendationPolicy,
-
     matchedProperties: Array.isArray(resultado?.matchedProperties)
       ? resultado.matchedProperties
       : [],
-
     housingAlternatives: resultado?.housingAlternatives || null,
     primaryHousingAlternative:
       resultado?.housingAlternatives?.primaryHousingAlternative || null,
     secondaryHousingAlternative:
       resultado?.housingAlternatives?.secondaryHousingAlternative || null,
-
     escenariosHL,
     rutasViables,
     rutaRecomendada,
-
-    flags: {
-      sinOferta,
-    },
-
+    flags: { sinOferta },
     _echo: {
       valorVivienda: entradaPayload?.valorVivienda ?? null,
       entradaDisponible: entradaPayload?.entradaDisponible ?? null,
@@ -334,35 +454,23 @@ function buildDurableSnapshot(resultado = {}, entradaPayload = {}) {
     unlocked: true,
     completed: true,
     hasResultado: true,
-
     engine: SNAPSHOT_ENGINE,
     snapshotVersion: SNAPSHOT_VERSION,
     source: "mobile_app",
     generatedBy: "journey_mobile",
     matcherType: "mortgage_matcher",
     isAppSnapshot: true,
-
-    // compat legacy
     ...legacyOutput,
-
-    // resultado bruto SIEMPRE preservado
     ...resultado,
-
-    // campos críticos duplicados arriba para fácil acceso
     matchedProperties,
     housingAlternatives,
     primaryHousingAlternative,
     secondaryHousingAlternative,
-
     rawMatcherResult: resultado,
-
     input: entradaPayload,
     perfilInput: entradaPayload,
     __entrada: entradaPayload,
-
     legacy: legacyOutput,
-
-    // output también debe preservar todo el matcher, no solo legacy
     output: {
       engine: SNAPSHOT_ENGINE,
       snapshotVersion: SNAPSHOT_VERSION,
@@ -376,14 +484,133 @@ function buildDurableSnapshot(resultado = {}, entradaPayload = {}) {
       primaryHousingAlternative,
       secondaryHousingAlternative,
     },
-
     ts: Date.now(),
   };
 }
 
-/* ===========================================================
-   UI Fields
-=========================================================== */
+function ScreenWrap({ children, scrollRef }) {
+  return (
+    <div
+      ref={scrollRef}
+      style={{
+        minHeight: "100dvh",
+        background:
+          "radial-gradient(1200px 800px at 20% 10%, rgba(45,212,191,0.10), transparent 55%)," +
+          "radial-gradient(1000px 700px at 80% 10%, rgba(59,130,246,0.10), transparent 60%)," +
+          "linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(15,23,42,1) 100%)",
+        color: "white",
+        padding: "92px 22px 170px",
+        fontFamily: "system-ui",
+        boxSizing: "border-box",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Pill({ children, tone = "neutral" }) {
+  const bg =
+    tone === "good" ? "rgba(37,211,166,0.12)" : "rgba(255,255,255,0.08)";
+  const border =
+    tone === "good"
+      ? "1px solid rgba(37,211,166,0.30)"
+      : "1px solid rgba(255,255,255,0.10)";
+
+  return (
+    <span
+      style={{
+        fontSize: 12,
+        padding: "8px 12px",
+        borderRadius: 999,
+        background: bg,
+        border,
+        fontWeight: 900,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SectionCard({ children, style }) {
+  return (
+    <div
+      style={{
+        marginTop: 18,
+        padding: 18,
+        borderRadius: 24,
+        background: "rgba(255,255,255,0.06)",
+        border: "1px solid rgba(255,255,255,0.10)",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.22)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ eyebrow, title, subtitle }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {eyebrow ? (
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 900,
+            color: "rgba(148,163,184,0.92)",
+            marginBottom: 8,
+          }}
+        >
+          {eyebrow}
+        </div>
+      ) : null}
+
+      <div
+        style={{
+          fontSize: 15,
+          fontWeight: 950,
+          lineHeight: 1.2,
+        }}
+      >
+        {title}
+      </div>
+
+      {subtitle ? (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            lineHeight: 1.4,
+            color: "rgba(148,163,184,0.90)",
+          }}
+        >
+          {subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatBox({ label, value, accent = false }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        borderRadius: 18,
+        background: "rgba(2,6,23,0.18)",
+        border: accent
+          ? "1px solid rgba(37,211,166,0.24)"
+          : "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
+      <div style={{ fontSize: 11, opacity: 0.72 }}>{label}</div>
+      <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>{value}</div>
+    </div>
+  );
+}
+
 function SliderField({
   label,
   helper,
@@ -412,31 +639,30 @@ function SliderField({
   };
 
   return (
-    <div style={{ marginBottom: 16 }}>
-      {label ? (
-        <div
-          style={{
-            fontSize: 12,
-            fontWeight: 900,
-            opacity: 0.9,
-            marginBottom: 8,
-          }}
-        >
-          {label}
-        </div>
-      ) : null}
+    <div style={{ marginBottom: 20 }}>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 900,
+          opacity: 0.96,
+          marginBottom: 8,
+          lineHeight: 1.25,
+        }}
+      >
+        {label}
+      </div>
 
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          fontSize: 11,
-          opacity: 0.75,
-          marginBottom: 8,
+          fontSize: 12,
+          opacity: 0.78,
+          marginBottom: 10,
         }}
       >
-        <span style={{ fontWeight: 800, opacity: 0.95 }}>{format(num)}</span>
-        <span style={{ opacity: 0.8 }}>
+        <span style={{ fontWeight: 900, opacity: 0.98 }}>{format(num)}</span>
+        <span>
           {format(min)} – {format(max)}
         </span>
       </div>
@@ -466,9 +692,9 @@ function SliderField({
           inputMode="numeric"
           pattern="[0-9]*"
           style={{
-            width: 110,
-            height: 44,
-            borderRadius: 16,
+            width: 112,
+            height: 48,
+            borderRadius: 18,
             border: "1px solid rgba(255,255,255,0.12)",
             background: "rgba(255,255,255,0.06)",
             color: "white",
@@ -476,6 +702,7 @@ function SliderField({
             textAlign: "right",
             outline: "none",
             fontWeight: 900,
+            fontSize: 14,
           }}
         />
       </div>
@@ -484,9 +711,10 @@ function SliderField({
         <div
           style={{
             marginTop: 8,
-            fontSize: 11,
-            opacity: 0.7,
-            lineHeight: 1.35,
+            fontSize: 12,
+            opacity: 0.72,
+            lineHeight: 1.4,
+            color: "rgba(148,163,184,0.92)",
           }}
         >
           {helper}
@@ -498,30 +726,33 @@ function SliderField({
 
 function SelectField({ label, value, onChange, options, helper }) {
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 18 }}>
       <div
         style={{
-          fontSize: 12,
+          fontSize: 14,
           fontWeight: 900,
-          opacity: 0.9,
+          opacity: 0.96,
           marginBottom: 8,
+          lineHeight: 1.25,
         }}
       >
         {label}
       </div>
+
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: "100%",
-          height: 46,
-          borderRadius: 16,
+          height: 54,
+          borderRadius: 18,
           border: "1px solid rgba(255,255,255,0.12)",
           background: "rgba(255,255,255,0.06)",
           color: "white",
-          padding: "0 12px",
+          padding: "0 14px",
           outline: "none",
           fontWeight: 800,
+          fontSize: 14,
         }}
       >
         {options.map((o) => (
@@ -530,13 +761,15 @@ function SelectField({ label, value, onChange, options, helper }) {
           </option>
         ))}
       </select>
+
       {helper ? (
         <div
           style={{
             marginTop: 8,
-            fontSize: 11,
-            opacity: 0.7,
-            lineHeight: 1.35,
+            fontSize: 12,
+            opacity: 0.72,
+            lineHeight: 1.4,
+            color: "rgba(148,163,184,0.92)",
           }}
         >
           {helper}
@@ -546,19 +779,58 @@ function SelectField({ label, value, onChange, options, helper }) {
   );
 }
 
-function Pill({ children }) {
+function StepButton({ selected, onClick, children }) {
   return (
-    <span
+    <button
+      type="button"
+      onClick={onClick}
       style={{
-        fontSize: 12,
-        padding: "6px 10px",
-        borderRadius: 999,
-        background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        borderRadius: 18,
+        padding: 14,
+        textAlign: "left",
+        border: selected
+          ? "1px solid rgba(37,211,166,0.65)"
+          : "1px solid rgba(255,255,255,0.12)",
+        background: selected
+          ? "rgba(37,211,166,0.12)"
+          : "rgba(255,255,255,0.06)",
+        color: "white",
+        fontWeight: 900,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
       }}
     >
-      {children}
-    </span>
+      <span
+        style={{
+          fontSize: 13,
+          lineHeight: 1.25,
+          opacity: 0.96,
+        }}
+      >
+        {children}
+      </span>
+      <span
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 999,
+          border: selected
+            ? "1px solid rgba(0,0,0,0.5)"
+            : "1px solid rgba(255,255,255,0.25)",
+          background: selected ? "#052019" : "transparent",
+          color: selected ? "#25d3a6" : "rgba(255,255,255,0.55)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 12,
+          fontWeight: 900,
+        }}
+      >
+        ✓
+      </span>
+    </button>
   );
 }
 
@@ -585,8 +857,30 @@ export default function Journey() {
   const navigate = useNavigate();
   const scrollerRef = useRef(null);
 
-  const existing = loadJSON(LS_JOURNEY);
-  const snapshotGuardado = loadJSON(LS_SNAPSHOT);
+const currentOwnerEmail = getStorageOwnerEmail();
+
+const existingEnvelope = loadJSON(LS_JOURNEY);
+const snapshotEnvelope = loadJSON(LS_SNAPSHOT);
+const selectedPropertyEnvelope = loadJSON(LS_SELECTED_PROPERTY);
+
+const existing =
+  existingEnvelope?.ownerEmail &&
+  existingEnvelope.ownerEmail === currentOwnerEmail
+    ? existingEnvelope.data
+    : null;
+
+const snapshotGuardado =
+  snapshotEnvelope?.ownerEmail &&
+  snapshotEnvelope.ownerEmail === currentOwnerEmail
+    ? snapshotEnvelope.data
+    : null;
+
+const selectedPropertyGuardada =
+  selectedPropertyEnvelope?.ownerEmail &&
+  selectedPropertyEnvelope.ownerEmail === currentOwnerEmail
+    ? normalizeSelectedProperty(selectedPropertyEnvelope.data)
+    : null;
+
   const hasResult =
     !!snapshotGuardado?.hasResultado || !!snapshotGuardado?.unlocked;
 
@@ -660,11 +954,73 @@ export default function Journey() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: 0, behavior: "smooth" });
-  }, [step]);
+useEffect(() => {
+  const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
+  const previousJourney =
+    previousJourneyEnvelope?.ownerEmail === currentOwnerEmail
+      ? previousJourneyEnvelope.data || {}
+      : {};
+
+  const payload = {
+    ...previousJourney,
+    step,
+    updatedAt: new Date().toISOString(),
+    form: {
+      nacionalidad,
+      estadoCivil,
+      edad,
+      tipoIngreso,
+      tipoContrato,
+      aniosEstabilidad,
+      mesesActividad,
+      sustentoIndependiente,
+      ingreso,
+      ingresoPareja,
+      deudas,
+      afiliadoIESS,
+      aportesTotales,
+      aportesConsecutivos,
+      ciudadCompra,
+      valorVivienda,
+      entrada,
+      capacidadEntradaMensual,
+      tieneVivienda,
+      primeraVivienda,
+      tipoVivienda,
+      horizonteCompra,
+    },
+  };
+
+  saveJSON(LS_JOURNEY, {
+    ownerEmail: currentOwnerEmail,
+    data: payload,
+  });
+}, [
+  currentOwnerEmail,
+  step,
+  nacionalidad,
+  estadoCivil,
+  edad,
+  tipoIngreso,
+  tipoContrato,
+  aniosEstabilidad,
+  mesesActividad,
+  sustentoIndependiente,
+  ingreso,
+  ingresoPareja,
+  deudas,
+  afiliadoIESS,
+  aportesTotales,
+  aportesConsecutivos,
+  ciudadCompra,
+  valorVivienda,
+  entrada,
+  capacidadEntradaMensual,
+  tieneVivienda,
+  primeraVivienda,
+  tipoVivienda,
+  horizonteCompra,
+]);
 
   const afiliadoBool = afiliadoIESS === "sí";
   const esParejaFormal =
@@ -702,60 +1058,66 @@ export default function Journey() {
     null;
 
   useEffect(() => {
-    const payload = {
-      step,
-      updatedAt: new Date().toISOString(),
-      form: {
-        nacionalidad,
-        estadoCivil,
-        edad,
-        tipoIngreso,
-        tipoContrato,
-        aniosEstabilidad,
-        mesesActividad,
-        sustentoIndependiente,
-        ingreso,
-        ingresoPareja,
-        deudas,
-        afiliadoIESS,
-        aportesTotales,
-        aportesConsecutivos,
-        ciudadCompra,
-        valorVivienda,
-        entrada,
-        capacidadEntradaMensual,
-        tieneVivienda,
-        primeraVivienda,
-        tipoVivienda,
-        horizonteCompra,
-      },
-    };
-    saveJSON(LS_JOURNEY, payload);
-  }, [
+  const payload = {
     step,
-    nacionalidad,
-    estadoCivil,
-    edad,
-    tipoIngreso,
-    tipoContrato,
-    aniosEstabilidad,
-    mesesActividad,
-    sustentoIndependiente,
-    ingreso,
-    ingresoPareja,
-    deudas,
-    afiliadoIESS,
-    aportesTotales,
-    aportesConsecutivos,
-    ciudadCompra,
-    valorVivienda,
-    entrada,
-    capacidadEntradaMensual,
-    tieneVivienda,
-    primeraVivienda,
-    tipoVivienda,
-    horizonteCompra,
-  ]);
+    updatedAt: new Date().toISOString(),
+    form: {
+      nacionalidad,
+      estadoCivil,
+      edad,
+      tipoIngreso,
+      tipoContrato,
+      aniosEstabilidad,
+      mesesActividad,
+      sustentoIndependiente,
+      ingreso,
+      ingresoPareja,
+      deudas,
+      afiliadoIESS,
+      aportesTotales,
+      aportesConsecutivos,
+      ciudadCompra,
+      valorVivienda,
+      entrada,
+      capacidadEntradaMensual,
+      tieneVivienda,
+      primeraVivienda,
+      tipoVivienda,
+      horizonteCompra,
+    },
+  };
+
+  const ownerEmail = getStorageOwnerEmail();
+
+  saveJSON(LS_JOURNEY, {
+    ownerEmail,
+    data: payload,
+  });
+}, [
+  step,
+  nacionalidad,
+  estadoCivil,
+  edad,
+  tipoIngreso,
+  tipoContrato,
+  aniosEstabilidad,
+  mesesActividad,
+  sustentoIndependiente,
+  ingreso,
+  ingresoPareja,
+  deudas,
+  afiliadoIESS,
+  aportesTotales,
+  aportesConsecutivos,
+  ciudadCompra,
+  valorVivienda,
+  entrada,
+  capacidadEntradaMensual,
+  tieneVivienda,
+  primeraVivienda,
+  tipoVivienda,
+  horizonteCompra,
+]);
 
   function validate(s) {
     if (s === 1) {
@@ -840,31 +1202,25 @@ export default function Journey() {
       nacionalidad,
       estadoCivil,
       edad: toNum(edad),
-
       tipoIngreso,
       tipoContrato,
       aniosEstabilidad: toNum(aniosEstabilidad),
       mesesActividad: toNum(mesesActividad),
       sustentoIndependiente,
-
       ingresoNetoMensual: toNum(ingreso),
       ingresoPareja: esParejaFormal ? toNum(ingresoPareja) : 0,
       otrasDeudasMensuales: toNum(deudas),
-
       afiliadoIess: afiliadoBool,
       iessAportesTotales: toNum(aportesTotales),
       iessAportesConsecutivos: toNum(aportesConsecutivos),
-
       ciudadCompra,
       valorVivienda: toNum(valorVivienda),
       entradaDisponible: toNum(entrada),
       capacidadEntradaMensual: toNum(capacidadEntradaMensual),
-
       tieneVivienda: tieneVivienda === "sí",
       primeraVivienda: primeraVivienda === "sí",
       viviendaEstrenar: tipoVivienda === "por_estrenar",
       tipoVivienda,
-
       tiempoCompra: horizonteCompra || null,
       origen: "journey_mobile",
     };
@@ -892,40 +1248,100 @@ export default function Journey() {
 
       const snapshot = buildDurableSnapshot(resultado, entradaPayload);
 
-      saveJSON(LS_SNAPSHOT, snapshot);
+      const ownerEmail = getStorageOwnerEmail();
 
-      removeStorage(LS_SELECTED_PROPERTY);
+saveJSON(LS_SNAPSHOT, {
+  ownerEmail,
+  data: snapshot,
+});
 
-      saveJSON(LS_JOURNEY, {
-        step: 4,
-        updatedAt: new Date().toISOString(),
-        form: {
-          nacionalidad,
-          estadoCivil,
-          edad,
-          tipoIngreso,
-          tipoContrato,
-          aniosEstabilidad,
-          mesesActividad,
-          sustentoIndependiente,
-          ingreso,
-          ingresoPareja,
-          deudas,
-          afiliadoIESS,
-          aportesTotales,
-          aportesConsecutivos,
-          ciudadCompra,
-          valorVivienda,
-          entrada,
-          capacidadEntradaMensual,
-          tieneVivienda,
-          primeraVivienda,
-          tipoVivienda,
-          horizonteCompra,
-        },
-        resultado: snapshot,
-      });
+const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
+const previousJourney =
+  previousJourneyEnvelope?.ownerEmail === ownerEmail
+    ? previousJourneyEnvelope.data || {}
+    : {};
 
+const previousSelectedEnvelope = loadJSON(LS_SELECTED_PROPERTY);
+const previousSelected =
+  previousSelectedEnvelope?.ownerEmail === ownerEmail
+    ? normalizeSelectedProperty(previousSelectedEnvelope.data)
+    : null;
+
+const matchedProperties = Array.isArray(snapshot?.matchedProperties)
+  ? snapshot.matchedProperties
+  : [];
+
+const reEvaluatedSelectedRaw = findMatchedPropertyById(
+  matchedProperties,
+  previousSelected
+);
+
+const reEvaluatedSelected = reEvaluatedSelectedRaw
+  ? normalizeSelectedProperty({
+      ...reEvaluatedSelectedRaw,
+      selectedAt: previousSelected?.selectedAt || new Date().toISOString(),
+      source: previousSelected?.source || "journey_recalc",
+    })
+  : previousSelected;
+
+const selectedPropertyStatus = reEvaluatedSelected
+  ? getSelectedPropertyStatus(reEvaluatedSelectedRaw || reEvaluatedSelected)
+  : null;
+
+if (reEvaluatedSelected) {
+  saveJSON(LS_SELECTED_PROPERTY, {
+    ownerEmail,
+    data: {
+      ...reEvaluatedSelected,
+      status: selectedPropertyStatus,
+      lastEvaluatedAt: new Date().toISOString(),
+    },
+  });
+}
+
+saveJSON(LS_JOURNEY, {
+  ownerEmail,
+  data: {
+    ...previousJourney,
+    step: 4,
+    updatedAt: new Date().toISOString(),
+    form: {
+      nacionalidad,
+      estadoCivil,
+      edad,
+      tipoIngreso,
+      tipoContrato,
+      aniosEstabilidad,
+      mesesActividad,
+      sustentoIndependiente,
+      ingreso,
+      ingresoPareja,
+      deudas,
+      afiliadoIESS,
+      aportesTotales,
+      aportesConsecutivos,
+      ciudadCompra,
+      valorVivienda,
+      entrada,
+      capacidadEntradaMensual,
+      tieneVivienda,
+      primeraVivienda,
+      tipoVivienda,
+      horizonteCompra,
+    },
+    resultado: snapshot,
+    propiedadElegida: !!reEvaluatedSelected,
+    propiedadId: reEvaluatedSelected?.id || previousJourney?.propiedadId || null,
+    propiedadSeleccionada: reEvaluatedSelected
+      ? {
+          ...reEvaluatedSelected,
+          status: selectedPropertyStatus,
+          lastEvaluatedAt: new Date().toISOString(),
+        }
+      : previousJourney?.propiedadSeleccionada || null,
+    selectedPropertyStatus,
+  },
+});
       navigate("/", { replace: true });
     } catch (ex) {
       console.error(ex);
@@ -938,16 +1354,7 @@ export default function Journey() {
   const progress = (step / TOTAL_STEPS) * 100;
 
   return (
-    <div
-      ref={scrollerRef}
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(180deg, #071024 0%, #0b1a35 100%)",
-        color: "white",
-        padding: 22,
-        fontFamily: "system-ui",
-      }}
-    >
+    <ScreenWrap scrollRef={scrollerRef}>
       <div
         style={{
           display: "flex",
@@ -956,19 +1363,38 @@ export default function Journey() {
           gap: 12,
         }}
       >
-        <div>
-          <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-            {hasResult ? "Mi capacidad" : "Precalificador HabitaLibre"}
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>
-            {hasResult ? "Tu capacidad de compra" : "Completa tu perfil"}
-          </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{
-              marginTop: 6,
-              fontSize: 12,
-              opacity: 0.7,
-              lineHeight: 1.35,
+              fontSize: 13,
+              fontWeight: 850,
+              color: "rgba(148,163,184,0.95)",
+              marginBottom: 10,
+            }}
+          >
+            {hasResult ? "Mi capacidad" : "Precalificador HabitaLibre"}
+          </div>
+
+          <div
+            style={{
+              fontSize: 32,
+              lineHeight: 1.02,
+              fontWeight: 980,
+              letterSpacing: -1,
+              color: "rgba(226,232,240,0.98)",
+              maxWidth: 320,
+            }}
+          >
+            {hasResult ? "Tu capacidad de compra" : "Completa tu perfil"}
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              maxWidth: 340,
+              fontSize: 16,
+              lineHeight: 1.4,
+              color: "rgba(148,163,184,0.95)",
             }}
           >
             {hasResult
@@ -982,14 +1408,19 @@ export default function Journey() {
             Paso {step}/{TOTAL_STEPS}
           </Pill>
         ) : (
-          <Pill>Editable</Pill>
+          <Pill>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Edit3 size={12} strokeWidth={2.2} />
+              Editable
+            </span>
+          </Pill>
         )}
       </div>
 
       {!hasResult ? (
         <div
           style={{
-            marginTop: 14,
+            marginTop: 16,
             height: 10,
             borderRadius: 999,
             background: "rgba(255,255,255,0.10)",
@@ -1009,78 +1440,53 @@ export default function Journey() {
       ) : null}
 
       {hasResult ? (
-        <div
+        <SectionCard
           style={{
-            marginTop: 18,
-            padding: 16,
-            borderRadius: 22,
             background: "rgba(37,211,166,0.10)",
             border: "1px solid rgba(37,211,166,0.22)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
           }}
         >
-          <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.88 }}>
-            Tu escenario actual
-          </div>
+          <SectionTitle
+            title="Tu escenario actual"
+            subtitle="Un resumen rápido de lo que hoy podría sostener tu perfil."
+          />
 
           <div
             style={{
-              marginTop: 8,
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
-              gap: 10,
+              gap: 12,
             }}
           >
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 16,
-                background: "rgba(2,6,23,0.18)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <div style={{ fontSize: 11, opacity: 0.72 }}>Vivienda aprox.</div>
-              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>
-                {capacidadActual ? money(capacidadActual) : "—"}
-              </div>
-            </div>
-
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 16,
-                background: "rgba(2,6,23,0.18)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <div style={{ fontSize: 11, opacity: 0.72 }}>Cuota estimada</div>
-              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>
-                {cuotaActual ? money(cuotaActual) : "—"}
-              </div>
-            </div>
+            <StatBox
+              label="Vivienda aprox."
+              value={capacidadActual ? money(capacidadActual) : "—"}
+            />
+            <StatBox
+              label="Cuota estimada"
+              value={cuotaActual ? money(cuotaActual) : "—"}
+              accent
+            />
           </div>
-        </div>
+        </SectionCard>
       ) : null}
 
-      <div
-        style={{
-          marginTop: 18,
-          padding: 18,
-          borderRadius: 22,
-          background: "rgba(255,255,255,0.06)",
-          border: "1px solid rgba(255,255,255,0.10)",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-        }}
-      >
+      <SectionCard>
         {step === 1 && (
           <>
+            <SectionTitle
+              eyebrow="Paso 1"
+              title="Tu perfil base"
+              subtitle="Esto nos ayuda a entender qué tan sólido es tu perfil para aplicar."
+            />
+
             <SelectField
               label="Nacionalidad"
               value={nacionalidad}
               onChange={setNacionalidad}
               options={[
-                { value: "ecuatoriana", label: "Ecuatoriana 🇪🇨" },
-                { value: "otra", label: "Otra nacionalidad 🌍" },
+                { value: "ecuatoriana", label: "Ecuatoriana" },
+                { value: "otra", label: "Otra nacionalidad" },
               ]}
             />
 
@@ -1121,6 +1527,11 @@ export default function Journey() {
 
             {(esDependiente || esMixto) && (
               <>
+                <SectionTitle
+                  eyebrow="Ingresos dependientes"
+                  title="Tu estabilidad laboral"
+                />
+
                 <SelectField
                   label="Tipo de contrato"
                   value={tipoContrato}
@@ -1148,6 +1559,11 @@ export default function Journey() {
 
             {(esIndependiente || esMixto) && (
               <>
+                <SectionTitle
+                  eyebrow="Ingresos independientes"
+                  title="Tu trayectoria económica"
+                />
+
                 <SliderField
                   label="Meses en tu actividad económica actual"
                   helper="Para ingresos independientes normalmente se piden al menos 24 meses."
@@ -1194,6 +1610,12 @@ export default function Journey() {
 
         {step === 2 && (
           <>
+            <SectionTitle
+              eyebrow="Paso 2"
+              title="Tu capacidad mensual"
+              subtitle="Aquí definimos cuánto podrías sostener de forma sana cada mes."
+            />
+
             <SliderField
               label="Tu ingreso neto mensual"
               min={450}
@@ -1206,7 +1628,7 @@ export default function Journey() {
 
             {esParejaFormal && (
               <SliderField
-                label="Ingreso neto mensual de tu pareja (opcional)"
+                label="Ingreso neto mensual de tu pareja"
                 min={0}
                 max={15000}
                 step={50}
@@ -1217,7 +1639,7 @@ export default function Journey() {
             )}
 
             <SliderField
-              label="Otras deudas mensuales (tarjetas, préstamos, etc.)"
+              label="Otras deudas mensuales"
               min={0}
               max={5000}
               step={50}
@@ -1238,8 +1660,14 @@ export default function Journey() {
 
             {afiliadoBool && (
               <>
+                <SectionTitle
+                  eyebrow="BIESS"
+                  title="Tus aportes"
+                  subtitle="Esto solo aplica si luego quieres evaluar una ruta BIESS."
+                />
+
                 <SliderField
-                  label="Aportes IESS totales (meses)"
+                  label="Aportes IESS totales"
                   helper="Para BIESS suelen requerirse al menos 36 aportes totales."
                   min={0}
                   max={600}
@@ -1250,7 +1678,7 @@ export default function Journey() {
                 />
 
                 <SliderField
-                  label="Aportes IESS consecutivos (meses)"
+                  label="Aportes IESS consecutivos"
                   helper="Suelen pedir mínimo 13 aportes consecutivos."
                   min={0}
                   max={600}
@@ -1266,6 +1694,12 @@ export default function Journey() {
 
         {step === 3 && (
           <>
+            <SectionTitle
+              eyebrow="Paso 3"
+              title="Tu objetivo de compra"
+              subtitle="Define la vivienda que te gustaría comprar y con qué entrada podrías contar."
+            />
+
             <SelectField
               label="Ciudad donde quieres comprar"
               value={ciudadCompra}
@@ -1278,45 +1712,16 @@ export default function Journey() {
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-                marginBottom: 14,
+                gap: 12,
+                marginBottom: 16,
               }}
             >
-              <div
-                style={{
-                  borderRadius: 18,
-                  padding: 12,
-                  background: "rgba(0,0,0,0.18)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                <div style={{ fontSize: 11, opacity: 0.7 }}>Valor objetivo</div>
-                <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>
-                  {money(valorVivienda)}
-                </div>
-              </div>
-              <div
-                style={{
-                  borderRadius: 18,
-                  padding: 12,
-                  background: "rgba(0,0,0,0.18)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                <div style={{ fontSize: 11, opacity: 0.7 }}>Entrada aprox.</div>
-                <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>
-                  {money(entrada)}{" "}
-                  <span
-                    style={{
-                      fontSize: 12,
-                      opacity: 0.8,
-                      color: "#25d3a6",
-                    }}
-                  >
-                    ({entradaPct}%)
-                  </span>
-                </div>
-              </div>
+              <StatBox label="Valor objetivo" value={money(valorVivienda)} />
+              <StatBox
+                label="Entrada aprox."
+                value={`${money(entrada)} (${entradaPct}%)`}
+                accent
+              />
             </div>
 
             <SliderField
@@ -1342,13 +1747,18 @@ export default function Journey() {
 
             <SliderField
               label="¿Cuánto podrías pagar al mes para completar la entrada?"
-              helper="Esto aplica especialmente a proyectos en construcción, donde el promotor te permite completar la entrada durante la obra."
+              helper="Útil sobre todo en proyectos en construcción, donde puedes completar la entrada durante la obra."
               min={0}
               max={2000}
               step={50}
               value={capacidadEntradaMensual}
               onChange={setCapacidadEntradaMensual}
               format={(v) => money(v)}
+            />
+
+            <SectionTitle
+              eyebrow="Condiciones"
+              title="Tu situación actual"
             />
 
             <SelectField
@@ -1384,17 +1794,10 @@ export default function Journey() {
               ]}
             />
 
-            <div
-              style={{
-                marginTop: 10,
-                fontSize: 12,
-                fontWeight: 900,
-                opacity: 0.9,
-                marginBottom: 10,
-              }}
-            >
-              ¿En qué plazo te gustaría adquirir tu vivienda?
-            </div>
+            <SectionTitle
+              eyebrow="Horizonte"
+              title="¿En qué plazo te gustaría adquirir tu vivienda?"
+            />
 
             <div
               style={{
@@ -1406,59 +1809,13 @@ export default function Journey() {
               {HORIZONTE_OPCIONES.map((opt) => {
                 const selected = horizonteCompra === opt.value;
                 return (
-                  <button
+                  <StepButton
                     key={opt.value}
-                    type="button"
+                    selected={selected}
                     onClick={() => setHorizonteCompra(opt.value)}
-                    style={{
-                      borderRadius: 18,
-                      padding: 12,
-                      textAlign: "left",
-                      border: selected
-                        ? "1px solid rgba(37,211,166,0.65)"
-                        : "1px solid rgba(255,255,255,0.12)",
-                      background: selected
-                        ? "rgba(37,211,166,0.12)"
-                        : "rgba(255,255,255,0.06)",
-                      color: "white",
-                      fontWeight: 900,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                    }}
                   >
-                    <span
-                      style={{
-                        fontSize: 12,
-                        lineHeight: 1.25,
-                        opacity: 0.95,
-                      }}
-                    >
-                      {opt.label}
-                    </span>
-                    <span
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 999,
-                        border: selected
-                          ? "1px solid rgba(0,0,0,0.5)"
-                          : "1px solid rgba(255,255,255,0.25)",
-                        background: selected ? "#052019" : "transparent",
-                        color: selected
-                          ? "#25d3a6"
-                          : "rgba(255,255,255,0.55)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 12,
-                        fontWeight: 900,
-                      }}
-                    >
-                      ✓
-                    </span>
-                  </button>
+                    {opt.label}
+                  </StepButton>
                 );
               })}
             </div>
@@ -1467,43 +1824,41 @@ export default function Journey() {
 
         {step === 4 && !hasResult && (
           <>
-            <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 8 }}>
-              ✅ Listo para ver tu resultado
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.35 }}>
-              Revisaremos tu capacidad de pago y la ruta sugerida (VIS/VIP/BIESS/privado).
-            </div>
+            <SectionTitle
+              eyebrow="Último paso"
+              title="Listo para ver tu resultado"
+              subtitle="Vamos a estimar tu capacidad, cuota y mejor ruta posible."
+            />
 
-            <div style={{ marginTop: 14, fontSize: 12, opacity: 0.75 }}>
+            <div style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
               Ciudad objetivo:{" "}
-              <span style={{ fontWeight: 900, color: "white" }}>
-                {ciudadCompra || "—"}
-              </span>
+              <strong style={{ color: "white" }}>{ciudadCompra || "—"}</strong>
             </div>
 
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
               Monto referencial a analizar:{" "}
-              <span style={{ fontWeight: 900, color: "white" }}>
+              <strong style={{ color: "white" }}>
                 {money(toNum(valorVivienda) - toNum(entrada))}
-              </span>
+              </strong>
             </div>
 
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
               Capacidad mensual para completar entrada:{" "}
-              <span style={{ fontWeight: 900, color: "white" }}>
+              <strong style={{ color: "white" }}>
                 {money(toNum(capacidadEntradaMensual))}
-              </span>
+              </strong>
             </div>
 
             <div
               style={{
                 marginTop: 14,
-                fontSize: 11,
-                opacity: 0.7,
-                lineHeight: 1.35,
+                fontSize: 12,
+                opacity: 0.72,
+                lineHeight: 1.4,
+                color: "rgba(148,163,184,0.92)",
               }}
             >
-              ⚖️ Las precalificaciones son estimaciones referenciales. No constituyen aprobación ni oferta formal.
+              Las precalificaciones son estimaciones referenciales. No constituyen aprobación ni oferta formal.
             </div>
           </>
         )}
@@ -1524,18 +1879,28 @@ export default function Journey() {
           </div>
         ) : null}
 
-        <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+        <div
+  style={{
+    marginTop: 28,
+    marginBottom: 18,
+    display: "flex",
+    gap: 10,
+    position: "relative",
+    zIndex: 2,
+  }}
+>
           {step > 1 ? (
             <button
               onClick={back}
               style={{
                 flex: 1,
-                padding: 12,
-                borderRadius: 16,
+                padding: 14,
+                borderRadius: 18,
                 border: "1px solid rgba(255,255,255,0.14)",
                 background: "rgba(255,255,255,0.06)",
                 color: "white",
                 fontWeight: 900,
+                fontSize: 14,
               }}
             >
               Atrás
@@ -1547,12 +1912,13 @@ export default function Journey() {
               onClick={next}
               style={{
                 flex: 1,
-                padding: 12,
-                borderRadius: 16,
+                padding: 14,
+                borderRadius: 18,
                 border: "none",
                 background: "#25d3a6",
                 color: "#052019",
                 fontWeight: 900,
+                fontSize: 14,
               }}
             >
               Siguiente
@@ -1562,40 +1928,46 @@ export default function Journey() {
               onClick={handleCalcular}
               disabled={loading}
               style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 16,
-                border: "none",
-                background: "#25d3a6",
-                color: "#052019",
-                fontWeight: 900,
-                opacity: loading ? 0.7 : 1,
-              }}
+  flex: 1,
+  minHeight: 58,
+  padding: "16px 18px",
+  borderRadius: 20,
+  border: "none",
+  background: "#25d3a6",
+  color: "#052019",
+  fontWeight: 950,
+  fontSize: 16,
+  opacity: loading ? 0.7 : 1,
+  boxShadow: "0 12px 28px rgba(37,211,166,0.18)",
+}}
             >
               {loading
                 ? "Analizando…"
                 : hasResult
-                ? "Actualizar cálculo"
+                ? "Actualizar"
                 : getCustomerToken()
                 ? "Ver resultados"
                 : "Entrar para ver resultados"}
             </button>
           )}
         </div>
-      </div>
+      </SectionCard>
 
-      <div
-        style={{
-          marginTop: 16,
-          fontSize: 11,
-          opacity: 0.55,
-          lineHeight: 1.35,
-        }}
-      >
-        {getCustomerToken()
-          ? "Sesión activa: tu resultado se guardará en tu cuenta."
-          : "Tip: crea una cuenta para guardar tu progreso y retomar tu camino."}
-      </div>
-    </div>
+<div
+  style={{
+    marginTop: 16,
+    fontSize: 12,
+    opacity: 0.6,
+    lineHeight: 1.4,
+    color: "rgba(148,163,184,0.90)",
+  }}
+>
+  {getCustomerToken()
+    ? "Sesión activa: tu resultado se guardará en tu cuenta."
+    : "Tip: crea una cuenta para guardar tu progreso y retomar tu camino."}
+</div>
+
+<div style={{ height: 90 }} />
+    </ScreenWrap>
   );
 }

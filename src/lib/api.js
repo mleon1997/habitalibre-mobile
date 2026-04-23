@@ -23,7 +23,7 @@ function resolveApiBase() {
   if (envBase) return envBase.replace(/\/+$/, "");
   if (runtimeBase) return runtimeBase.replace(/\/+$/, "");
 
-  return "https://habitalibre.com";
+  return "https://habitalibre-backend.onrender.com";
 }
 
 export const API_BASE = resolveApiBase();

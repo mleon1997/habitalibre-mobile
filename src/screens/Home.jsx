@@ -1,10 +1,22 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  Sparkles,
+  Home as HomeIcon,
+  Compass,
+  CheckCircle2,
+  Target,
+  MapPin,
+  Lock,
+  Calculator,
+  Building2,
+  ChevronDown,
+} from "lucide-react";
 import { summarizeProfile } from "../lib/profileSummary.js";
 import { moneyUSD } from "../lib/money";
 import { apiGet } from "../lib/api";
 import { buildPlan } from "../lib/planEngine.js";
-import { getCustomerToken } from "../lib/customerSession.js";
+import { getCustomerToken, getCustomer } from "../lib/customerSession.js";
 import { fetchLatestSnapshot } from "../lib/snapshots.js";
 
 import {
@@ -19,9 +31,10 @@ import {
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
+const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
 const COPY = {
-  appSubtitle: "Descubre si hoy ya estás más cerca de comprar casa",
+  appSubtitle: "Revisa tu capacidad estimada y lo que te conviene hacer ahora.",
   guideTag: "Tu guía",
   guideResultTag: "Tu resultado",
 
@@ -45,8 +58,8 @@ const COPY = {
   limitInsightLabel: "Factor limitante",
   limitInsightHint: "Lo que más está limitando tu capacidad hoy.",
 
-  alternativesHide: "Ocultar opciones",
-  alternativesShow: "Ver otras opciones",
+  alternativesHide: "Ocultar caminos alternativos",
+  alternativesShow: "Ver caminos alternativos",
 
   altSimularTitle: "Simular",
   altSimularBody: "Prueba otros escenarios",
@@ -120,6 +133,36 @@ function saveJSON(key, val) {
   } catch {}
 }
 
+function clearLocalScenarioState() {
+  try {
+    localStorage.removeItem(LS_SNAPSHOT);
+    localStorage.removeItem(LS_JOURNEY);
+    localStorage.removeItem(LS_SELECTED_PROPERTY);
+  } catch {}
+}
+
+function getStorageOwnerEmail() {
+  try {
+    const email = String(getCustomer()?.email || "").trim().toLowerCase();
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
+function snapshotLooksValid(snap) {
+  return Boolean(
+    snap?.unlocked === true ||
+      snap?.output?.unlocked === true ||
+      snap?.ok === true ||
+      snap?.output?.ok === true ||
+      snap?.score != null ||
+      snap?.output?.score != null ||
+      snap?.financialCapacity?.estimatedMaxPropertyValue != null ||
+      snap?.output?.financialCapacity?.estimatedMaxPropertyValue != null
+  );
+}
+
 function InsightGrid({ items, cols = 2 }) {
   if (!items?.length) return null;
 
@@ -189,6 +232,95 @@ function SoftMetric({ label, value, hint }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AccordionSection({
+  title,
+  subtitle = null,
+  open,
+  onToggle,
+  children,
+  style = {},
+}) {
+  return (
+    <InnerCard
+      style={{
+        marginTop: 12,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(148,163,184,0.16)",
+        overflow: "hidden",
+        ...style,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          all: "unset",
+          cursor: "pointer",
+          width: "100%",
+          display: "block",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 900,
+                color: "rgba(148,163,184,0.95)",
+              }}
+            >
+              {title}
+            </div>
+
+            {subtitle ? (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 12,
+                  lineHeight: 1.35,
+                  color: "rgba(148,163,184,0.86)",
+                }}
+              >
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            style={{
+              marginTop: 1,
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.25s ease",
+              color: "rgba(226,232,240,0.82)",
+              flexShrink: 0,
+            }}
+          >
+            <ChevronDown size={18} strokeWidth={2.4} />
+          </div>
+        </div>
+      </button>
+
+      <div
+        style={{
+          maxHeight: open ? 1200 : 0,
+          opacity: open ? 1 : 0,
+          overflow: "hidden",
+          transition: "max-height 0.35s ease, opacity 0.25s ease",
+        }}
+      >
+        <div style={{ paddingTop: open ? 12 : 0 }}>{children}</div>
+      </div>
+    </InnerCard>
   );
 }
 
@@ -398,17 +530,95 @@ function buildAlternativeSubtitle(alt) {
   return parts.join(" · ");
 }
 
+function useCountUp(target, duration = 900, enabled = true) {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    const finalValue = Number(target);
+
+    if (!enabled) return;
+    if (!Number.isFinite(finalValue)) {
+      setValue(0);
+      return;
+    }
+
+    let frameId = null;
+    let startTime = null;
+    const startValue = 0;
+
+    const tick = (ts) => {
+      if (startTime == null) startTime = ts;
+      const elapsed = ts - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const next = startValue + (finalValue - startValue) * eased;
+
+      setValue(next);
+
+      if (progress < 1) {
+        frameId = requestAnimationFrame(tick);
+      }
+    };
+
+    setValue(0);
+    frameId = requestAnimationFrame(tick);
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId);
+    };
+  }, [target, duration, enabled]);
+
+  return Math.round(value);
+}
+
+function useFadeIn(delay = 0) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), delay);
+    return () => clearTimeout(t);
+  }, [delay]);
+
+  return {
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateY(0px)" : "translateY(10px)",
+    transition: "opacity 0.45s ease, transform 0.45s ease",
+  };
+}
+
+
+const visibleInViewStyle = {
+  opacity: 1,
+  transform: "translateY(0px)",
+  transition: "opacity 0.5s ease, transform 0.5s ease",
+};
+
 export default function Home() {
   const navigate = useNavigate();
 
-  const [raw, setRaw] = useState(() => loadJSON(LS_SNAPSHOT));
-  const [journey, setJourney] = useState(() => loadJSON(LS_JOURNEY));
+  const [raw, setRaw] = useState(null);
+  const [journey, setJourney] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [, setIsOnline] = useState(false);
   const [, setErr] = useState("");
 
   const [showAlternatives, setShowAlternatives] = useState(false);
+
+  const [expandedSections, setExpandedSections] = useState({
+    actionGuide: true,
+    blocker: false,
+    rhythm: false,
+    alternatives: false,
+  });
+
+  function toggleSection(key) {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  }
 
   function go(path) {
     navigate(path);
@@ -574,24 +784,26 @@ export default function Home() {
   async function syncLatestSnapshotFromBackend() {
     try {
       const t = getCustomerToken();
-      if (!t) return;
+      if (!t) {
+        clearLocalScenarioState();
+        setRaw(null);
+        return;
+      }
 
       const res = await fetchLatestSnapshot();
       const snap = res?.snapshot ?? null;
-      if (!snap) return;
 
-      const looksValid =
-        snap?.unlocked === true ||
-        snap?.output?.unlocked === true ||
-        snap?.score != null ||
-        snap?.output?.score != null ||
-        snap?.financialCapacity?.estimatedMaxPropertyValue != null ||
-        snap?.output?.financialCapacity?.estimatedMaxPropertyValue != null;
+      if (!snapshotLooksValid(snap)) {
+        return;
+      }
 
-      if (!looksValid) return;
+      const ownerEmail = getStorageOwnerEmail();
 
       setRaw(snap);
-      saveJSON(LS_SNAPSHOT, snap);
+      saveJSON(LS_SNAPSHOT, {
+        ownerEmail,
+        data: snap,
+      });
     } catch (e) {
       console.warn("[HL] fetchLatestSnapshot failed:", e?.message || e);
     }
@@ -604,13 +816,41 @@ export default function Home() {
       await checkBackend();
       if (!alive) return;
 
-      const snap = loadJSON(LS_SNAPSHOT);
-      const j = loadJSON(LS_JOURNEY);
+      const token = getCustomerToken();
 
-      if (snap) setRaw(snap);
-      if (j) setJourney(j);
+      if (!token) {
+        clearLocalScenarioState();
+        setRaw(null);
+        setJourney(null);
+        return;
+      }
 
-      // await syncLatestSnapshotFromBackend();
+      const currentOwnerEmail = getStorageOwnerEmail();
+
+      const snapEnvelope = loadJSON(LS_SNAPSHOT);
+      const journeyEnvelope = loadJSON(LS_JOURNEY);
+
+      const snap =
+        snapEnvelope?.ownerEmail &&
+        snapEnvelope.ownerEmail === currentOwnerEmail
+          ? snapEnvelope.data
+          : null;
+
+      const j =
+        journeyEnvelope?.ownerEmail &&
+        journeyEnvelope.ownerEmail === currentOwnerEmail
+          ? journeyEnvelope.data
+          : null;
+
+      if (snapshotLooksValid(snap)) {
+        setRaw(snap);
+      } else {
+        setRaw(null);
+      }
+
+      setJourney(j || null);
+
+      await syncLatestSnapshotFromBackend();
     })();
 
     return () => {
@@ -718,14 +958,14 @@ export default function Home() {
         title: "Hoy ya tienes una ruta hipotecaria clara.",
         subtitle:
           "Tu perfil sí muestra una opción de crédito viable hoy. Ahora lo más útil es revisar propiedades que encajen con esa capacidad.",
-        cta: "Ver propiedades que hacen match",
+        cta: "Ver propiedades compatibles",
         to: "/marketplace",
       };
     }
 
     if (toNum(estimatedMaxPropertyValue) > 0) {
       return {
-        title: "Sí existe una ruta financiera disponible para ti.",
+        title: "Hoy tienes una ruta posible",
         subtitle:
           `Hoy todavía no aparece aprobación inmediata, pero tu capacidad estimada llega alrededor de ${safeMoney(
             estimatedMaxPropertyValue
@@ -752,17 +992,15 @@ export default function Home() {
 
   const heroHint =
     homeRecommendation?.mainMessage ||
-    (
-      hasImmediateViableMortgage
-        ? `Hoy sí vemos una ruta hipotecaria viable. Tu capacidad estimada llega alrededor de ${safeMoney(
-            estimatedMaxPropertyValue
-          )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
-        : toNum(estimatedMaxPropertyValue) > 0
-        ? `Aunque hoy todavía no veamos aprobación inmediata, tu capacidad financiera estimada llega alrededor de ${safeMoney(
-            estimatedMaxPropertyValue
-          )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
-        : "Con los datos actuales, todavía no aparece una opción de crédito viable. Ajustar ingreso, entrada o valor de vivienda puede mejorar tu resultado."
-    );
+    (hasImmediateViableMortgage
+      ? `Hoy sí vemos una ruta hipotecaria viable. Tu capacidad estimada llega alrededor de ${safeMoney(
+          estimatedMaxPropertyValue
+        )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
+      : toNum(estimatedMaxPropertyValue) > 0
+      ? `Aunque hoy todavía no veamos aprobación inmediata, tu capacidad financiera estimada llega alrededor de ${safeMoney(
+          estimatedMaxPropertyValue
+        )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
+      : "Con los datos actuales, todavía no aparece una opción de crédito viable. Ajustar ingreso, entrada o valor de vivienda puede mejorar tu resultado.");
 
   const showConnecting = loading && !snapshot;
 
@@ -791,14 +1029,17 @@ export default function Home() {
     estimatedMaxPropertyValue,
   ]);
 
-  const firstName = useMemo(() => {
-    const nombre =
-      journey?.form?.nombre ||
-      journey?.nombre ||
-      "Mateo";
+const firstName = useMemo(() => {
+  const customer = getCustomer?.() || {};
+  const nombre =
+    journey?.form?.nombre ||
+    journey?.nombre ||
+    customer?.nombre ||
+    customer?.name ||
+    "";
 
-    return String(nombre).trim().split(" ")[0] || "Mateo";
-  }, [journey]);
+  return String(nombre).trim().split(" ")[0] || "";
+}, [journey]);
 
   const mainInsightItems = useMemo(() => {
     const items = [];
@@ -874,7 +1115,9 @@ export default function Home() {
   const primaryHeadlineHelp = isGoalAboveCapacity
     ? "Este es el rango donde tu perfil tiene mayor probabilidad de aprobación hoy."
     : hasImmediateViableMortgage
-    ? `Tu perfil ya tiene una ruta hipotecaria viable hoy${canonicalBestMortgage?.label ? ` con ${canonicalBestMortgage.label}` : ""}.`
+    ? `Tu perfil ya tiene una ruta hipotecaria viable hoy${
+        canonicalBestMortgage?.label ? ` con ${canonicalBestMortgage.label}` : ""
+      }.`
     : "Este valor resume la capacidad que hoy podría sostener tu perfil.";
 
   const currentEntryAmount =
@@ -936,46 +1179,87 @@ export default function Home() {
       .slice(0, 2);
   }, [homeAlternatives, isGoalAboveCapacity]);
 
+  const heroAnim = useFadeIn(40);
+const resultInView = true;
+const guideInView = true;
+const progressInView = true;
+const capacityInView = true;
+const alternativesInView = true;
+
+  const animatedScore = useCountUp(
+    useCompactScoreDisplay ? 0 : Number(displayScoreValue) || 0,
+    950,
+    resultInView
+  );
+
+  const animatedProgress = useCountUp(displayProgress, 950, progressInView);
+
   return (
-    <Screen style={{ padding: 22, paddingBottom: 18 }}>
+    <Screen
+      style={{
+        padding: 22,
+        paddingTop: 78,
+        paddingBottom: 18,
+      }}
+    >
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
           gap: 12,
+          ...heroAnim,
         }}
       >
         <div>
-          <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
-            Hola {firstName} 👋
+          <div
+            style={{
+              fontSize: 13,
+              color: "rgba(148,163,184,0.95)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span>{firstName ? `Hola, ${firstName}` : "Hola"}</span>
+            <Sparkles
+              size={14}
+              strokeWidth={2.2}
+              style={{ opacity: 0.95, flexShrink: 0 }}
+            />
           </div>
 
           <div
             style={{
               marginTop: 6,
-              fontSize: 20,
+              fontSize: 31,
+              letterSpacing: -1,
+              maxWidth: 320,
               fontWeight: 980,
-              lineHeight: 1.15,
+              lineHeight: 1.02,
             }}
           >
-            Estás más cerca de tu casa de lo que crees
-          </div>
+Tu avance para comprar vivienda          </div>
 
           <div
             style={{
-              color: "rgba(148,163,184,0.95)",
-              marginTop: 8,
-              fontSize: 13,
-              lineHeight: 1.35,
-              maxWidth: 320,
+              color: "rgba(226,232,240,0.88)",
+              marginTop: 10,
+              fontSize: 14,
+              lineHeight: 1.4,
+              maxWidth: 330,
             }}
           >
             {COPY.appSubtitle}
           </div>
         </div>
 
-        <Chip tone="neutral">Camino a Casa 🏠</Chip>
+        <Chip tone="neutral">
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <HomeIcon size={13} strokeWidth={2.2} />
+            Camino a Casa
+          </span>
+        </Chip>
       </div>
 
       {showConnecting ? (
@@ -990,531 +1274,577 @@ export default function Home() {
         </div>
       ) : null}
 
-      <Card style={{ marginTop: 18 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                color: "rgba(148,163,184,0.95)",
-                fontWeight: 900,
-              }}
-            >
-              Tu progreso hacia comprar casa
-            </div>
-            <div
-              style={{
-                marginTop: 6,
-                fontSize: 28,
-                fontWeight: 980,
-                lineHeight: 1,
-              }}
-            >
-              {displayProgress}%
-            </div>
-          </div>
-
-          <Chip tone={displayProgress >= 85 ? "good" : "neutral"}>
-            {displayProgress >= 85 ? "Vas muy bien" : "Sigue avanzando"}
-          </Chip>
-        </div>
-
-        <div style={{ marginTop: 10 }}>
-          <ProgressBar value={displayProgress} />
-        </div>
-
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 12,
-            color: "rgba(148,163,184,0.92)",
-            lineHeight: 1.35,
-          }}
-        >
-          {homeProgressText}
-        </div>
-      </Card>
-
-      <Card style={{ marginTop: 18 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)", fontWeight: 950 }}>
-            🧭 {COPY.guideTag}
-          </div>
-          <Chip tone="neutral">{COPY.guideResultTag}</Chip>
-        </div>
-
-        <div style={{ marginTop: 10, fontWeight: 980, fontSize: 18, lineHeight: 1.2 }}>
-          {bestNext.title}
-        </div>
-
-        <div
-          style={{
-            marginTop: 8,
-            color: "rgba(226,232,240,0.90)",
-            lineHeight: 1.35,
-            fontSize: 13,
-          }}
-        >
-          {bestNext.subtitle}
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <PrimaryButton onClick={() => go(bestNext.to)}>
-            {isGoalAboveCapacity ? "Ver propiedades en mi rango" : bestNext.cta}
-          </PrimaryButton>
-        </div>
-      </Card>
-
-      {summary?.unlocked ? (
+    <div style={visibleInViewStyle}>
         <Card style={{ marginTop: 18 }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "flex-start",
+              alignItems: "center",
               gap: 12,
             }}
           >
+            <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
+              Tu resultado hoy
+            </div>
+
+            {summary?.unlocked ? (
+              <Chip tone="good">
+                <span
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <CheckCircle2 size={13} strokeWidth={2.4} />
+                  {COPY.scoreReady}
+                </span>
+              </Chip>
+            ) : (
+              <Chip tone="neutral">
+                <span
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <Lock size={13} strokeWidth={2.4} />
+                  {COPY.scoreMissing}
+                </span>
+              </Chip>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 14,
+              flexWrap: "wrap",
+            }}
+          >
             <div>
-              <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
-                {primaryHeadlineLabel}
-              </div>
+              {useCompactScoreDisplay ? (
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(148,163,184,0.16)",
+                    background: "rgba(255,255,255,0.04)",
+                    fontSize: 13,
+                    fontWeight: 950,
+                    color: "rgba(226,232,240,0.95)",
+                  }}
+                >
+                  {displayScoreBadge}
+                </div>
+              ) : (
+                <div style={{ fontSize: 42, fontWeight: 980, letterSpacing: -1 }}>
+                  {animatedScore}
+                </div>
+              )}
 
               <div
                 style={{
                   marginTop: 6,
-                  fontSize: 24,
-                  fontWeight: 980,
-                  lineHeight: 1.1,
-                }}
-              >
-                {primaryHeadlineValue}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 13,
                   color: "rgba(148,163,184,0.95)",
+                  fontSize: 13,
                   lineHeight: 1.35,
+                  maxWidth: 240,
                 }}
               >
-                {primaryHeadlineHelp}
+                {displayScoreLabel}
               </div>
             </div>
 
-            <Chip tone={hasImmediateViableMortgage ? "good" : "neutral"}>
-              {hasImmediateViableMortgage
-                ? "✅ Hoy viable"
-                : isGoalAboveCapacity
-                ? "🎯 Aterrizar meta"
-                : "📍 Ruta estimada"}
-            </Chip>
+            {summary?.unlocked ? (
+              <Chip tone={hasImmediateViableMortgage ? "good" : "neutral"}>
+                {hasImmediateViableMortgage
+                  ? "Ruta viable hoy"
+                  : "Perfil en construcción"}
+              </Chip>
+            ) : null}
           </div>
 
-          {blockerExplanationTitle && blockerExplanationBody ? (
-            <InnerCard
-              style={{
-                marginTop: 12,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(148,163,184,0.16)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 900,
-                  color: "rgba(148,163,184,0.95)",
-                }}
-              >
-                {blockerExplanationTitle}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 13,
-                  lineHeight: 1.4,
-                  color: "rgba(226,232,240,0.90)",
-                }}
-              >
-                {blockerExplanationBody}
-              </div>
-
-              {homePrimaryBlocker === "entrada" ? (
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    lineHeight: 1.35,
-                    color: "rgba(148,163,184,0.88)",
-                  }}
-                >
-                  La buena noticia: si aumentas tu entrada, tu capacidad puede subir mucho más rápido.
-                </div>
-              ) : null}
-            </InnerCard>
+          {summary?.unlocked ? (
+            <ProbabilityBar
+              valuePct={isGoalAboveCapacity ? null : prob?.pct}
+              valueText={isGoalAboveCapacity ? "Baja" : null}
+              hint={heroHint}
+            />
           ) : null}
 
-          {isGoalAboveCapacity && toNum(goalSummary?.targetPropertyValue) > 0 ? (
-            <InnerCard
+          {homeActionHints.length > 0 ? (
+            <AccordionSection
+              title="Qué te conviene hacer ahora"
+              subtitle="Te mostramos solo el siguiente mejor movimiento para avanzar."
+              open={expandedSections.actionGuide}
+              onToggle={() => toggleSection("actionGuide")}
               style={{
-                marginTop: 12,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(148,163,184,0.16)",
+                background: isImmediateRoute
+                  ? "rgba(16,185,129,0.10)"
+                  : "rgba(37,211,166,0.08)",
+                border: isImmediateRoute
+                  ? "1px solid rgba(16,185,129,0.22)"
+                  : "1px solid rgba(37,211,166,0.20)",
               }}
             >
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
+                  gap: 8,
                 }}
               >
-                <SoftMetric
-                  label="Tu objetivo de vivienda"
-                  value={safeMoney(goalSummary?.targetPropertyValue)}
-                />
-                <SoftMetric
-                  label="Lo más realista hoy"
-                  value={primaryHeadlineValue}
-                />
+                {homeActionHints.slice(0, 3).map((hint, idx) => (
+                  <div
+                    key={`${hint}-${idx}`}
+                    style={{
+                      fontSize: 13,
+                      lineHeight: 1.35,
+                      color: "rgba(226,232,240,0.88)",
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      background: "rgba(2,6,23,0.18)",
+                      border: "1px solid rgba(148,163,184,0.12)",
+                    }}
+                  >
+                    {idx + 1}. {hint}
+                  </div>
+                ))}
               </div>
-            </InnerCard>
+
+              <div style={{ marginTop: 12 }}>
+                <SecondaryButton onClick={() => go(bestNext.to)}>
+                  {isGoalAboveCapacity
+                    ? "Ver propiedades en mi rango"
+                    : bestNext.cta}
+                </SecondaryButton>
+              </div>
+            </AccordionSection>
           ) : null}
-{summary?.unlocked && entryTrajectory ? (
-  <InnerCard
-    style={{
-      marginTop: 12,
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(148,163,184,0.16)",
-    }}
-  >
-    <div
-      style={{
-        fontSize: 12,
-        fontWeight: 900,
-        color: "rgba(148,163,184,0.95)",
-      }}
-    >
-      Si mantienes este ritmo
-    </div>
-
-    <div
-      style={{
-        marginTop: 8,
-        fontSize: 13,
-        lineHeight: 1.4,
-        color: "rgba(226,232,240,0.90)",
-      }}
-    >
-      Hoy tienes {safeMoney(entryTrajectory.entradaActual)} de entrada y podrías
-      destinar {safeMoney(entryTrajectory.capacidadMensual)} al mes para seguir
-      construyéndola.
-    </div>
-
-    {/* RANGO ACTUAL */}
-    {entryTrajectory.mejorRutaActual ? (
-      <div
-        style={{
-          marginTop: 10,
-          padding: "10px 12px",
-          borderRadius: 12,
-          background: "rgba(2,6,23,0.18)",
-          border: "1px solid rgba(148,163,184,0.12)",
-          fontSize: 13,
-          lineHeight: 1.35,
-          color: "rgba(226,232,240,0.88)",
-        }}
-      >
-        Para tu rango más realista de hoy, la forma más rápida de fortalecer tu
-        entrada sería con{" "}
-        <strong>{entryTrajectory.mejorRutaActual.producto}</strong>. Manteniendo
-        este ritmo, podrías completar una entrada referencial en{" "}
-        <strong>
-          {entryTrajectory.mejorRutaActual.mesesActual}{" "}
-          {entryTrajectory.mejorRutaActual.mesesActual === 1 ? "mes" : "meses"}
-        </strong>.
-      </div>
-    ) : null}
-
-    {/* META */}
-    {isGoalAboveCapacity && entryTrajectory.mejorRutaMeta ? (
-      <div
-        style={{
-          marginTop: 10,
-          padding: "10px 12px",
-          borderRadius: 12,
-          background: "rgba(2,6,23,0.18)",
-          border: "1px solid rgba(148,163,184,0.12)",
-          fontSize: 13,
-          lineHeight: 1.35,
-          color: "rgba(226,232,240,0.88)",
-        }}
-      >
-        Para acercarte a tu meta de vivienda, la ruta más rápida estimada sería
-        con <strong>{entryTrajectory.mejorRutaMeta.producto}</strong>, y tomaría
-        alrededor de{" "}
-        <strong>
-          {entryTrajectory.mejorRutaMeta.mesesMeta}{" "}
-          {entryTrajectory.mejorRutaMeta.mesesMeta === 1 ? "mes" : "meses"}
-        </strong>{" "}
-        solo para fortalecer la entrada.
-      </div>
-    ) : null}
-
-    {/* DISCLAIMER SUAVE */}
-    <div
-      style={{
-        marginTop: 8,
-        fontSize: 12,
-        lineHeight: 1.35,
-        color: "rgba(148,163,184,0.85)",
-      }}
-    >
-      Esto mejora tu capacidad de entrada. La aprobación final también dependerá
-      del programa y de tu perfil crediticio al momento de aplicar.
-    </div>
-  </InnerCard>
-) : null}
-
-          <InsightGrid items={mainInsightItems} />
-
-          <div style={{ marginTop: 12 }}>
-            <PrimaryButton onClick={() => go("/marketplace")}>
-              {isGoalAboveCapacity
-                ? "Ver propiedades en mi rango"
-                : "Ver propiedades que hacen match"}
-            </PrimaryButton>
-          </div>
         </Card>
-      ) : null}
-
-      {summary?.unlocked && filteredHomeAlternatives.length > 0 ? (
+      </div>
+<div style={visibleInViewStyle}>
         <Card style={{ marginTop: 18 }}>
           <div
             style={{
-              fontSize: 13,
-              color: "rgba(148,163,184,0.95)",
-              fontWeight: 900,
-            }}
-          >
-            {isGoalAboveCapacity
-              ? "Opciones para acercarte a tu meta"
-              : "Caminos que también podrían servirte"}
-          </div>
-
-          <div
-            style={{
-              marginTop: 12,
-              display: "grid",
-              gap: 10,
-            }}
-          >
-            {filteredHomeAlternatives.map((alt, idx) => (
-              <div
-                key={`${alt?.kind || "alt"}-${idx}`}
-                style={{
-                  padding: 14,
-                  borderRadius: 16,
-                  border: "1px solid rgba(148,163,184,0.16)",
-                  background: "rgba(2,6,23,0.18)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: 12,
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 950, fontSize: 15 }}>
-                      {alt?.title || "Alternativa"}
-                    </div>
-
-                    {buildAlternativeSubtitle(alt) ? (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          fontSize: 12,
-                          color: "rgba(148,163,184,0.95)",
-                        }}
-                      >
-                        {buildAlternativeSubtitle(alt)}
-                      </div>
-                    ) : null}
-
-                    {alt?.description ? (
-                      <div
-                        style={{
-                          marginTop: 8,
-                          fontSize: 13,
-                          lineHeight: 1.35,
-                          color: "rgba(226,232,240,0.88)",
-                        }}
-                      >
-                        {alt.description}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <Chip tone="neutral">
-                    {alt?.kind === "entry_installments"
-                      ? "Entrada en cuotas"
-                      : alt?.kind === "search_range"
-                      ? "Tu rango"
-                      : "Alternativa"}
-                  </Chip>
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <SecondaryButton
-                    onClick={() => go(alt?.ctaPath || "/marketplace")}
-                  >
-                    {alt?.ctaLabel || "Ver opción"}
-                  </SecondaryButton>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      <Card style={{ marginTop: 18 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
-            {COPY.scoreTitle}
-          </div>
-
-          {summary?.unlocked ? (
-            <Chip tone="good">{COPY.scoreReady} ✅</Chip>
-          ) : (
-            <Chip tone="neutral">{COPY.scoreMissing} 🔒</Chip>
-          )}
-        </div>
-
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          {useCompactScoreDisplay ? (
-            <div
-              style={{
-                padding: "8px 12px",
-                borderRadius: 999,
-                border: "1px solid rgba(148,163,184,0.16)",
-                background: "rgba(255,255,255,0.04)",
-                fontSize: 13,
-                fontWeight: 950,
-                color: "rgba(226,232,240,0.95)",
-              }}
-            >
-              {displayScoreBadge}
-            </div>
-          ) : (
-            <div style={{ fontSize: 46, fontWeight: 980, letterSpacing: -1 }}>
-              {displayScoreValue}
-            </div>
-          )}
-
-          <div style={{ color: "rgba(148,163,184,0.95)", fontSize: 14 }}>
-            {displayScoreLabel}
-          </div>
-        </div>
-
-        {summary?.unlocked ? (
-          <ProbabilityBar
-            valuePct={isGoalAboveCapacity ? null : prob?.pct}
-            valueText={isGoalAboveCapacity ? "Baja" : null}
-            hint={heroHint}
-          />
-        ) : null}
-
-        {homeActionHints.length > 0 ? (
-          <InnerCard
-            style={{
-              marginTop: 12,
-              background:
-                isImmediateRoute
-                  ? "rgba(16,185,129,0.10)"
-                  : "rgba(37,211,166,0.08)",
-              border:
-                isImmediateRoute
-                  ? "1px solid rgba(16,185,129,0.22)"
-                  : "1px solid rgba(37,211,166,0.20)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
             }}
           >
             <div
               style={{
                 fontSize: 12,
-                fontWeight: 900,
                 color: "rgba(148,163,184,0.95)",
+                fontWeight: 950,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              Qué te conviene hacer ahora
+              <Compass
+                size={13}
+                strokeWidth={2.3}
+                style={{ opacity: 0.95, flexShrink: 0 }}
+              />
+              {COPY.guideTag}
+            </div>
+            <Chip tone="neutral">{COPY.guideResultTag}</Chip>
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              fontWeight: 980,
+              fontSize: 18,
+              lineHeight: 1.2,
+            }}
+          >
+            {bestNext.title}
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              color: "rgba(226,232,240,0.90)",
+              lineHeight: 1.35,
+              fontSize: 13,
+            }}
+          >
+            {bestNext.subtitle}
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <PrimaryButton onClick={() => go(bestNext.to)}>
+              {isGoalAboveCapacity ? "Ver propiedades en mi rango" : bestNext.cta}
+            </PrimaryButton>
+          </div>
+        </Card>
+      </div>
+
+      <div style={visibleInViewStyle}>
+        <Card style={{ marginTop: 18 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "rgba(148,163,184,0.95)",
+                  fontWeight: 900,
+                }}
+              >
+                Tu progreso hacia comprar casa
+              </div>
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 28,
+                  fontWeight: 980,
+                  lineHeight: 1,
+                }}
+              >
+                {animatedProgress}%
+              </div>
             </div>
 
+            <Chip tone={displayProgress >= 85 ? "good" : "neutral"}>
+              {displayProgress >= 85 ? "Vas muy bien" : "Sigue avanzando"}
+            </Chip>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <ProgressBar value={animatedProgress} />
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              fontSize: 12,
+              color: "rgba(148,163,184,0.92)",
+              lineHeight: 1.35,
+            }}
+          >
+            {homeProgressText}
+          </div>
+        </Card>
+      </div>
+
+      {summary?.unlocked ? (
+       <div style={visibleInViewStyle}>
+          <Card style={{ marginTop: 18 }}>
             <div
               style={{
-                marginTop: 8,
-                display: "grid",
-                gap: 8,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 12,
               }}
             >
-              {homeActionHints.slice(0, 3).map((hint, idx) => (
+              <div>
+                <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
+                  {primaryHeadlineLabel}
+                </div>
+
                 <div
-                  key={`${hint}-${idx}`}
                   style={{
-                    fontSize: 13,
-                    lineHeight: 1.35,
-                    color: "rgba(226,232,240,0.88)",
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    background: "rgba(2,6,23,0.18)",
-                    border: "1px solid rgba(148,163,184,0.12)",
+                    marginTop: 6,
+                    fontSize: 24,
+                    fontWeight: 980,
+                    lineHeight: 1.1,
                   }}
                 >
-                  {idx + 1}. {hint}
+                  {primaryHeadlineValue}
                 </div>
-              ))}
+
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 13,
+                    color: "rgba(148,163,184,0.95)",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {primaryHeadlineHelp}
+                </div>
+              </div>
+
+              <Chip tone={hasImmediateViableMortgage ? "good" : "neutral"}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {hasImmediateViableMortgage ? (
+                    <>
+                      <CheckCircle2 size={13} strokeWidth={2.4} />
+                      Hoy viable
+                    </>
+                  ) : isGoalAboveCapacity ? (
+                    <>
+                      <Target size={13} strokeWidth={2.4} />
+                      Aterrizar meta
+                    </>
+                  ) : (
+                    <>
+                      <MapPin size={13} strokeWidth={2.4} />
+                      Ruta estimada
+                    </>
+                  )}
+                </span>
+              </Chip>
             </div>
 
+            {blockerExplanationTitle && blockerExplanationBody ? (
+              <AccordionSection
+                title={blockerExplanationTitle}
+                subtitle="Esto te ayuda a entender qué variable pesa más hoy."
+                open={expandedSections.blocker}
+                onToggle={() => toggleSection("blocker")}
+              >
+                <div
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 1.4,
+                    color: "rgba(226,232,240,0.90)",
+                  }}
+                >
+                  {blockerExplanationBody}
+                </div>
+
+                {homePrimaryBlocker === "entrada" ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      lineHeight: 1.35,
+                      color: "rgba(148,163,184,0.88)",
+                    }}
+                  >
+                    La buena noticia: si aumentas tu entrada, tu capacidad puede subir mucho más rápido.
+                  </div>
+                ) : null}
+              </AccordionSection>
+            ) : null}
+
+            {isGoalAboveCapacity && toNum(goalSummary?.targetPropertyValue) > 0 ? (
+              <InnerCard
+                style={{
+                  marginTop: 12,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(148,163,184,0.16)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                  }}
+                >
+                  <SoftMetric
+                    label="Tu objetivo de vivienda"
+                    value={safeMoney(goalSummary?.targetPropertyValue)}
+                  />
+                  <SoftMetric
+                    label="Lo más realista hoy"
+                    value={primaryHeadlineValue}
+                  />
+                </div>
+              </InnerCard>
+            ) : null}
+
+            {summary?.unlocked && entryTrajectory ? (
+              <AccordionSection
+                title="Si mantienes este ritmo"
+                subtitle="Una proyección simple para visualizar cómo se podría mover tu entrada."
+                open={expandedSections.rhythm}
+                onToggle={() => toggleSection("rhythm")}
+              >
+                <div
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 1.4,
+                    color: "rgba(226,232,240,0.90)",
+                  }}
+                >
+                  Hoy tienes {safeMoney(entryTrajectory.entradaActual)} de entrada y podrías
+                  destinar {safeMoney(entryTrajectory.capacidadMensual)} al mes para seguir
+                  construyéndola.
+                </div>
+
+                {entryTrajectory.mejorRutaActual ? (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      background: "rgba(2,6,23,0.18)",
+                      border: "1px solid rgba(148,163,184,0.12)",
+                      fontSize: 13,
+                      lineHeight: 1.35,
+                      color: "rgba(226,232,240,0.88)",
+                    }}
+                  >
+                    Para tu rango más realista de hoy, la forma más rápida de fortalecer tu
+                    entrada sería con{" "}
+                    <strong>{entryTrajectory.mejorRutaActual.producto}</strong>. Manteniendo
+                    este ritmo, podrías completar una entrada referencial en{" "}
+                    <strong>
+                      {entryTrajectory.mejorRutaActual.mesesActual}{" "}
+                      {entryTrajectory.mejorRutaActual.mesesActual === 1 ? "mes" : "meses"}
+                    </strong>.
+                  </div>
+                ) : null}
+
+                {isGoalAboveCapacity && entryTrajectory.mejorRutaMeta ? (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      background: "rgba(2,6,23,0.18)",
+                      border: "1px solid rgba(148,163,184,0.12)",
+                      fontSize: 13,
+                      lineHeight: 1.35,
+                      color: "rgba(226,232,240,0.88)",
+                    }}
+                  >
+                    Para acercarte a tu meta de vivienda, la ruta más rápida estimada sería
+                    con <strong>{entryTrajectory.mejorRutaMeta.producto}</strong>, y tomaría
+                    alrededor de{" "}
+                    <strong>
+                      {entryTrajectory.mejorRutaMeta.mesesMeta}{" "}
+                      {entryTrajectory.mejorRutaMeta.mesesMeta === 1 ? "mes" : "meses"}
+                    </strong>{" "}
+                    solo para fortalecer la entrada.
+                  </div>
+                ) : null}
+
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    lineHeight: 1.35,
+                    color: "rgba(148,163,184,0.85)",
+                  }}
+                >
+                  Esto mejora tu capacidad de entrada. La aprobación final también dependerá
+                  del programa y de tu perfil crediticio al momento de aplicar.
+                </div>
+              </AccordionSection>
+            ) : null}
+
+            <InsightGrid items={mainInsightItems} />
+
             <div style={{ marginTop: 12 }}>
-              <SecondaryButton onClick={() => go(bestNext.to)}>
-                {isGoalAboveCapacity ? "Ver propiedades en mi rango" : bestNext.cta}
-              </SecondaryButton>
+              <PrimaryButton onClick={() => go("/marketplace")}>
+                {isGoalAboveCapacity
+                  ? "Ver propiedades en mi rango"
+                  : "Ver propiedades compatibles"}
+              </PrimaryButton>
             </div>
-          </InnerCard>
-        ) : null}
-      </Card>
+          </Card>
+        </div>
+      ) : null}
+
+      {summary?.unlocked && filteredHomeAlternatives.length > 0 ? (
+       <div style={visibleInViewStyle}>
+          <Card style={{ marginTop: 18 }}>
+            <AccordionSection
+              title={
+                isGoalAboveCapacity
+                  ? "Opciones para acercarte a tu meta"
+                  : "Caminos que también podrían servirte"
+              }
+              subtitle="Alternativas para explorar sin saturar tu pantalla principal."
+              open={expandedSections.alternatives}
+              onToggle={() => toggleSection("alternatives")}
+              style={{
+                marginTop: 0,
+                background: "transparent",
+                border: "none",
+                padding: 0,
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                {filteredHomeAlternatives.map((alt, idx) => (
+                  <div
+                    key={`${alt?.kind || "alt"}-${idx}`}
+                    style={{
+                      padding: 14,
+                      borderRadius: 16,
+                      border: "1px solid rgba(148,163,184,0.16)",
+                      background: "rgba(2,6,23,0.18)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 950, fontSize: 15 }}>
+                          {alt?.title || "Alternativa"}
+                        </div>
+
+                        {buildAlternativeSubtitle(alt) ? (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              fontSize: 12,
+                              color: "rgba(148,163,184,0.95)",
+                            }}
+                          >
+                            {buildAlternativeSubtitle(alt)}
+                          </div>
+                        ) : null}
+
+                        {alt?.description ? (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              fontSize: 13,
+                              lineHeight: 1.35,
+                              color: "rgba(226,232,240,0.88)",
+                            }}
+                          >
+                            {alt.description}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <Chip tone="neutral">
+                        {alt?.kind === "entry_installments"
+                          ? "Entrada en cuotas"
+                          : alt?.kind === "search_range"
+                          ? "Tu rango"
+                          : "Alternativa"}
+                      </Chip>
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <SecondaryButton
+                        onClick={() => go(alt?.ctaPath || "/marketplace")}
+                      >
+                        {alt?.ctaLabel || "Ver opción"}
+                      </SecondaryButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </AccordionSection>
+          </Card>
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 16 }}>
         <button
@@ -1549,7 +1879,17 @@ export default function Home() {
               onClick={() => go("/journey")}
               style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}
             >
-              <div style={{ fontWeight: 950 }}>🧮 {COPY.altSimularTitle}</div>
+              <div
+                style={{
+                  fontWeight: 950,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Calculator size={14} strokeWidth={2.3} />
+                {COPY.altSimularTitle}
+              </div>
               <div
                 style={{
                   fontSize: 12,
@@ -1567,7 +1907,17 @@ export default function Home() {
               onClick={() => go("/marketplace")}
               style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}
             >
-              <div style={{ fontWeight: 950 }}>🏘 {COPY.altMatchTitle}</div>
+              <div
+                style={{
+                  fontWeight: 950,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Building2 size={14} strokeWidth={2.3} />
+                {COPY.altMatchTitle}
+              </div>
               <div
                 style={{
                   fontSize: 12,
@@ -1585,7 +1935,17 @@ export default function Home() {
               onClick={() => go("/ruta")}
               style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}
             >
-              <div style={{ fontWeight: 950 }}>🧭 {COPY.altRutaTitle}</div>
+              <div
+                style={{
+                  fontWeight: 950,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Compass size={14} strokeWidth={2.3} />
+                {COPY.altRutaTitle}
+              </div>
               <div
                 style={{
                   fontSize: 12,
@@ -1609,7 +1969,7 @@ export default function Home() {
           textAlign: "center",
         }}
       >
-        Las simulaciones y resultados mostrados en HabitaLibre son referenciales y pueden variar según la evaluación y verificación final de cada entidad financiera.
+        Los resultados de HabitaLibre son referenciales y pueden variar según la evaluación final de cada entidad financiera.
       </div>
     </Screen>
   );

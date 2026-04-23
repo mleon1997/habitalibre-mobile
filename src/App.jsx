@@ -1,6 +1,7 @@
-// src/App.jsx
 import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import Onboarding from "./screens/Onboarding.jsx";
+import { hasSeenOnboarding } from "./lib/appOnboarding.js";
 import ForgotPassword from "./screens/ForgotPassword.jsx";
 import ResetPassword from "./screens/ResetPassword.jsx";
 import Home from "./screens/Home.jsx";
@@ -18,7 +19,11 @@ import EditarPerfil from "./screens/EditarPerfil.jsx";
 import PropiedadIdeal from "./screens/PropiedadIdeal.jsx";
 import Legal from "./screens/Legal.jsx";
 import DeleteAccount from "./screens/DeleteAccount.jsx";
+import ChecklistDocumentos from "./screens/ChecklistDocumentos";
+import SiguientePaso from "./screens/SiguientePaso.jsx";
+import Caso from "./screens/Caso.jsx";
 import BottomNav from "./components/BottomNav.jsx";
+import AppShell from "./components/AppShell.jsx";
 import { getCustomerToken } from "./lib/customerSession.js";
 
 function RequireCustomer({ children }) {
@@ -26,7 +31,9 @@ function RequireCustomer({ children }) {
   const location = useLocation();
 
   if (!token) {
-    const next = encodeURIComponent(`${location.pathname}${location.search || ""}`);
+    const next = encodeURIComponent(
+      `${location.pathname}${location.search || ""}`
+    );
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
@@ -35,18 +42,31 @@ function RequireCustomer({ children }) {
 
 export default function App() {
   const location = useLocation();
+  const token = getCustomerToken();
+  const seenOnboarding = hasSeenOnboarding();
 
   const hideNav =
+    location.pathname.startsWith("/onboarding") ||
     location.pathname.startsWith("/login") ||
     location.pathname.startsWith("/register") ||
     location.pathname.startsWith("/forgot-password") ||
     location.pathname.startsWith("/reset-password");
 
   return (
-    <>
+    <AppShell hideNav={hideNav}>
       <Routes>
-        {/* Públicas */}
-        <Route path="/" element={<Home />} />
+        {/* PÚBLICAS */}
+        <Route
+          path="/"
+          element={
+            !seenOnboarding ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Home />
+            )
+          }
+        />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/journey" element={<Journey />} />
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/property/:id" element={<PropertyDetail />} />
@@ -54,14 +74,23 @@ export default function App() {
         <Route path="/mejorar" element={<MejorarPerfil />} />
         <Route path="/asesor" element={<Asesor />} />
         <Route path="/legal" element={<Legal />} />
+        <Route path="/checklist-documentos" element={<ChecklistDocumentos />} />
+        <Route path="/siguiente-paso" element={<SiguientePaso />} />
+        <Route path="/caso" element={<Caso />} />
 
-        {/* Auth */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* AUTH */}
+        <Route
+          path="/login"
+          element={token ? <Navigate to="/" replace /> : <Login />}
+        />
+        <Route
+          path="/register"
+          element={token ? <Navigate to="/" replace /> : <Register />}
+        />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Protegidas */}
+        {/* PROTEGIDAS */}
         <Route
           path="/perfil"
           element={
@@ -70,7 +99,6 @@ export default function App() {
             </RequireCustomer>
           }
         />
-
         <Route
           path="/perfil/editar"
           element={
@@ -79,7 +107,6 @@ export default function App() {
             </RequireCustomer>
           }
         />
-
         <Route
           path="/eliminar-cuenta"
           element={
@@ -88,7 +115,6 @@ export default function App() {
             </RequireCustomer>
           }
         />
-
         <Route
           path="/propiedad-ideal"
           element={
@@ -98,11 +124,11 @@ export default function App() {
           }
         />
 
-        {/* Ruta / Docs */}
+        {/* RUTA / DOCS */}
         <Route path="/ruta" element={<Ruta />} />
         <Route path="/docs" element={<Ruta />} />
 
-        {/* Versiones protegidas del journey */}
+        {/* VERSIONES PROTEGIDAS */}
         <Route
           path="/journey/full"
           element={
@@ -111,7 +137,6 @@ export default function App() {
             </RequireCustomer>
           }
         />
-
         <Route
           path="/mejorar/full"
           element={
@@ -121,11 +146,11 @@ export default function App() {
           }
         />
 
-        {/* Fallback */}
+        {/* FALLBACK */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
       {!hideNav ? <BottomNav /> : null}
-    </>
+    </AppShell>
   );
 }

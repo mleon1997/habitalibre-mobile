@@ -249,19 +249,19 @@ export default function PropertyCard({ property, onClick }) {
   const routeLabel = plan?.routeLabel || matchReasonCalculado || estadoLabel || "Ruta por definir";
 
   const headline =
-    plan?.status === "viable_today"
-      ? "Ruta posible con este proyecto"
-      : plan?.status === "needs_down_payment"
-      ? "Ruta cercana con este proyecto"
-      : estadoCompra === "top_match"
-      ? "Listo para comprar"
-      : estadoCompra === "entrada_viable_hipoteca_futura_viable"
-      ? "Ruta posible con este proyecto"
-      : estadoCompra === "entrada_viable_hipoteca_futura_debil"
-      ? "Ruta posible con ajustes"
-      : estadoCompra === "entrada_no_viable"
-      ? "Explorar ruta"
-      : "Ruta por definir";
+  plan?.status === "viable_today"
+    ? "Ruta viable"
+    : plan?.status === "needs_down_payment"
+    ? "Ruta cercana"
+    : estadoCompra === "top_match"
+    ? "Compra posible"
+    : estadoCompra === "entrada_viable_hipoteca_futura_viable"
+    ? "Ruta viable"
+    : estadoCompra === "entrada_viable_hipoteca_futura_debil"
+    ? "Con ajustes"
+    : estadoCompra === "entrada_no_viable"
+    ? "Explorar ruta"
+    : "Ruta por definir";
 
   const summaryText =
     plan?.status === "viable_today"
@@ -338,16 +338,21 @@ export default function PropertyCard({ property, onClick }) {
             style={{
               position: "absolute",
               left: 12,
+              right: 170,
               bottom: 12,
-              padding: "9px 13px",
-              borderRadius: 999,
-              background: "rgba(9,18,39,0.78)",
+              padding: "10px 14px",
+              borderRadius: 18,
+              background: "rgba(9,18,39,0.86)",
               border: "1px solid rgba(255,255,255,0.10)",
               backdropFilter: "blur(8px)",
               fontWeight: 900,
               fontSize: 13,
               color: "rgba(255,255,255,0.98)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              zIndex: 1,
             }}
           >
             {headline}
@@ -358,12 +363,15 @@ export default function PropertyCard({ property, onClick }) {
               position: "absolute",
               right: 12,
               bottom: 12,
+              width: 146,
               padding: "10px 14px",
               borderRadius: 20,
-              background: "rgba(9,18,39,0.82)",
+              background: "rgba(9,18,39,0.92)",
               border: "1px solid rgba(255,255,255,0.10)",
               backdropFilter: "blur(8px)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+              boxSizing: "border-box",
+              zIndex: 2,
             }}
           >
             <div
@@ -372,6 +380,7 @@ export default function PropertyCard({ property, onClick }) {
                 color: "rgba(255,255,255,0.78)",
                 marginBottom: 2,
                 fontWeight: 700,
+                lineHeight: 1.1,
               }}
             >
               Precio
