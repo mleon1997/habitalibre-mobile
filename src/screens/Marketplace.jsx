@@ -456,7 +456,7 @@ function ScreenWrap({ children }) {
           "radial-gradient(1000px 700px at 80% 10%, rgba(59,130,246,0.10), transparent 60%)," +
           "linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(15,23,42,1) 100%)",
         color: "white",
-        padding: "92px 22px 28px",
+        padding: "92px 22px calc(140px + env(safe-area-inset-bottom, 0px))",
         fontFamily: "system-ui",
         boxSizing: "border-box",
       }}

@@ -148,7 +148,7 @@ function getSelectedPropertyStatusMeta(status, hasChosenProperty) {
   if (status === "selected_near_route") {
     return {
       short: "Revisar encaje",
-      hint: "Tu perfil cambió y conviene revisar si esta propiedad sigue siendo de tus mejores opciones.",
+      hint: "Tu perfil cambió y conviene revisar si esta sigue siendo de tus mejores opciones.",
       tone: "neutral",
     };
   }
@@ -282,22 +282,35 @@ function getCaseStepMeta({
     validateDone: false,
     sendDone: false,
     statusDone: false,
-    validateStatus: "next",
+    validateStatus: "locked",
     sendStatus: "locked",
-    statusStatus: "pending",
-    validateChip: "Falta base",
+    statusStatus: "locked",
+    validateChip: "Falta evaluación",
     sendChip: "Bloqueado",
-    statusChip: "Pendiente",
+    statusChip: "Bloqueado",
     validateHint:
-      "Primero debes tener una propiedad base y una preparación documental útil.",
+      "Primero debes completar tu evaluación para abrir una ruta real.",
     sendHint:
-      "El envío solo se habilita cuando el caso ya está listo.",
+      "El envío solo se habilita cuando ya existe una base suficiente del caso.",
     statusHint:
       "Aquí verás el estado real cuando tu caso ya haya sido recibido por HabitaLibre.",
-    validateCta: "Ver validación",
+    validateCta: "Ver evaluación",
     sendCta: "Ir al envío",
     statusCta: "Ver estado",
   };
+}
+
+function hasUnlockedEvaluation(snapshot) {
+  return Boolean(
+    snapshot?.unlocked === true ||
+      snapshot?.output?.unlocked === true ||
+      snapshot?.ok === true ||
+      snapshot?.output?.ok === true ||
+      snapshot?.score != null ||
+      snapshot?.output?.score != null ||
+      snapshot?.financialCapacity?.estimatedMaxPropertyValue != null ||
+      snapshot?.output?.financialCapacity?.estimatedMaxPropertyValue != null
+  );
 }
 
 function TimelineDot({ status }) {
@@ -507,35 +520,43 @@ export default function Ruta() {
     []
   );
 
-  const cuota =
-    snapshot?.cuotaMensual ??
-    snapshot?.kpis?.cuotaMensual ??
-    snapshot?.resultado?.cuotaMensual ??
-    snapshot?.cuotaEstimada ??
-    snapshot?.bestMortgage?.cuota ??
-    null;
+  const hasEvaluation = hasUnlockedEvaluation(snapshot);
 
-  const maxCompra =
-    snapshot?.maxCompra ??
-    snapshot?.kpis?.maxCompra ??
-    snapshot?.resultado?.maxCompra ??
-    snapshot?.precioMaxVivienda ??
-    snapshot?.montoMaximo ??
-    null;
+  const cuota = hasEvaluation
+    ? snapshot?.cuotaMensual ??
+      snapshot?.kpis?.cuotaMensual ??
+      snapshot?.resultado?.cuotaMensual ??
+      snapshot?.cuotaEstimada ??
+      snapshot?.bestMortgage?.cuota ??
+      null
+    : null;
 
-  const visTag =
-    snapshot?.programa ??
-    snapshot?.kpis?.programa ??
-    snapshot?.resultado?.programa ??
-    snapshot?.productoSugerido ??
-    "VIS";
+  const maxCompra = hasEvaluation
+    ? snapshot?.maxCompra ??
+      snapshot?.kpis?.maxCompra ??
+      snapshot?.resultado?.maxCompra ??
+      snapshot?.precioMaxVivienda ??
+      snapshot?.montoMaximo ??
+      null
+    : null;
 
-  const probPct = toPct(
-    snapshot?.probAprobacion ??
-      snapshot?.kpis?.probAprobacion ??
-      snapshot?.resultado?.probAprobacion ??
-      snapshot?.score
-  );
+  const visTag = hasEvaluation
+    ? snapshot?.programa ??
+      snapshot?.kpis?.programa ??
+      snapshot?.resultado?.programa ??
+      snapshot?.productoSugerido ??
+      "VIS"
+    : "—";
+
+  const probPct = hasEvaluation
+    ? toPct(
+        snapshot?.probAprobacion ??
+          snapshot?.kpis?.probAprobacion ??
+          snapshot?.resultado?.probAprobacion ??
+          snapshot?.score
+      )
+    : null;
+
   const prob = probMeta(probPct);
 
   const matchedPropsFromJourney =
@@ -544,12 +565,13 @@ export default function Ruta() {
     journey?.matchCount ??
     null;
 
-  const matchedPropsFromSnapshot =
-    snapshot?.matchedProperties?.length ??
-    snapshot?.output?.matchedProperties?.length ??
-    snapshot?.plan?.routeSignals?.matchedProperties?.length ??
-    snapshot?.routeSignals?.matchedProperties?.length ??
-    null;
+  const matchedPropsFromSnapshot = hasEvaluation
+    ? snapshot?.matchedProperties?.length ??
+      snapshot?.output?.matchedProperties?.length ??
+      snapshot?.plan?.routeSignals?.matchedProperties?.length ??
+      snapshot?.routeSignals?.matchedProperties?.length ??
+      null
+    : null;
 
   const propsCount = matchedPropsFromJourney ?? matchedPropsFromSnapshot ?? null;
 
@@ -579,11 +601,13 @@ export default function Ruta() {
     journey?.propiedadElegida || journey?.propiedadId || selectedPropertyId
   );
 
-  const caseReadinessStatus = getCaseReadinessStatus({
-    hasChosenProperty,
-    selectedPropertyStatus,
-    docsReady,
-  });
+  const caseReadinessStatus = hasEvaluation
+    ? getCaseReadinessStatus({
+        hasChosenProperty,
+        selectedPropertyStatus,
+        docsReady,
+      })
+    : "no_listo";
 
   const activationRequestedAt = journey?.activationRequestedAt || null;
   const projectSubmittedAt = journey?.projectSubmittedAt || null;
@@ -597,24 +621,28 @@ export default function Ruta() {
   });
 
   const flags = {
-    precalificacion: true,
-    matchExplorado: Boolean(
-      journey?.matchExplorado ||
-        journey?.match?.visto ||
-        (propsCount && propsCount > 0)
-    ),
-    propiedadElegida: hasChosenProperty,
-    docsSubidos: docsReady,
+    precalificacion: hasEvaluation,
+    matchExplorado:
+      hasEvaluation &&
+      Boolean(
+        journey?.matchExplorado ||
+          journey?.match?.visto ||
+          (propsCount && propsCount > 0)
+      ),
+    propiedadElegida: hasEvaluation && hasChosenProperty,
+    docsSubidos: hasEvaluation && docsReady,
     casoValidado:
-      caseReadinessStatus === "listo_para_revision_habitalibre" ||
-      Boolean(activationRequestedAt) ||
-      Boolean(projectSubmittedAt) ||
-      Boolean(bankSubmittedAt),
-    casoEnviado: Boolean(activationRequestedAt),
+      hasEvaluation &&
+      (caseReadinessStatus === "listo_para_revision_habitalibre" ||
+        Boolean(activationRequestedAt) ||
+        Boolean(projectSubmittedAt) ||
+        Boolean(bankSubmittedAt)),
+    casoEnviado: hasEvaluation && Boolean(activationRequestedAt),
     estadoRevision:
-      Boolean(activationRequestedAt) ||
-      Boolean(projectSubmittedAt) ||
-      Boolean(bankSubmittedAt),
+      hasEvaluation &&
+      (Boolean(activationRequestedAt) ||
+        Boolean(projectSubmittedAt) ||
+        Boolean(bankSubmittedAt)),
   };
 
   const stepsOrder = [
@@ -638,7 +666,9 @@ export default function Ruta() {
   const nextStepKey = stepsOrder.find((k) => !flags[k]) || "estadoRevision";
 
   const nextStepLabel =
-    nextStepKey === "matchExplorado"
+    nextStepKey === "precalificacion"
+      ? "Empezar evaluación"
+      : nextStepKey === "matchExplorado"
       ? "Explorar tu Match"
       : nextStepKey === "propiedadElegida"
       ? "Elegir una propiedad"
@@ -651,7 +681,8 @@ export default function Ruta() {
       : "Estado de revisión";
 
   const goNext = () => {
-    if (nextStepKey === "matchExplorado") nav("/marketplace");
+    if (nextStepKey === "precalificacion") nav("/journey/full");
+    else if (nextStepKey === "matchExplorado") nav("/marketplace");
     else if (nextStepKey === "propiedadElegida") nav("/marketplace");
     else if (nextStepKey === "docsSubidos") nav("/checklist-documentos");
     else if (nextStepKey === "casoValidado") nav("/siguiente-paso");
@@ -808,55 +839,71 @@ export default function Ruta() {
         <StepTimelineCard
           stepNum={1}
           title="Precalificación"
-          subtitle="Tu perfil hipotecario ya está listo."
-          status="done"
+          subtitle={
+            hasEvaluation
+              ? "Tu perfil hipotecario ya está listo."
+              : "Completa tu evaluación para abrir tu ruta real."
+          }
+          status={hasEvaluation ? "done" : "next"}
+          featured={!hasEvaluation}
           icon={<CheckCircle2 size={13} />}
           rightChips={
             <>
-              <RightMetric>Score</RightMetric>
+              <RightMetric>{hasEvaluation ? "Score" : "Pendiente"}</RightMetric>
               <RightMetric>
-                {cuota ? `Cuota ${moneyUSD(cuota)}` : "Cuota —"}
+                {hasEvaluation && cuota ? `Cuota ${moneyUSD(cuota)}` : "Cuota —"}
               </RightMetric>
             </>
           }
-          ctaLabel="Ver mi resultado"
-          onClick={() => nav("/")}
-          hint="Este es el paso más importante. Lo demás es elegir la mejor opción."
+          ctaLabel={hasEvaluation ? "Ver mi resultado" : "Empezar evaluación"}
+          onClick={() => nav(hasEvaluation ? "/" : "/journey/full")}
+          hint={
+            hasEvaluation
+              ? "Este es el paso más importante. Lo demás es elegir la mejor opción."
+              : "Aquí se activa tu capacidad estimada, tu cuota referencial y tu siguiente mejor paso."
+          }
         />
 
         <StepTimelineCard
           stepNum={2}
           title="Explorar tu Match"
           subtitle="Ver las casas que sí puedes comprar con tu perfil."
-          status={flags.matchExplorado ? "done" : "next"}
-          featured={!flags.matchExplorado}
+          status={
+            !hasEvaluation
+              ? "locked"
+              : flags.matchExplorado
+              ? "done"
+              : "next"
+          }
+          featured={hasEvaluation && !flags.matchExplorado}
           icon={<MapPinned size={13} />}
           rightChips={
             <>
-              <RightMetric>{visTag}</RightMetric>
+              <RightMetric>{hasEvaluation ? visTag : "—"}</RightMetric>
               <RightMetric>
-                {maxCompra ? `Hasta ${moneyUSD(maxCompra)}` : "Hasta —"}
+                {hasEvaluation && maxCompra ? `Hasta ${moneyUSD(maxCompra)}` : "Hasta —"}
               </RightMetric>
             </>
           }
           ctaLabel={propsCount ? `Ver ${propsCount} propiedades` : "Ir a Match"}
           onClick={() => nav("/marketplace")}
+          disabled={!hasEvaluation}
           hint={
-            cuota && maxCompra ? (
-              <>
-                Tu rango:{" "}
-                <b style={{ color: "rgba(226,232,240,0.95)" }}>
-                  {moneyUSD(maxCompra)}
-                </b>{" "}
-                · cuotas desde{" "}
-                <b style={{ color: "rgba(226,232,240,0.95)" }}>
-                  {moneyUSD(cuota)}
-                </b>
-                .
-              </>
-            ) : (
-              "Aquí ves casas + cuotas en un solo lugar, sin perder tiempo."
-            )
+            hasEvaluation
+              ? cuota && maxCompra
+                ? <>
+                    Tu rango:{" "}
+                    <b style={{ color: "rgba(226,232,240,0.95)" }}>
+                      {moneyUSD(maxCompra)}
+                    </b>{" "}
+                    · cuotas desde{" "}
+                    <b style={{ color: "rgba(226,232,240,0.95)" }}>
+                      {moneyUSD(cuota)}
+                    </b>
+                    .
+                  </>
+                : "Aquí ves casas + cuotas en un solo lugar, sin perder tiempo."
+              : "Primero necesitas completar tu evaluación para ver propiedades alineadas con tu perfil."
           }
         />
 
@@ -869,7 +916,9 @@ export default function Ruta() {
               : "Selecciona la vivienda que te interesa para seguir avanzando."
           }
           status={
-            flags.propiedadElegida
+            !hasEvaluation
+              ? "locked"
+              : flags.propiedadElegida
               ? "done"
               : flags.matchExplorado
               ? "pending"
@@ -895,7 +944,7 @@ export default function Ruta() {
                 : "/marketplace"
             )
           }
-          disabled={!flags.matchExplorado}
+          disabled={!hasEvaluation || !flags.matchExplorado}
           hint={
             flags.propiedadElegida
               ? selectedPropertyStatusMeta.hint
@@ -908,7 +957,9 @@ export default function Ruta() {
           title="Preparar documentos"
           subtitle="Te mostramos qué deberías tener listo para avanzar con el proyecto o la entidad financiera."
           status={
-            flags.docsSubidos
+            !hasEvaluation
+              ? "locked"
+              : flags.docsSubidos
               ? "done"
               : flags.propiedadElegida
               ? "pending"
@@ -922,7 +973,7 @@ export default function Ruta() {
           }
           ctaLabel="Ver checklist"
           onClick={() => nav("/checklist-documentos")}
-          disabled={!flags.propiedadElegida}
+          disabled={!hasEvaluation || !flags.propiedadElegida}
           hint={
             docsDone > 0
               ? `Tienes ${docsDone} de ${docsTotal} ítems marcados en tu checklist.`
@@ -943,15 +994,19 @@ export default function Ruta() {
             </RightMetric>
           }
           ctaLabel={caseSteps.validateCta}
-          onClick={() => nav("/siguiente-paso")}
-          disabled={!flags.docsSubidos}
-          hint={caseSteps.validateHint}
+          onClick={() => nav(hasEvaluation ? "/siguiente-paso" : "/journey/full")}
+          disabled={!hasEvaluation || !flags.docsSubidos}
+          hint={
+            hasEvaluation
+              ? "Tu propiedad y tu preparación ya se ven suficientes para revisar si el caso puede enviarse a HabitaLibre."
+              : "Primero necesitas una evaluación real para abrir este paso."
+          }
         />
 
         <StepTimelineCard
           stepNum={6}
           title="Enviar caso a HabitaLibre"
-          subtitle="Si tu caso ya está listo, HabitaLibre lo recibe en su cola operativa para revisar cómo moverlo."
+          subtitle="Cuando tu caso esté listo, podrás enviarlo a HabitaLibre para que lo revise."
           status={caseSteps.sendStatus}
           featured={caseSteps.sendStatus === "next"}
           icon={<Send size={13} />}
@@ -961,15 +1016,19 @@ export default function Ruta() {
             </RightMetric>
           }
           ctaLabel={caseSteps.sendCta}
-          onClick={() => nav("/siguiente-paso")}
-          disabled={caseSteps.sendStatus === "locked"}
-          hint={caseSteps.sendHint}
+          onClick={() => nav(hasEvaluation ? "/siguiente-paso" : "/journey/full")}
+          disabled={!hasEvaluation || caseSteps.sendStatus === "locked"}
+          hint={
+            hasEvaluation
+              ? "HabitaLibre lo recibirá y decidirá cómo moverlo."
+              : "Este paso solo se habilita después de completar tu evaluación."
+          }
         />
 
         <StepTimelineCard
           stepNum={7}
           title="Estado de revisión"
-          subtitle="Aquí ves si tu caso ya fue recibido por HabitaLibre y en qué punto está la revisión."
+          subtitle="Aquí verás cuando HabitaLibre reciba tu caso y cómo va avanzando la revisión."
           status={caseSteps.statusStatus}
           icon={<BadgeCheck size={13} />}
           rightChips={
@@ -984,9 +1043,13 @@ export default function Ruta() {
             </RightMetric>
           }
           ctaLabel={caseSteps.statusCta}
-          onClick={() => nav("/caso")}
-          disabled={caseSteps.statusStatus === "locked"}
-          hint={caseSteps.statusHint}
+          onClick={() => nav(hasEvaluation ? "/caso" : "/journey/full")}
+          disabled={!hasEvaluation || caseSteps.statusStatus === "locked"}
+          hint={
+            hasEvaluation
+              ? "Aquí aparecerá el estado real una vez que tu caso ya haya sido recibido por HabitaLibre."
+              : "Este seguimiento aparecerá cuando ya exista una evaluación y un caso activo."
+          }
         />
       </div>
     </Screen>

@@ -1,4 +1,3 @@
-// src/screens/Perfil.jsx
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -19,7 +18,6 @@ import {
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 
-
 const LEGAL_LINKS = {
   privacidad: "https://www.habitalibre.com/privacy.html",
   terminos: "https://www.habitalibre.com/terms.html",
@@ -34,7 +32,6 @@ function readJSON(key, fallback = null) {
     return fallback;
   }
 }
-
 
 function openExternal(url) {
   try {
@@ -54,7 +51,7 @@ function toNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-function snapshotLooksValid(snap) {
+function hasUnlockedEvaluation(snap) {
   return Boolean(
     snap?.unlocked === true ||
       snap?.output?.unlocked === true ||
@@ -397,7 +394,8 @@ export default function Perfil() {
       ? rawSnapshotEnvelope.data
       : null;
 
-  const snapshot = snapshotLooksValid(rawSnapshotStored) ? rawSnapshotStored : null;
+  const snapshot = hasUnlockedEvaluation(rawSnapshotStored) ? rawSnapshotStored : null;
+  const hasEvaluation = !!snapshot;
 
   const hasMeaningfulJourney = journeyLooksMeaningful(rawJourneyStored);
 
@@ -463,7 +461,7 @@ export default function Perfil() {
     };
   }, [journey, form, customer]);
 
-  const profileCompletion = useMemo(() => {
+  const accountCompletion = useMemo(() => {
     const checks = [
       user.nombre,
       user.apellido,
@@ -471,14 +469,6 @@ export default function Perfil() {
       user.telefono,
       edadValue,
       estadoCivilValue,
-      ingresoValue,
-      pickProfileField(journey, form, snapshot, ["tipoIngreso"]),
-      pickProfileField(journey, form, snapshot, ["aniosEstabilidad", "mesesActividad"]),
-      pickProfileField(journey, form, snapshot, ["deudas", "otrasDeudasMensuales"]),
-      entradaValue,
-      primeraViviendaValue,
-      horizonteCompraValue,
-      tipoViviendaValue,
     ];
 
     const complete = checks.filter((v) => {
@@ -486,25 +476,13 @@ export default function Perfil() {
     }).length;
 
     return Math.round((complete / checks.length) * 100);
-  }, [
-    user,
-    edadValue,
-    estadoCivilValue,
-    ingresoValue,
-    entradaValue,
-    primeraViviendaValue,
-    horizonteCompraValue,
-    tipoViviendaValue,
-    journey,
-    form,
-    snapshot,
-  ]);
+  }, [user, edadValue, estadoCivilValue]);
 
   const estadoPerfil = useMemo(() => {
-    if (profileCompletion >= 85) return "Muy completo";
-    if (profileCompletion >= 60) return "Bien encaminado";
-    return "Por completar";
-  }, [profileCompletion]);
+if (accountCompletion >= 85) return "Datos completos";
+if (accountCompletion >= 60) return "Cuenta en progreso";
+return "Faltan datos";
+  }, [accountCompletion]);
 
   const score = useMemo(() => {
     if (!snapshot) return "—";
@@ -512,7 +490,7 @@ export default function Perfil() {
   }, [snapshot]);
 
   const estadoActual = useMemo(() => {
-    if (!snapshot) return "Sin resultado aún";
+    if (!snapshot) return "Aún no has hecho tu evaluación";
 
     return (
       normalizeProbabilityLabel(
@@ -525,14 +503,14 @@ export default function Perfil() {
   }, [snapshot]);
 
   const completionTone =
-    profileCompletion >= 85
+    accountCompletion >= 85
       ? "good"
-      : profileCompletion >= 60
+      : accountCompletion >= 60
       ? "warn"
       : "neutral";
 
   const resumenRuta = useMemo(() => {
-    if (!hasScenarioInfo) return "Aún no completas tu ruta";
+    if (!hasEvaluation) return "Aún no has hecho tu evaluación";
 
     const partes = [];
 
@@ -540,31 +518,34 @@ export default function Perfil() {
     if (horizonteCompraValue) partes.push(`${horizonteCompraValue} meses`);
     if (tipoViviendaValue) partes.push(tipoViviendaValue);
 
-    return partes.length ? partes.join(" · ") : "Aún no completas tu ruta";
-  }, [hasScenarioInfo, ciudadCompraValue, horizonteCompraValue, tipoViviendaValue]);
+    return partes.length ? partes.join(" · ") : "Tu evaluación ya está disponible";
+  }, [hasEvaluation, ciudadCompraValue, horizonteCompraValue, tipoViviendaValue]);
 
-  const ingresoLabel = ingresoValue != null ? formatMoney(ingresoValue) : "No definido";
-  const entradaLabel = entradaValue != null ? formatMoney(entradaValue) : "No definido";
-  const viviendaLabel = primeraViviendaValue != null ? String(primeraViviendaValue) : "No definido";
+  const ingresoLabel = hasEvaluation && ingresoValue != null ? formatMoney(ingresoValue) : "No definido";
+  const entradaLabel = hasEvaluation && entradaValue != null ? formatMoney(entradaValue) : "No definido";
+  const viviendaLabel = hasEvaluation && primeraViviendaValue != null ? String(primeraViviendaValue) : "No definido";
 
-function handleLogout() {
-  clearCustomerSession();
-  navigate("/login", { replace: true });
-}
+  function handleLogout() {
+    clearCustomerSession();
+    navigate("/login", { replace: true });
+  }
 
   function goEditarPerfil() {
     navigate("/perfil/editar");
   }
 
-  const shouldShowJourneyBlock = hasScenarioInfo || !!snapshot;
+  const shouldShowJourneyBlock = hasEvaluation;
+  const routeButtonLabel = hasEvaluation ? "Actualizar mi ruta" : "Empezar evaluación";
+  const routeButtonTarget = hasEvaluation ? "/journey" : "/journey/full";
+  const routeActionTitle = hasEvaluation ? "Ver mi camino a casa" : "Completar mi capacidad";
 
   return (
-   <Screen
-  style={{
-    paddingTop: 78,
-    paddingBottom: 110,
-  }}
->
+    <Screen
+      style={{
+        paddingTop: 78,
+        paddingBottom: 110,
+      }}
+    >
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <div
           style={{
@@ -572,7 +553,7 @@ function handleLogout() {
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: 16,
-          marginBottom: 20,
+            marginBottom: 20,
           }}
         >
           <div>
@@ -702,7 +683,7 @@ function handleLogout() {
                     fontWeight: 700,
                   }}
                 >
-                  Completitud de tu perfil
+                  Completitud de tu cuenta
                 </div>
 
                 <div
@@ -714,16 +695,16 @@ function handleLogout() {
                     letterSpacing: -0.4,
                   }}
                 >
-                  {profileCompletion}% · {estadoPerfil}
+                  {accountCompletion}% · {estadoPerfil}
                 </div>
               </div>
 
               <Chip tone={completionTone}>
-                {profileCompletion >= 85 ? "Listo" : "Mejorable"}
+               {accountCompletion >= 85 ? "Completa" : "En progreso"}
               </Chip>
             </div>
 
-            <ProgressBar value={profileCompletion} />
+            <ProgressBar value={accountCompletion} />
 
             <div
               style={{
@@ -733,8 +714,7 @@ function handleLogout() {
                 lineHeight: 1.45,
               }}
             >
-              Completar mejor tu información ayuda a mostrarte rutas y resultados
-              más precisos.
+              Completar mejor tus datos ayuda a personalizar mejor tu experiencia dentro de HabitaLibre.
             </div>
           </InnerCard>
 
@@ -747,7 +727,7 @@ function handleLogout() {
             }}
           >
             <MetricCard label="Score HabitaLibre" value={score} />
-            <MetricCard label="Estado actual" value={estadoActual} />
+            <MetricCard label="Estado hipotecario" value={estadoActual} />
           </div>
         </Card>
 
@@ -797,7 +777,7 @@ function handleLogout() {
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <SectionTitle right={{ label: "Ver ruta", onClick: () => navigate("/ruta") }}>
+          <SectionTitle right={{ label: "Ver ruta", onClick: () => navigate(hasEvaluation ? "/ruta" : "/journey/full") }}>
             Tu ruta hipotecaria
           </SectionTitle>
 
@@ -810,7 +790,7 @@ function handleLogout() {
                 marginBottom: 6,
               }}
             >
-              Resumen de tu escenario
+              {hasEvaluation ? "Resumen de tu escenario" : "Aún no tienes evaluación"}
             </div>
 
             <div
@@ -824,21 +804,37 @@ function handleLogout() {
               {resumenRuta}
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: 10,
-              }}
-            >
-              <InlineInfo label="Ingreso" value={ingresoLabel} />
-              <InlineInfo label="Entrada" value={entradaLabel} />
-              <InlineInfo label="Primera vivienda" value={viviendaLabel} />
-            </div>
+            {hasEvaluation ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 10,
+                }}
+              >
+                <InlineInfo label="Ingreso" value={ingresoLabel} />
+                <InlineInfo label="Entrada" value={entradaLabel} />
+                <InlineInfo label="Primera vivienda" value={viviendaLabel} />
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: "14px 14px",
+                  borderRadius: 16,
+                  background: "rgba(255,255,255,0.04)",
+                  border: UI.borderSoft,
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  color: UI.subtext,
+                }}
+              >
+                Primero completa tu evaluación para ver tu capacidad estimada, tu cuota referencial y tu ruta hipotecaria.
+              </div>
+            )}
 
             <button
               type="button"
-              onClick={() => navigate("/journey")}
+              onClick={() => navigate(routeButtonTarget)}
               style={{
                 marginTop: 14,
                 width: "100%",
@@ -852,7 +848,7 @@ function handleLogout() {
                 cursor: "pointer",
               }}
             >
-              {shouldShowJourneyBlock ? "Actualizar mi ruta" : "Completar mi ruta"}
+              {routeButtonLabel}
             </button>
           </Card>
         </div>
@@ -867,8 +863,8 @@ function handleLogout() {
             />
             <PrimaryActionCard
               eyebrow="Mi ruta"
-              title={shouldShowJourneyBlock ? "Ver mi camino a casa" : "Completar mi capacidad"}
-              onClick={() => navigate(shouldShowJourneyBlock ? "/ruta" : "/journey")}
+              title={routeActionTitle}
+              onClick={() => navigate(hasEvaluation ? "/ruta" : "/journey/full")}
             />
             <PrimaryActionCard
               eyebrow="Ayuda"

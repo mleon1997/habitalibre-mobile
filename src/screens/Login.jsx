@@ -345,19 +345,6 @@ Accede a tu progreso guardado y tus resultados.
           >
             {loading ? "Ingresando..." : "Iniciar sesión"}
           </PrimaryButton>
-
-          <div
-            style={{
-              marginTop: 10,
-              textAlign: "center",
-              fontSize: 12,
-              fontWeight: 800,
-              color: COLORS.subtextSoft,
-            }}
-          >
-            Te tomará menos de 2 minutos
-          </div>
-
           <TrustLine />
 
           <div style={{ marginTop: 14 }}>

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Edit3 } from "lucide-react"
+import { Edit3 } from "lucide-react";
 import { API_BASE } from "../lib/api";
 import { getCustomerToken, getCustomer } from "../lib/customerSession.js";
 
@@ -47,6 +47,12 @@ const CIUDADES_COMPRA = [
   { value: "Otra", label: "Otra ciudad" },
 ];
 
+const OBJETIVO_VIVIENDA_OPCIONES = [
+  { value: "aun_no", label: "Aún no sé qué vivienda quiero" },
+  { value: "rango", label: "Sí, tengo un rango en mente" },
+  { value: "propiedad", label: "Sí, ya tengo una propiedad en mente" },
+];
+
 function loadJSON(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -59,12 +65,6 @@ function loadJSON(key) {
 function saveJSON(key, val) {
   try {
     localStorage.setItem(key, JSON.stringify(val));
-  } catch {}
-}
-
-function removeStorage(key) {
-  try {
-    localStorage.removeItem(key);
   } catch {}
 }
 
@@ -428,6 +428,7 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
       capacidadEntradaMensual: entradaPayload?.capacidadEntradaMensual ?? null,
       ingresoNetoMensual: entradaPayload?.ingresoNetoMensual ?? null,
       ciudadCompra: entradaPayload?.ciudadCompra ?? null,
+      objetivoViviendaModo: entradaPayload?.objetivoViviendaModo ?? null,
     },
   };
 }
@@ -857,29 +858,29 @@ export default function Journey() {
   const navigate = useNavigate();
   const scrollerRef = useRef(null);
 
-const currentOwnerEmail = getStorageOwnerEmail();
+  const currentOwnerEmail = getStorageOwnerEmail();
 
-const existingEnvelope = loadJSON(LS_JOURNEY);
-const snapshotEnvelope = loadJSON(LS_SNAPSHOT);
-const selectedPropertyEnvelope = loadJSON(LS_SELECTED_PROPERTY);
+  const existingEnvelope = loadJSON(LS_JOURNEY);
+  const snapshotEnvelope = loadJSON(LS_SNAPSHOT);
+  const selectedPropertyEnvelope = loadJSON(LS_SELECTED_PROPERTY);
 
-const existing =
-  existingEnvelope?.ownerEmail &&
-  existingEnvelope.ownerEmail === currentOwnerEmail
-    ? existingEnvelope.data
-    : null;
+  const existing =
+    existingEnvelope?.ownerEmail &&
+    existingEnvelope.ownerEmail === currentOwnerEmail
+      ? existingEnvelope.data
+      : null;
 
-const snapshotGuardado =
-  snapshotEnvelope?.ownerEmail &&
-  snapshotEnvelope.ownerEmail === currentOwnerEmail
-    ? snapshotEnvelope.data
-    : null;
+  const snapshotGuardado =
+    snapshotEnvelope?.ownerEmail &&
+    snapshotEnvelope.ownerEmail === currentOwnerEmail
+      ? snapshotEnvelope.data
+      : null;
 
-const selectedPropertyGuardada =
-  selectedPropertyEnvelope?.ownerEmail &&
-  selectedPropertyEnvelope.ownerEmail === currentOwnerEmail
-    ? normalizeSelectedProperty(selectedPropertyEnvelope.data)
-    : null;
+  const selectedPropertyGuardada =
+    selectedPropertyEnvelope?.ownerEmail &&
+    selectedPropertyEnvelope.ownerEmail === currentOwnerEmail
+      ? normalizeSelectedProperty(selectedPropertyEnvelope.data)
+      : null;
 
   const hasResult =
     !!snapshotGuardado?.hasResultado || !!snapshotGuardado?.unlocked;
@@ -931,8 +932,11 @@ const selectedPropertyGuardada =
   const [ciudadCompra, setCiudadCompra] = useState(
     existing?.form?.ciudadCompra || ""
   );
+  const [objetivoViviendaModo, setObjetivoViviendaModo] = useState(
+    existing?.form?.objetivoViviendaModo || "aun_no"
+  );
   const [valorVivienda, setValorVivienda] = useState(
-    existing?.form?.valorVivienda || "90000"
+    existing?.form?.valorVivienda || ""
   );
   const [entrada, setEntrada] = useState(existing?.form?.entrada || "15000");
   const [capacidadEntradaMensual, setCapacidadEntradaMensual] = useState(
@@ -954,74 +958,6 @@ const selectedPropertyGuardada =
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-useEffect(() => {
-  const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
-  const previousJourney =
-    previousJourneyEnvelope?.ownerEmail === currentOwnerEmail
-      ? previousJourneyEnvelope.data || {}
-      : {};
-
-  const payload = {
-    ...previousJourney,
-    step,
-    updatedAt: new Date().toISOString(),
-    form: {
-      nacionalidad,
-      estadoCivil,
-      edad,
-      tipoIngreso,
-      tipoContrato,
-      aniosEstabilidad,
-      mesesActividad,
-      sustentoIndependiente,
-      ingreso,
-      ingresoPareja,
-      deudas,
-      afiliadoIESS,
-      aportesTotales,
-      aportesConsecutivos,
-      ciudadCompra,
-      valorVivienda,
-      entrada,
-      capacidadEntradaMensual,
-      tieneVivienda,
-      primeraVivienda,
-      tipoVivienda,
-      horizonteCompra,
-    },
-  };
-
-  saveJSON(LS_JOURNEY, {
-    ownerEmail: currentOwnerEmail,
-    data: payload,
-  });
-}, [
-  currentOwnerEmail,
-  step,
-  nacionalidad,
-  estadoCivil,
-  edad,
-  tipoIngreso,
-  tipoContrato,
-  aniosEstabilidad,
-  mesesActividad,
-  sustentoIndependiente,
-  ingreso,
-  ingresoPareja,
-  deudas,
-  afiliadoIESS,
-  aportesTotales,
-  aportesConsecutivos,
-  ciudadCompra,
-  valorVivienda,
-  entrada,
-  capacidadEntradaMensual,
-  tieneVivienda,
-  primeraVivienda,
-  tipoVivienda,
-  horizonteCompra,
-]);
-
   const afiliadoBool = afiliadoIESS === "sí";
   const esParejaFormal =
     estadoCivil === "casado" || estadoCivil === "union_de_hecho";
@@ -1037,6 +973,8 @@ useEffect(() => {
 
   const ingresoUsado =
     toNum(ingreso) + (esParejaFormal ? toNum(ingresoPareja) : 0);
+
+  const shouldAskTargetValue = objetivoViviendaModo !== "aun_no";
 
   const entradaPct = useMemo(() => {
     const v = toNum(valorVivienda);
@@ -1058,66 +996,74 @@ useEffect(() => {
     null;
 
   useEffect(() => {
-  const payload = {
+    const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
+    const previousJourney =
+      previousJourneyEnvelope?.ownerEmail === currentOwnerEmail
+        ? previousJourneyEnvelope.data || {}
+        : {};
+
+    const payload = {
+      ...previousJourney,
+      step,
+      updatedAt: new Date().toISOString(),
+      form: {
+        nacionalidad,
+        estadoCivil,
+        edad,
+        tipoIngreso,
+        tipoContrato,
+        aniosEstabilidad,
+        mesesActividad,
+        sustentoIndependiente,
+        ingreso,
+        ingresoPareja,
+        deudas,
+        afiliadoIESS,
+        aportesTotales,
+        aportesConsecutivos,
+        ciudadCompra,
+        objetivoViviendaModo,
+        valorVivienda,
+        entrada,
+        capacidadEntradaMensual,
+        tieneVivienda,
+        primeraVivienda,
+        tipoVivienda,
+        horizonteCompra,
+      },
+    };
+
+    saveJSON(LS_JOURNEY, {
+      ownerEmail: currentOwnerEmail,
+      data: payload,
+    });
+  }, [
+    currentOwnerEmail,
     step,
-    updatedAt: new Date().toISOString(),
-    form: {
-      nacionalidad,
-      estadoCivil,
-      edad,
-      tipoIngreso,
-      tipoContrato,
-      aniosEstabilidad,
-      mesesActividad,
-      sustentoIndependiente,
-      ingreso,
-      ingresoPareja,
-      deudas,
-      afiliadoIESS,
-      aportesTotales,
-      aportesConsecutivos,
-      ciudadCompra,
-      valorVivienda,
-      entrada,
-      capacidadEntradaMensual,
-      tieneVivienda,
-      primeraVivienda,
-      tipoVivienda,
-      horizonteCompra,
-    },
-  };
-
-  const ownerEmail = getStorageOwnerEmail();
-
-  saveJSON(LS_JOURNEY, {
-    ownerEmail,
-    data: payload,
-  });
-}, [
-  step,
-  nacionalidad,
-  estadoCivil,
-  edad,
-  tipoIngreso,
-  tipoContrato,
-  aniosEstabilidad,
-  mesesActividad,
-  sustentoIndependiente,
-  ingreso,
-  ingresoPareja,
-  deudas,
-  afiliadoIESS,
-  aportesTotales,
-  aportesConsecutivos,
-  ciudadCompra,
-  valorVivienda,
-  entrada,
-  capacidadEntradaMensual,
-  tieneVivienda,
-  primeraVivienda,
-  tipoVivienda,
-  horizonteCompra,
-]);
+    nacionalidad,
+    estadoCivil,
+    edad,
+    tipoIngreso,
+    tipoContrato,
+    aniosEstabilidad,
+    mesesActividad,
+    sustentoIndependiente,
+    ingreso,
+    ingresoPareja,
+    deudas,
+    afiliadoIESS,
+    aportesTotales,
+    aportesConsecutivos,
+    ciudadCompra,
+    objetivoViviendaModo,
+    valorVivienda,
+    entrada,
+    capacidadEntradaMensual,
+    tieneVivienda,
+    primeraVivienda,
+    tipoVivienda,
+    horizonteCompra,
+  ]);
 
   function validate(s) {
     if (s === 1) {
@@ -1165,7 +1111,7 @@ useEffect(() => {
         return "Selecciona la ciudad donde quieres comprar.";
       }
 
-      if (toNum(valorVivienda) < 30000) {
+      if (shouldAskTargetValue && toNum(valorVivienda) < 30000) {
         return "El valor mínimo de vivienda que analizamos es $30.000.";
       }
 
@@ -1173,7 +1119,7 @@ useEffect(() => {
         return "Elige en qué plazo te gustaría adquirir tu vivienda.";
       }
 
-      if (toNum(entrada) > toNum(valorVivienda)) {
+      if (shouldAskTargetValue && toNum(entrada) > toNum(valorVivienda)) {
         return "Tu entrada no puede ser mayor al valor de la vivienda.";
       }
 
@@ -1214,7 +1160,11 @@ useEffect(() => {
       iessAportesTotales: toNum(aportesTotales),
       iessAportesConsecutivos: toNum(aportesConsecutivos),
       ciudadCompra,
-      valorVivienda: toNum(valorVivienda),
+      objetivoViviendaModo,
+      valorVivienda:
+        shouldAskTargetValue && toNum(valorVivienda) > 0
+          ? toNum(valorVivienda)
+          : null,
       entradaDisponible: toNum(entrada),
       capacidadEntradaMensual: toNum(capacidadEntradaMensual),
       tieneVivienda: tieneVivienda === "sí",
@@ -1250,98 +1200,100 @@ useEffect(() => {
 
       const ownerEmail = getStorageOwnerEmail();
 
-saveJSON(LS_SNAPSHOT, {
-  ownerEmail,
-  data: snapshot,
-});
+      saveJSON(LS_SNAPSHOT, {
+        ownerEmail,
+        data: snapshot,
+      });
 
-const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
-const previousJourney =
-  previousJourneyEnvelope?.ownerEmail === ownerEmail
-    ? previousJourneyEnvelope.data || {}
-    : {};
+      const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
+      const previousJourney =
+        previousJourneyEnvelope?.ownerEmail === ownerEmail
+          ? previousJourneyEnvelope.data || {}
+          : {};
 
-const previousSelectedEnvelope = loadJSON(LS_SELECTED_PROPERTY);
-const previousSelected =
-  previousSelectedEnvelope?.ownerEmail === ownerEmail
-    ? normalizeSelectedProperty(previousSelectedEnvelope.data)
-    : null;
+      const previousSelectedEnvelope = loadJSON(LS_SELECTED_PROPERTY);
+      const previousSelected =
+        previousSelectedEnvelope?.ownerEmail === ownerEmail
+          ? normalizeSelectedProperty(previousSelectedEnvelope.data)
+          : null;
 
-const matchedProperties = Array.isArray(snapshot?.matchedProperties)
-  ? snapshot.matchedProperties
-  : [];
+      const matchedProperties = Array.isArray(snapshot?.matchedProperties)
+        ? snapshot.matchedProperties
+        : [];
 
-const reEvaluatedSelectedRaw = findMatchedPropertyById(
-  matchedProperties,
-  previousSelected
-);
+      const reEvaluatedSelectedRaw = findMatchedPropertyById(
+        matchedProperties,
+        previousSelected
+      );
 
-const reEvaluatedSelected = reEvaluatedSelectedRaw
-  ? normalizeSelectedProperty({
-      ...reEvaluatedSelectedRaw,
-      selectedAt: previousSelected?.selectedAt || new Date().toISOString(),
-      source: previousSelected?.source || "journey_recalc",
-    })
-  : previousSelected;
+      const reEvaluatedSelected = reEvaluatedSelectedRaw
+        ? normalizeSelectedProperty({
+            ...reEvaluatedSelectedRaw,
+            selectedAt: previousSelected?.selectedAt || new Date().toISOString(),
+            source: previousSelected?.source || "journey_recalc",
+          })
+        : previousSelected;
 
-const selectedPropertyStatus = reEvaluatedSelected
-  ? getSelectedPropertyStatus(reEvaluatedSelectedRaw || reEvaluatedSelected)
-  : null;
+      const selectedPropertyStatus = reEvaluatedSelected
+        ? getSelectedPropertyStatus(reEvaluatedSelectedRaw || reEvaluatedSelected)
+        : null;
 
-if (reEvaluatedSelected) {
-  saveJSON(LS_SELECTED_PROPERTY, {
-    ownerEmail,
-    data: {
-      ...reEvaluatedSelected,
-      status: selectedPropertyStatus,
-      lastEvaluatedAt: new Date().toISOString(),
-    },
-  });
-}
+      if (reEvaluatedSelected) {
+        saveJSON(LS_SELECTED_PROPERTY, {
+          ownerEmail,
+          data: {
+            ...reEvaluatedSelected,
+            status: selectedPropertyStatus,
+            lastEvaluatedAt: new Date().toISOString(),
+          },
+        });
+      }
 
-saveJSON(LS_JOURNEY, {
-  ownerEmail,
-  data: {
-    ...previousJourney,
-    step: 4,
-    updatedAt: new Date().toISOString(),
-    form: {
-      nacionalidad,
-      estadoCivil,
-      edad,
-      tipoIngreso,
-      tipoContrato,
-      aniosEstabilidad,
-      mesesActividad,
-      sustentoIndependiente,
-      ingreso,
-      ingresoPareja,
-      deudas,
-      afiliadoIESS,
-      aportesTotales,
-      aportesConsecutivos,
-      ciudadCompra,
-      valorVivienda,
-      entrada,
-      capacidadEntradaMensual,
-      tieneVivienda,
-      primeraVivienda,
-      tipoVivienda,
-      horizonteCompra,
-    },
-    resultado: snapshot,
-    propiedadElegida: !!reEvaluatedSelected,
-    propiedadId: reEvaluatedSelected?.id || previousJourney?.propiedadId || null,
-    propiedadSeleccionada: reEvaluatedSelected
-      ? {
-          ...reEvaluatedSelected,
-          status: selectedPropertyStatus,
-          lastEvaluatedAt: new Date().toISOString(),
-        }
-      : previousJourney?.propiedadSeleccionada || null,
-    selectedPropertyStatus,
-  },
-});
+      saveJSON(LS_JOURNEY, {
+        ownerEmail,
+        data: {
+          ...previousJourney,
+          step: 4,
+          updatedAt: new Date().toISOString(),
+          form: {
+            nacionalidad,
+            estadoCivil,
+            edad,
+            tipoIngreso,
+            tipoContrato,
+            aniosEstabilidad,
+            mesesActividad,
+            sustentoIndependiente,
+            ingreso,
+            ingresoPareja,
+            deudas,
+            afiliadoIESS,
+            aportesTotales,
+            aportesConsecutivos,
+            ciudadCompra,
+            objetivoViviendaModo,
+            valorVivienda,
+            entrada,
+            capacidadEntradaMensual,
+            tieneVivienda,
+            primeraVivienda,
+            tipoVivienda,
+            horizonteCompra,
+          },
+          resultado: snapshot,
+          propiedadElegida: !!reEvaluatedSelected,
+          propiedadId: reEvaluatedSelected?.id || previousJourney?.propiedadId || null,
+          propiedadSeleccionada: reEvaluatedSelected
+            ? {
+                ...reEvaluatedSelected,
+                status: selectedPropertyStatus,
+                lastEvaluatedAt: new Date().toISOString(),
+              }
+            : previousJourney?.propiedadSeleccionada || null,
+          selectedPropertyStatus,
+        },
+      });
+
       navigate("/", { replace: true });
     } catch (ex) {
       console.error(ex);
@@ -1399,7 +1351,7 @@ saveJSON(LS_JOURNEY, {
           >
             {hasResult
               ? "Ajusta tu escenario y actualiza tu cálculo para ver qué vivienda podrías comprar."
-              : "Te toma menos de 2 minutos. Te damos cuota, ruta sugerida y checklist."}
+              : "Te toma menos de 2 minutos. Te damos capacidad estimada, cuota y ruta sugerida."}
           </div>
         </div>
 
@@ -1696,8 +1648,8 @@ saveJSON(LS_JOURNEY, {
           <>
             <SectionTitle
               eyebrow="Paso 3"
-              title="Tu objetivo de compra"
-              subtitle="Define la vivienda que te gustaría comprar y con qué entrada podrías contar."
+              title="Tu punto de partida"
+              subtitle="Primero define tu entrada, tu ciudad y si ya tienes una vivienda en mente."
             />
 
             <SelectField
@@ -1708,31 +1660,47 @@ saveJSON(LS_JOURNEY, {
               helper="Esto nos ayuda a darte una guía más útil según tu mercado objetivo."
             />
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
-                marginBottom: 16,
-              }}
-            >
-              <StatBox label="Valor objetivo" value={money(valorVivienda)} />
-              <StatBox
-                label="Entrada aprox."
-                value={`${money(entrada)} (${entradaPct}%)`}
-                accent
-              />
-            </div>
-
-            <SliderField
-              label="Valor aproximado de la vivienda (USD)"
-              min={30000}
-              max={500000}
-              step={1000}
-              value={valorVivienda}
-              onChange={setValorVivienda}
-              format={(v) => money(v)}
+            <SelectField
+              label="¿Ya tienes una vivienda o un rango en mente?"
+              value={objetivoViviendaModo}
+              onChange={setObjetivoViviendaModo}
+              options={OBJETIVO_VIVIENDA_OPCIONES}
+              helper="Si todavía no sabes el valor, no pasa nada. Primero calculamos qué sí podrías comprar."
             />
+
+            {shouldAskTargetValue ? (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 12,
+                    marginBottom: 16,
+                  }}
+                >
+                  <StatBox label="Valor objetivo" value={money(valorVivienda)} />
+                  <StatBox
+                    label="Entrada aprox."
+                    value={`${money(entrada)} (${entradaPct}%)`}
+                    accent
+                  />
+                </div>
+
+                <SliderField
+                  label={
+                    objetivoViviendaModo === "propiedad"
+                      ? "Valor aproximado de la propiedad (USD)"
+                      : "Valor aproximado del rango que te interesa (USD)"
+                  }
+                  min={30000}
+                  max={500000}
+                  step={1000}
+                  value={valorVivienda || "30000"}
+                  onChange={setValorVivienda}
+                  format={(v) => money(v)}
+                />
+              </>
+            ) : null}
 
             <SliderField
               label="Entrada disponible (USD)"
@@ -1827,7 +1795,7 @@ saveJSON(LS_JOURNEY, {
             <SectionTitle
               eyebrow="Último paso"
               title="Listo para ver tu resultado"
-              subtitle="Vamos a estimar tu capacidad, cuota y mejor ruta posible."
+              subtitle="Vamos a estimar tu capacidad, tu cuota y tu mejor ruta posible."
             />
 
             <div style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
@@ -1835,12 +1803,18 @@ saveJSON(LS_JOURNEY, {
               <strong style={{ color: "white" }}>{ciudadCompra || "—"}</strong>
             </div>
 
-            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
-              Monto referencial a analizar:{" "}
-              <strong style={{ color: "white" }}>
-                {money(toNum(valorVivienda) - toNum(entrada))}
-              </strong>
-            </div>
+            {shouldAskTargetValue ? (
+              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
+                Monto referencial a analizar:{" "}
+                <strong style={{ color: "white" }}>
+                  {money(toNum(valorVivienda) - toNum(entrada))}
+                </strong>
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
+                Vamos a estimar primero tu capacidad máxima de compra con tu perfil actual.
+              </div>
+            )}
 
             <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
               Capacidad mensual para completar entrada:{" "}
@@ -1880,15 +1854,15 @@ saveJSON(LS_JOURNEY, {
         ) : null}
 
         <div
-  style={{
-    marginTop: 28,
-    marginBottom: 18,
-    display: "flex",
-    gap: 10,
-    position: "relative",
-    zIndex: 2,
-  }}
->
+          style={{
+            marginTop: 28,
+            marginBottom: 18,
+            display: "flex",
+            gap: 10,
+            position: "relative",
+            zIndex: 2,
+          }}
+        >
           {step > 1 ? (
             <button
               onClick={back}
@@ -1928,18 +1902,18 @@ saveJSON(LS_JOURNEY, {
               onClick={handleCalcular}
               disabled={loading}
               style={{
-  flex: 1,
-  minHeight: 58,
-  padding: "16px 18px",
-  borderRadius: 20,
-  border: "none",
-  background: "#25d3a6",
-  color: "#052019",
-  fontWeight: 950,
-  fontSize: 16,
-  opacity: loading ? 0.7 : 1,
-  boxShadow: "0 12px 28px rgba(37,211,166,0.18)",
-}}
+                flex: 1,
+                minHeight: 58,
+                padding: "16px 18px",
+                borderRadius: 20,
+                border: "none",
+                background: "#25d3a6",
+                color: "#052019",
+                fontWeight: 950,
+                fontSize: 16,
+                opacity: loading ? 0.7 : 1,
+                boxShadow: "0 12px 28px rgba(37,211,166,0.18)",
+              }}
             >
               {loading
                 ? "Analizando…"
@@ -1953,21 +1927,21 @@ saveJSON(LS_JOURNEY, {
         </div>
       </SectionCard>
 
-<div
-  style={{
-    marginTop: 16,
-    fontSize: 12,
-    opacity: 0.6,
-    lineHeight: 1.4,
-    color: "rgba(148,163,184,0.90)",
-  }}
->
-  {getCustomerToken()
-    ? "Sesión activa: tu resultado se guardará en tu cuenta."
-    : "Tip: crea una cuenta para guardar tu progreso y retomar tu camino."}
-</div>
+      <div
+        style={{
+          marginTop: 16,
+          fontSize: 12,
+          opacity: 0.6,
+          lineHeight: 1.4,
+          color: "rgba(148,163,184,0.90)",
+        }}
+      >
+        {getCustomerToken()
+          ? "Sesión activa: tu resultado se guardará en tu cuenta."
+          : "Tip: crea una cuenta para guardar tu progreso y retomar tu camino."}
+      </div>
 
-<div style={{ height: 90 }} />
+      <div style={{ height: 90 }} />
     </ScreenWrap>
   );
 }

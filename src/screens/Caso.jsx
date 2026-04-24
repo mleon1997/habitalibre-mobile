@@ -26,8 +26,12 @@ const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 const LS_DOCS_CHECKLIST = "hl_docs_checklist_v1";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE || "https://habitalibre-backend.onrender.com/api";
+const RAW_API_BASE =
+  import.meta.env.VITE_API_BASE || "https://habitalibre-backend.onrender.com";
+
+const API_BASE = RAW_API_BASE.endsWith("/api")
+  ? RAW_API_BASE
+  : `${RAW_API_BASE}/api`;
 
 function safeParseLS(key) {
   try {
@@ -261,81 +265,88 @@ function TimelineItem({ title, body, done = false }) {
   );
 }
 
-function getCaseDefinition({
+function getSimpleCaseDefinition({
   hasChosenProperty,
   docsReady,
-  selectedPropertyStatus,
   activationRequestedAt,
-  activationRequestStatus,
-  activationRequestLabel,
-  projectSubmittedAt,
-  projectSubmissionStatus,
-  bankSubmittedAt,
-  bankSubmissionStatus,
+  statusGeneral,
+  projectStatus,
+  bankStatus,
 }) {
-  const wasSentExternally = Boolean(projectSubmittedAt || bankSubmittedAt);
-  const isInOperationalQueue = Boolean(
-    activationRequestedAt ||
-      activationRequestStatus === "pendiente_revision_habitalibre"
+  const wasReceived = Boolean(
+    activationRequestedAt || statusGeneral === "pendiente_revision_habitalibre"
   );
 
-  if (wasSentExternally) {
+  const wasSent =
+    statusGeneral === "enviado" ||
+    projectStatus === "enviado" ||
+    bankStatus === "enviado";
+
+  if (wasSent) {
     return {
-      statusLabel:
-        activationRequestLabel || "Caso activado con proyecto y banco",
+      statusLabel: "Enviado por HabitaLibre",
       statusTone: "good",
-      heroTitle: "Tu caso ya fue activado con proyecto y banco",
+      heroTitle: "Tu caso ya fue enviado",
       heroBody:
-        "HabitaLibre ya movió tu caso por dos frentes: el proyecto que elegiste y una entidad financiera compatible según tu perfil.",
-      nextActorLabel: "Proyecto y banco en revisión",
+        "HabitaLibre ya compartió tu perfil con los actores correspondientes según tu caso.",
+      nextActorLabel: "Caso enviado",
       nextActorText:
-        "Tu caso ya está avanzando tanto por el frente comercial del proyecto como por el frente financiero.",
+        "Tu caso ya salió de HabitaLibre hacia el promotor, la entidad financiera o ambos.",
       userAction:
-        "Esperar respuesta y revisar si alguno de los dos frentes solicita un siguiente paso de tu parte.",
+        "Esperar el siguiente contacto o respuesta según tu caso.",
       habitalibreAction:
-        "Coordinar el avance con el proyecto y también con la entidad financiera adecuada.",
+        "Ya compartió tu perfil con los actores correspondientes.",
       nextExternalStep:
-        "El proyecto y/o la entidad financiera revisarán tu caso y luego podrán pedirte el siguiente paso.",
+        "El promotor y/o la entidad financiera podrán revisar tu perfil y contactarte si aplica.",
       ctaLabel: "Volver a mi ruta",
       ctaPath: "/ruta",
       projectStatusLabel:
-        projectSubmissionStatus || "Caso enviado al proyecto",
+        projectStatus === "enviado"
+          ? "Enviado al promotor"
+          : "Pendiente de envío",
       bankStatusLabel:
-        bankSubmissionStatus || "Caso enviado a entidad financiera",
-      timelineProjectTitle: "Caso enviado al proyecto",
-      timelineProjectBody: "Tu caso ya fue dirigido al proyecto elegido.",
+        bankStatus === "enviado"
+          ? "Enviado a entidad financiera"
+          : "Pendiente de envío",
+      timelineProjectTitle: "Caso enviado al promotor",
+      timelineProjectBody:
+        projectStatus === "enviado"
+          ? "HabitaLibre ya compartió tu perfil con el promotor."
+          : "Todavía no se ha enviado al promotor.",
       timelineBankTitle: "Caso enviado a entidad financiera",
       timelineBankBody:
-        "Tu caso ya fue activado también con una entidad financiera compatible.",
+        bankStatus === "enviado"
+          ? "HabitaLibre ya compartió tu perfil con una entidad financiera."
+          : "Todavía no se ha enviado a una entidad financiera.",
     };
   }
 
-  if (isInOperationalQueue) {
+  if (wasReceived) {
     return {
-      statusLabel: activationRequestLabel || "Caso recibido por HabitaLibre",
+      statusLabel: "Pendiente de envío",
       statusTone: "good",
       heroTitle: "Tu caso fue recibido por HabitaLibre",
       heroBody:
-        "Ya recibimos tu caso en la cola operativa de HabitaLibre. Ahora revisaremos internamente cómo moverlo con el proyecto y con una entidad financiera compatible.",
-      nextActorLabel: "En revisión operativa",
+        "Ya recibimos tu caso. Ahora HabitaLibre revisará y lo enviará al promotor, al banco o a ambos.",
+      nextActorLabel: "Pendiente de envío",
       nextActorText:
-        "Tu caso ya está dentro de la cola operativa de HabitaLibre.",
+        "Tu caso ya fue recibido por HabitaLibre y está pendiente de envío.",
       userAction:
-        "Esperar la revisión interna de HabitaLibre. Si hace falta algo más, te lo mostraremos.",
+        "Esperar mientras HabitaLibre realiza el envío correspondiente.",
       habitalibreAction:
-        "Revisar internamente tu caso y decidir si conviene moverlo al proyecto, al banco o a ambos.",
+        "Enviar tu perfil al promotor, al banco o a ambos.",
       nextExternalStep:
-        "Una vez revisado, HabitaLibre podrá activar el frente del proyecto y/o el frente financiero.",
+        "Una vez enviado, aquí podrás ver por qué frente ya fue compartido tu caso.",
       ctaLabel: "Volver a mi ruta",
       ctaPath: "/ruta",
       projectStatusLabel: "Por revisar por HabitaLibre",
       bankStatusLabel: "Por revisar por HabitaLibre",
-      timelineProjectTitle: "Revisión de proyecto pendiente",
+      timelineProjectTitle: "Envío al promotor pendiente",
       timelineProjectBody:
-        "HabitaLibre todavía no lo ha movido al proyecto. Primero lo revisa internamente.",
-      timelineBankTitle: "Revisión financiera pendiente",
+        "HabitaLibre todavía no ha compartido tu caso con el promotor.",
+      timelineBankTitle: "Envío a entidad financiera pendiente",
       timelineBankBody:
-        "HabitaLibre todavía no lo ha movido al banco. Primero valida la mejor ruta financiera.",
+        "HabitaLibre todavía no ha compartido tu caso con una entidad financiera.",
     };
   }
 
@@ -354,17 +365,17 @@ function getCaseDefinition({
       habitalibreAction:
         "Usar esa propiedad para definir cómo mover tu caso.",
       nextExternalStep:
-        "Después el sistema podrá decidir si ya puede entrar a revisión operativa.",
+        "Después podrás enviar tu caso a HabitaLibre.",
       ctaLabel: "Elegir propiedad",
       ctaPath: "/marketplace",
       projectStatusLabel: "Pendiente",
       bankStatusLabel: "Pendiente",
-      timelineProjectTitle: "Revisión de proyecto pendiente",
+      timelineProjectTitle: "Envío al promotor pendiente",
       timelineProjectBody:
-        "Todavía no puede revisarse ese frente porque falta una propiedad base.",
-      timelineBankTitle: "Revisión financiera pendiente",
+        "Todavía no puede enviarse porque falta una propiedad base.",
+      timelineBankTitle: "Envío a entidad financiera pendiente",
       timelineBankBody:
-        "Todavía no puede revisarse ese frente porque falta una base suficiente del caso.",
+        "Todavía no puede enviarse porque falta una base suficiente del caso.",
     };
   }
 
@@ -374,110 +385,52 @@ function getCaseDefinition({
       statusTone: "neutral",
       heroTitle: "Tu caso va bien, pero todavía falta preparación",
       heroBody:
-        "Ya tienes una propiedad base. Antes de enviarlo a revisión HabitaLibre, conviene completar mejor tu checklist documental.",
+        "Ya tienes una propiedad base. Antes de enviar tu caso a HabitaLibre, conviene completar mejor tu checklist documental.",
       nextActorLabel: "Primero preparación",
       nextActorText:
         "Antes de mover tu caso, conviene fortalecer tu base documental.",
       userAction:
         "Completar tu checklist para llegar más ordenado al siguiente paso.",
       habitalibreAction:
-        "Validar si tu caso ya tiene base suficiente para entrar a revisión operativa.",
+        "Validar si tu caso ya tiene base suficiente para ser enviado.",
       nextExternalStep:
-        "Cuando tu preparación sea suficiente, el sistema podrá habilitar el envío a HabitaLibre.",
+        "Cuando tu preparación sea suficiente, podrás activar tu caso.",
       ctaLabel: "Ver checklist",
       ctaPath: "/checklist-documentos",
       projectStatusLabel: "Pendiente",
       bankStatusLabel: "Pendiente",
-      timelineProjectTitle: "Revisión de proyecto pendiente",
+      timelineProjectTitle: "Envío al promotor pendiente",
       timelineProjectBody:
-        "Todavía no conviene mover este frente mientras falta preparación.",
-      timelineBankTitle: "Revisión financiera pendiente",
+        "Todavía no conviene enviarlo mientras falta preparación.",
+      timelineBankTitle: "Envío a entidad financiera pendiente",
       timelineBankBody:
-        "Todavía no conviene mover este frente mientras falta preparación.",
-    };
-  }
-
-  if (selectedPropertyStatus === "selected_no_longer_viable") {
-    return {
-      statusLabel: "Ruta en revisión",
-      statusTone: "neutral",
-      heroTitle: "Antes de avanzar, conviene ajustar tu ruta",
-      heroBody:
-        "Tu propiedad elegida ya no calza bien con tu perfil actual. Primero conviene revisar alternativas.",
-      nextActorLabel: "Primero revisar",
-      nextActorText:
-        "Todavía no conviene mover tu caso ni a revisión operativa.",
-      userAction:
-        "Revisar nuevas opciones o cambiar tu propiedad base.",
-      habitalibreAction:
-        "Recalcular la mejor ruta según tu perfil actual.",
-      nextExternalStep:
-        "Cuando la ruta vuelva a estar clara, el sistema podrá habilitar la revisión operativa.",
-      ctaLabel: "Ver nuevas opciones",
-      ctaPath: "/marketplace",
-      projectStatusLabel: "Pendiente",
-      bankStatusLabel: "Pendiente",
-      timelineProjectTitle: "Revisión de proyecto pendiente",
-      timelineProjectBody:
-        "Primero conviene ajustar la ruta antes de mover el caso.",
-      timelineBankTitle: "Revisión financiera pendiente",
-      timelineBankBody:
-        "Primero conviene ajustar la ruta antes de mover el caso.",
-    };
-  }
-
-  if (selectedPropertyStatus === "selected_near_route") {
-    return {
-      statusLabel: "Conviene revisar encaje",
-      statusTone: "neutral",
-      heroTitle: "Tu caso está cerca, pero conviene revisar el encaje",
-      heroBody:
-        "Tu propiedad base sigue siendo posible de revisar, pero vale la pena compararla antes de activar tu caso.",
-      nextActorLabel: "Comparar primero",
-      nextActorText:
-        "Todavía no conviene asumir que esta es la mejor ruta final.",
-      userAction:
-        "Comparar esta propiedad con otras opciones de tu Match.",
-      habitalibreAction:
-        "Mostrarte si esta sigue siendo la mejor base o si otra opción te conviene más.",
-      nextExternalStep:
-        "Después el sistema podrá decidir si ya puede entrar a revisión operativa.",
-      ctaLabel: "Comparar opciones",
-      ctaPath: "/marketplace",
-      projectStatusLabel: "Pendiente",
-      bankStatusLabel: "Pendiente",
-      timelineProjectTitle: "Revisión de proyecto pendiente",
-      timelineProjectBody:
-        "Todavía no conviene mover el caso hasta revisar mejor el encaje.",
-      timelineBankTitle: "Revisión financiera pendiente",
-      timelineBankBody:
-        "Todavía no conviene mover el caso hasta revisar mejor el encaje.",
+        "Todavía no conviene enviarlo mientras falta preparación.",
     };
   }
 
   return {
     statusLabel: "Caso en preparación",
     statusTone: "neutral",
-    heroTitle: "Estamos revisando la mejor forma de mover tu caso",
+    heroTitle: "Tu caso todavía no está listo para enviarse",
     heroBody:
-      "Aún no hay una señal suficiente para activarlo. Primero conviene revisar qué te falta.",
+      "Primero conviene revisar qué te falta antes de activar tu caso.",
     nextActorLabel: "Preparación",
     nextActorText:
       "Antes de mover el caso, conviene fortalecer su base.",
     userAction:
       "Revisar tu propiedad, checklist y ruta actual.",
     habitalibreAction:
-      "Usar esa información para decidir si el caso ya puede activarse.",
+      "Usar esa información para decidir si el caso ya puede enviarse.",
     nextExternalStep:
-      "Después el sistema podrá habilitar el siguiente paso correcto.",
+      "Después podrás enviarlo a HabitaLibre.",
     ctaLabel: "Volver al siguiente paso",
     ctaPath: "/siguiente-paso",
     projectStatusLabel: "Pendiente",
     bankStatusLabel: "Pendiente",
-    timelineProjectTitle: "Revisión de proyecto pendiente",
+    timelineProjectTitle: "Envío al promotor pendiente",
     timelineProjectBody:
       "Todavía no se ha habilitado este frente.",
-    timelineBankTitle: "Revisión financiera pendiente",
+    timelineBankTitle: "Envío a entidad financiera pendiente",
     timelineBankBody:
       "Todavía no se ha habilitado este frente.",
   };
@@ -540,6 +493,8 @@ export default function Caso() {
             activationRequestLabel:
               caso?.statusGeneral === "pendiente_revision_habitalibre"
                 ? "Caso recibido por HabitaLibre"
+                : caso?.statusGeneral === "enviado"
+                ? "Enviado por HabitaLibre"
                 : journey?.activationRequestLabel || null,
             statusGeneral: caso?.statusGeneral || null,
             projectStatus: caso?.projectStatus || null,
@@ -547,13 +502,13 @@ export default function Caso() {
             projectSubmittedAt: caso?.projectSubmittedAt || null,
             bankSubmittedAt: caso?.bankSubmittedAt || null,
             projectSubmissionStatus:
-              caso?.projectSubmittedAt
-                ? "Caso enviado al proyecto"
-                : "Por revisar por HabitaLibre",
+              caso?.projectStatus === "enviado"
+                ? "Enviado al promotor"
+                : "Pendiente de envío",
             bankSubmissionStatus:
-              caso?.bankSubmittedAt
-                ? "Caso enviado a entidad financiera"
-                : "Por revisar por HabitaLibre",
+              caso?.bankStatus === "enviado"
+                ? "Enviado a entidad financiera"
+                : "Pendiente de envío",
           };
 
           saveOwnedData(LS_JOURNEY, nextJourney);
@@ -579,11 +534,6 @@ export default function Caso() {
     null;
 
   const hasChosenProperty = Boolean(property?.id);
-  const selectedPropertyStatus =
-    property?.status ||
-    journey?.selectedPropertyStatus ||
-    selectedPropertyRef?.status ||
-    null;
 
   const remoteDocsChecklist = remoteCase?.docsChecklist || null;
   const effectiveDocsChecklist = remoteDocsChecklist || docsChecklist;
@@ -619,39 +569,28 @@ export default function Caso() {
   const activationRequestedAt =
     remoteCase?.requestedAt || journey?.activationRequestedAt || null;
 
-  const activationRequestStatus =
-    remoteCase?.statusGeneral || journey?.activationRequestStatus || null;
+  const statusGeneral =
+    remoteCase?.statusGeneral || journey?.statusGeneral || null;
 
-  const activationRequestLabel =
-    remoteCase?.statusGeneral === "pendiente_revision_habitalibre"
-      ? "Caso recibido por HabitaLibre"
-      : journey?.activationRequestLabel || null;
+  const projectStatus =
+    remoteCase?.projectStatus || journey?.projectStatus || "por_revisar";
+
+  const bankStatus =
+    remoteCase?.bankStatus || journey?.bankStatus || "por_revisar";
 
   const projectSubmittedAt =
     remoteCase?.projectSubmittedAt || journey?.projectSubmittedAt || null;
 
-  const projectSubmissionStatus = remoteCase?.projectSubmittedAt
-    ? "Caso enviado al proyecto"
-    : journey?.projectSubmissionStatus || "Por revisar por HabitaLibre";
-
   const bankSubmittedAt =
     remoteCase?.bankSubmittedAt || journey?.bankSubmittedAt || null;
 
-  const bankSubmissionStatus = remoteCase?.bankSubmittedAt
-    ? "Caso enviado a entidad financiera"
-    : journey?.bankSubmissionStatus || "Por revisar por HabitaLibre";
-
-  const caseDef = getCaseDefinition({
+  const caseDef = getSimpleCaseDefinition({
     hasChosenProperty,
     docsReady,
-    selectedPropertyStatus,
     activationRequestedAt,
-    activationRequestStatus,
-    activationRequestLabel,
-    projectSubmittedAt,
-    projectSubmissionStatus,
-    bankSubmittedAt,
-    bankSubmissionStatus,
+    statusGeneral,
+    projectStatus,
+    bankStatus,
   });
 
   return (
@@ -771,32 +710,6 @@ export default function Caso() {
               }}
             >
               Caso recibido: {new Date(activationRequestedAt).toLocaleString()}
-            </div>
-          ) : null}
-
-          {projectSubmittedAt ? (
-            <div
-              style={{
-                marginTop: 8,
-                fontSize: 12.5,
-                lineHeight: 1.4,
-                color: "rgba(148,163,184,0.92)",
-              }}
-            >
-              Proyecto activado: {new Date(projectSubmittedAt).toLocaleString()}
-            </div>
-          ) : null}
-
-          {bankSubmittedAt ? (
-            <div
-              style={{
-                marginTop: 8,
-                fontSize: 12.5,
-                lineHeight: 1.4,
-                color: "rgba(148,163,184,0.92)",
-              }}
-            >
-              Banco activado: {new Date(bankSubmittedAt).toLocaleString()}
             </div>
           ) : null}
         </InfoCard>
@@ -974,20 +887,20 @@ export default function Caso() {
               title="Caso recibido por HabitaLibre"
               body={
                 activationRequestedAt
-                  ? "Tu caso ya entró a la cola operativa de HabitaLibre."
-                  : "Todavía no has enviado tu caso a revisión HabitaLibre."
+                  ? "Tu caso ya fue recibido por HabitaLibre."
+                  : "Todavía no has enviado tu caso a HabitaLibre."
               }
               done={Boolean(activationRequestedAt)}
             />
             <TimelineItem
               title={caseDef.timelineProjectTitle}
               body={caseDef.timelineProjectBody}
-              done={Boolean(projectSubmittedAt)}
+              done={projectStatus === "enviado"}
             />
             <TimelineItem
               title={caseDef.timelineBankTitle}
               body={caseDef.timelineBankBody}
-              done={Boolean(bankSubmittedAt)}
+              done={bankStatus === "enviado"}
             />
           </div>
         </InfoCard>
