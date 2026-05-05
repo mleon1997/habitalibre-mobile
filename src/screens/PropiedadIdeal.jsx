@@ -282,24 +282,6 @@ export default function PropiedadIdeal() {
     journey?.ciudadCompra ||
     "Ubicación por definir";
 
-  const whatsappMessage = encodeURIComponent(
-    `Hola, vengo de HabitaLibre.
-
-Estoy interesado en ${property?.nombre || "este proyecto"} en ${property?.ciudad || ciudadMostrar}.
-
-Veo que esta opción podría encajar con mi perfil:
-• Vivienda: ${money(valorViviendaPropiedad)}
-• Cuota estimada: ${money(cuota)} al mes
-• Préstamo estimado del banco: ${money(prestamoBanco)}
-
-¿Podrían darme más información o ayudarme a agendar una visita?`
-  );
-
-  const whatsappUrl = `https://wa.me/593999999999?text=${whatsappMessage}`;
-
-  function handleAgendarVisita() {
-    window.open(whatsappUrl, "_blank");
-  }
 
   return (
     <Screen style={{ paddingBottom: 110 }}>
@@ -335,7 +317,7 @@ Veo que esta opción podría encajar con mi perfil:
                 color: UI.text,
               }}
             >
-              Tu propiedad ideal
+              Una opción alineada contigo 
             </h1>
 
             <div
@@ -347,9 +329,9 @@ Veo que esta opción podría encajar con mi perfil:
                 maxWidth: 420,
               }}
             >
-              {isUserSelected
-                ? `${nombreUsuario}, esta es la propiedad que elegiste para avanzar.`
-                : `${nombreUsuario}, esta opción encaja muy bien con tu perfil y con lo que hoy podrías comprar.`}
+            {isUserSelected
+  ? `${nombreUsuario}, esta propiedad puede servir como base para seguir avanzando dentro de tu ruta.`
+  : `${nombreUsuario}, esta es una opción que sí encaja con tu capacidad actual de compra.`}
             </div>
           </div>
 
@@ -360,7 +342,7 @@ Veo que esta opción podría encajar con mi perfil:
           <div
             style={{
               width: "100%",
-              height: 220,
+              height: 160,
               backgroundImage: property?.imagen ? `url(${property.imagen})` : "none",
               backgroundSize: "cover",
               backgroundPosition: "center",
@@ -405,7 +387,7 @@ Veo que esta opción podría encajar con mi perfil:
               </div>
 
               <Chip tone="good">
-                {isUserSelected ? "Tu elegida" : "Encaja contigo"}
+            {isUserSelected ? "Base de tu ruta" : "Alineada contigo"}
               </Chip>
             </div>
 
@@ -580,9 +562,9 @@ Veo que esta opción podría encajar con mi perfil:
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
-              <PrimaryButton onClick={handleAgendarVisita}>
-                Agendar visita
-              </PrimaryButton>
+         <PrimaryButton onClick={() => navigate("/ruta")}>
+  Quiero avanzar con esta propiedad
+</PrimaryButton>
 
               <SecondaryButton onClick={() => navigate("/marketplace")}>
                 Ver más opciones
@@ -610,7 +592,7 @@ Veo que esta opción podría encajar con mi perfil:
               marginBottom: 12,
             }}
           >
-            Si este proyecto te interesa, puedes hablar con el promotor y avanzar con una visita o pedir más información.
+            Si esta opción te interesa, HabitaLibre la puede tomar como base para seguir guiando tu caso y mostrarte el siguiente paso más conveniente.
           </div>
 
           <SecondaryButton onClick={() => navigate("/ruta")}>

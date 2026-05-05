@@ -32,11 +32,12 @@ import {
 } from "../ui/kit.jsx";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
-const LS_JOURNEY = "hl_mobile_last_snapshot_v1";
+const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
 const COPY = {
-  appSubtitle: "Revisa tu capacidad estimada y lo que te conviene hacer ahora.",
+  appSubtitle:
+    "Descubre cuánto podrías comprar hoy y cuál debería ser tu siguiente paso.",
   guideTag: "Tu guía",
   guideResultTag: "Tu resultado",
 
@@ -45,7 +46,7 @@ const COPY = {
   scoreReady: "Listo",
   scoreMissing: "Falta info",
 
-  probabilityTitle: "Qué tan probable es que te aprueben el crédito",
+  probabilityTitle: "Qué tan sólido se ve hoy tu perfil",
   probabilityFallback: "Estimación",
 
   quotaInsightLabel: "Pago mensual aprox.",
@@ -133,7 +134,9 @@ function clearLocalScenarioState() {
 
 function getStorageOwnerEmail() {
   try {
-    const email = String(getCustomer()?.email || "").trim().toLowerCase();
+    const email = String(getCustomer()?.email || "")
+      .trim()
+      .toLowerCase();
     return email || null;
   } catch {
     return null;
@@ -207,7 +210,9 @@ function SoftMetric({ label, value, hint }) {
         background: "rgba(2,6,23,0.18)",
       }}
     >
-      <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)" }}>{label}</div>
+      <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)" }}>
+        {label}
+      </div>
       <div style={{ marginTop: 6, fontSize: 18, fontWeight: 980 }}>{value}</div>
       {hint ? (
         <div
@@ -222,6 +227,184 @@ function SoftMetric({ label, value, hint }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function CreditValidationCard({
+  creditAssessment,
+  readinessStatus,
+  hasImmediateViableMortgage,
+  onReview,
+}) {
+  const level = String(creditAssessment?.level || "unknown");
+  const blocksBankSubmission =
+    creditAssessment?.blocksBankSubmission === true;
+
+  const reasons = Array.isArray(creditAssessment?.reasons)
+    ? creditAssessment.reasons
+    : [];
+
+  let title = "Validación crediticia pendiente";
+  let subtitle =
+    "Tus números ya fueron analizados. Falta entender mejor tu historial crediticio para estimar qué tan listo estás para banco.";
+  let chip = "Por revisar";
+  let tone = "neutral";
+  let border = "1px solid rgba(148,163,184,0.16)";
+  let background = "rgba(255,255,255,0.04)";
+
+  if (level === "healthy" || level === "low_risk") {
+    title = "Historial crediticio favorable";
+    subtitle =
+      "Tu historial declarado se ve alineado con una revisión bancaria más sólida.";
+    chip = hasImmediateViableMortgage ? "Listo para banco" : "Favorable";
+    tone = "good";
+    border = "1px solid rgba(16,185,129,0.24)";
+    background = "rgba(16,185,129,0.08)";
+  }
+
+  if (level === "medium_risk") {
+    title = "Historial crediticio por revisar";
+    subtitle =
+      "Tu capacidad puede verse bien, pero tu historial declarado podría requerir revisión antes de avanzar con un banco.";
+    chip = "Revisión recomendada";
+    tone = "neutral";
+    border = "1px solid rgba(245,158,11,0.24)";
+    background = "rgba(245,158,11,0.08)";
+  }
+
+  if (blocksBankSubmission || level === "high_risk") {
+    title = "Primero conviene revisar tu perfil crediticio";
+    subtitle =
+      "Tienes una alerta crediticia declarada que podría frenar una aprobación bancaria, incluso si tu capacidad de pago se ve bien.";
+    chip = "No enviar aún";
+    tone = "neutral";
+    border = "1px solid rgba(244,63,94,0.26)";
+    background = "rgba(244,63,94,0.08)";
+  }
+
+  if (readinessStatus === "ready_financially_credit_pending") {
+    title = "Capacidad lista, buró pendiente";
+    subtitle =
+      "Financieramente te ves bien, pero falta validar tu historial crediticio antes de considerarte listo para banco.";
+    chip = "Pendiente";
+  }
+
+  return (
+    <Card style={{ marginTop: 18, background, border }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 12,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "rgba(148,163,184,0.95)",
+              fontWeight: 950,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <ShieldCheck size={14} strokeWidth={2.4} />
+            Validación crediticia
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 18,
+              fontWeight: 980,
+              lineHeight: 1.18,
+              color: "rgba(226,232,240,0.98)",
+            }}
+          >
+            {title}
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 13,
+              lineHeight: 1.4,
+              color: "rgba(226,232,240,0.88)",
+            }}
+          >
+            {subtitle}
+          </div>
+        </div>
+
+        <Chip tone={tone}>{chip}</Chip>
+      </div>
+
+      {creditAssessment?.recommendedAction ? (
+        <InnerCard
+          style={{
+            marginTop: 12,
+            background: "rgba(2,6,23,0.18)",
+            border: "1px solid rgba(148,163,184,0.12)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              color: "rgba(148,163,184,0.92)",
+              fontWeight: 900,
+            }}
+          >
+            Recomendación
+          </div>
+
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 13,
+              lineHeight: 1.4,
+              color: "rgba(226,232,240,0.90)",
+            }}
+          >
+            {creditAssessment.recommendedAction}
+          </div>
+        </InnerCard>
+      ) : null}
+
+      {reasons.length > 0 ? (
+        <div
+          style={{
+            marginTop: 10,
+            display: "grid",
+            gap: 8,
+          }}
+        >
+          {reasons.slice(0, 2).map((reason, idx) => (
+            <div
+              key={`${reason}-${idx}`}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                background: "rgba(2,6,23,0.16)",
+                border: "1px solid rgba(148,163,184,0.10)",
+                fontSize: 12,
+                lineHeight: 1.35,
+                color: "rgba(148,163,184,0.92)",
+              }}
+            >
+              {reason}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div style={{ marginTop: 12 }}>
+        <SecondaryButton onClick={onReview}>
+          Actualizar historial crediticio
+        </SecondaryButton>
+      </div>
+    </Card>
   );
 }
 
@@ -380,10 +563,7 @@ function parseAnyToPctUniversal(x) {
     if (lower === "baja") return 35;
     if (lower.includes("sin oferta")) return 0;
 
-    const s =
-      s0.includes(",") && !s0.includes(".")
-        ? s0.replace(",", ".")
-        : s0;
+    const s = s0.includes(",") && !s0.includes(".") ? s0.replace(",", ".") : s0;
 
     const m = s.match(/(\d+(\.\d+)?)/);
     if (!m) return null;
@@ -846,7 +1026,7 @@ export default function Home() {
   const [, setErr] = useState("");
 
   const [expandedSections, setExpandedSections] = useState({
-    actionGuide: true,
+    actionGuide: false,
     blocker: false,
     rhythm: false,
   });
@@ -864,20 +1044,23 @@ export default function Home() {
 
   const snapshot = raw || null;
 
-  const snapshotEngine =
-    snapshot?.engine ||
-    snapshot?.output?.engine ||
+  const targetPropertyValue =
+    toNum(snapshot?.input?.valorVivienda) ??
+    toNum(snapshot?.perfilInput?.valorVivienda) ??
+    toNum(snapshot?.__entrada?.valorVivienda) ??
+    toNum(snapshot?.inputNormalizado?.valorVivienda) ??
     null;
+
+  const hasTargetPropertyValue =
+    targetPropertyValue != null && targetPropertyValue > 0;
+
+  const snapshotEngine = snapshot?.engine || snapshot?.output?.engine || null;
 
   const canonicalBestMortgage =
-    snapshot?.bestMortgage ??
-    snapshot?.output?.bestMortgage ??
-    null;
+    snapshot?.bestMortgage ?? snapshot?.output?.bestMortgage ?? null;
 
   const financialCapacity =
-    snapshot?.financialCapacity ??
-    snapshot?.output?.financialCapacity ??
-    null;
+    snapshot?.financialCapacity ?? snapshot?.output?.financialCapacity ?? null;
 
   const hasImmediateViableMortgage =
     !!financialCapacity?.hasImmediateViableMortgage;
@@ -885,45 +1068,25 @@ export default function Home() {
   const estimatedMaxPropertyValue =
     toNum(financialCapacity?.estimatedMaxPropertyValue) ??
     toNum(canonicalBestMortgage?.precioMaxVivienda) ??
-    toNum(
-      pickMatcherFirst(snapshot, [
-        "precioMaxVivienda",
-        "propertyPrice",
-      ])
-    ) ??
+    toNum(pickMatcherFirst(snapshot, ["precioMaxVivienda", "propertyPrice"])) ??
     null;
 
   const estimatedMaxLoanAmount =
     toNum(financialCapacity?.estimatedMaxLoanAmount) ??
     toNum(canonicalBestMortgage?.montoPrestamo) ??
-    toNum(
-      pickMatcherFirst(snapshot, [
-        "montoMaximo",
-        "loanAmount",
-      ])
-    ) ??
+    toNum(pickMatcherFirst(snapshot, ["montoMaximo", "loanAmount"])) ??
     null;
 
   const estimatedMonthlyPayment =
     toNum(financialCapacity?.estimatedMonthlyPayment) ??
     toNum(canonicalBestMortgage?.cuota) ??
-    toNum(
-      pickMatcherFirst(snapshot, [
-        "cuotaEstimada",
-        "monthlyPayment",
-      ])
-    ) ??
+    toNum(pickMatcherFirst(snapshot, ["cuotaEstimada", "monthlyPayment"])) ??
     null;
 
   const estimatedAnnualRate =
     toNum(financialCapacity?.estimatedAnnualRate) ??
     toNum(canonicalBestMortgage?.annualRate) ??
-    toNum(
-      pickMatcherFirst(snapshot, [
-        "tasaAnual",
-        "annualRate",
-      ])
-    ) ??
+    toNum(pickMatcherFirst(snapshot, ["tasaAnual", "annualRate"])) ??
     null;
 
   const limitingFactor =
@@ -932,13 +1095,39 @@ export default function Home() {
     null;
 
   const homeRecommendation =
-    snapshot?.homeRecommendation ??
-    snapshot?.output?.homeRecommendation ??
-    null;
+    snapshot?.homeRecommendation ?? snapshot?.output?.homeRecommendation ?? null;
 
   const homeActionHints = Array.isArray(homeRecommendation?.actionHints)
     ? homeRecommendation.actionHints
     : [];
+
+  const creditAssessment =
+    snapshot?.creditAssessment ??
+    snapshot?.output?.creditAssessment ??
+    homeRecommendation?.creditAssessment ??
+    null;
+
+  const creditWarnings =
+    snapshot?.creditWarnings ?? snapshot?.output?.creditWarnings ?? null;
+
+  const readinessStatus =
+    snapshot?.readinessStatus ??
+    snapshot?.output?.readinessStatus ??
+    homeRecommendation?.readinessStatus ??
+    null;
+
+  const effectiveCreditAssessment =
+    creditAssessment ||
+    (creditWarnings
+      ? {
+          level: creditWarnings?.level || "unknown",
+          label: creditWarnings?.label || "Validación crediticia pendiente",
+          blocksBankSubmission:
+            creditWarnings?.blocksBankSubmission === true,
+          reasons: creditWarnings?.reasons || [],
+          recommendedAction: creditWarnings?.recommendedAction || null,
+        }
+      : null);
 
   const realityCheck = homeRecommendation?.realityCheck || null;
   const goalSummary = homeRecommendation?.goalSummary || null;
@@ -983,6 +1172,13 @@ export default function Home() {
       progress: base?.progress ?? 0,
     };
   }, [snapshot, financialCapacity, canonicalBestMortgage]);
+
+  const shouldShowCreditValidation =
+    summary?.unlocked && !!effectiveCreditAssessment && !!readinessStatus;
+
+  const hasCreditBlocker =
+    readinessStatus === "credit_repair_needed" ||
+    effectiveCreditAssessment?.blocksBankSubmission === true;
 
   const plan = useMemo(() => {
     try {
@@ -1065,8 +1261,7 @@ export default function Home() {
       const journeyEnvelope = loadJSON(LS_JOURNEY);
 
       const snap =
-        snapEnvelope?.ownerEmail &&
-        snapEnvelope.ownerEmail === currentOwnerEmail
+        snapEnvelope?.ownerEmail && snapEnvelope.ownerEmail === currentOwnerEmail
           ? snapEnvelope.data
           : null;
 
@@ -1098,8 +1293,17 @@ export default function Home() {
     console.log("[HOME] canonicalBestMortgage:", canonicalBestMortgage);
     console.log("[HOME] financialCapacity:", snapshot?.financialCapacity);
     console.log("[HOME] homeRecommendation:", snapshot?.homeRecommendation);
+    console.log("[HOME] creditAssessment:", effectiveCreditAssessment);
+    console.log("[HOME] readinessStatus:", readinessStatus);
     console.log("[HOME] plan:", plan);
-  }, [snapshot, snapshotEngine, canonicalBestMortgage, plan]);
+  }, [
+    snapshot,
+    snapshotEngine,
+    canonicalBestMortgage,
+    effectiveCreditAssessment,
+    readinessStatus,
+    plan,
+  ]);
 
   const prob = useMemo(() => {
     const normal = normalizeProbability(probabilityRaw);
@@ -1113,23 +1317,11 @@ export default function Home() {
   }, [probabilityRaw, summary?.unlocked, summary?.score]);
 
   const isGoalAboveCapacity =
+    hasTargetPropertyValue &&
     homeRecommendation?.type === "goal_above_capacity";
 
   const isImmediateRoute =
-    homeRecommendation?.type === "immediate_viable";
-
-  const displayProgress = useMemo(() => {
-    return calculateProgressFromSnapshot(snapshot, {
-      hasImmediateViableMortgage,
-      estimatedMaxPropertyValue,
-      probabilityPct: prob?.pct,
-    });
-  }, [
-    snapshot,
-    hasImmediateViableMortgage,
-    estimatedMaxPropertyValue,
-    prob?.pct,
-  ]);
+    homeRecommendation?.type === "immediate_viable" && !hasCreditBlocker;
 
   const useCompactScoreDisplay = isGoalAboveCapacity;
 
@@ -1154,12 +1346,14 @@ export default function Home() {
   const displayScoreLabel = useMemo(() => {
     if (!summary?.unlocked) return COPY.scoreLocked;
     if (isGoalAboveCapacity) return "Meta por encima de capacidad actual";
+    if (hasCreditBlocker) return "Revisión crediticia necesaria";
     if (hasImmediateViableMortgage) return prob?.label || COPY.probabilityFallback;
     if (toNum(estimatedMaxPropertyValue) > 0) return "Capacidad estimada detectada";
     return prob?.label || COPY.probabilityFallback;
   }, [
     summary?.unlocked,
     isGoalAboveCapacity,
+    hasCreditBlocker,
     hasImmediateViableMortgage,
     prob?.label,
     estimatedMaxPropertyValue,
@@ -1176,7 +1370,17 @@ export default function Home() {
       };
     }
 
-    if (homeRecommendation) {
+    if (hasCreditBlocker) {
+      return {
+        title: "Primero revisa tu historial crediticio",
+        subtitle:
+          "Tu capacidad financiera puede verse bien, pero tu historial declarado podría frenar una aprobación bancaria. Antes de enviar tu caso, conviene revisar o regularizar este punto.",
+        cta: "Actualizar historial crediticio",
+        to: "/journey/full",
+      };
+    }
+
+    if (hasTargetPropertyValue && homeRecommendation) {
       return {
         title: homeRecommendation?.title || "Tu mejor siguiente paso",
         subtitle:
@@ -1189,7 +1393,7 @@ export default function Home() {
 
     if (hasImmediateViableMortgage) {
       return {
-        title: "Hoy ya tienes una ruta hipotecaria clara.",
+        title: "Hoy ya tienes una ruta hipotecaria clara",
         subtitle:
           "Tu perfil sí muestra una opción de crédito viable hoy. Ahora lo más útil es revisar propiedades que encajen con esa capacidad.",
         cta: "Ver propiedades compatibles",
@@ -1199,69 +1403,49 @@ export default function Home() {
 
     if (toNum(estimatedMaxPropertyValue) > 0) {
       return {
-        title: "Hoy tienes una ruta posible",
-        subtitle:
-          `Hoy todavía no aparece aprobación inmediata, pero tu capacidad estimada llega alrededor de ${safeMoney(
-            estimatedMaxPropertyValue
-          )} con una cuota de ${safeMoney(estimatedMonthlyPayment)}.`,
-        cta: "Ver propiedades que hacen match",
+        title: "Esto es lo que hoy sí podrías comprar",
+        subtitle: `Con tu perfil actual, hoy podrías apuntar aproximadamente a viviendas de hasta ${safeMoney(
+          estimatedMaxPropertyValue
+        )} con una cuota cercana a ${safeMoney(estimatedMonthlyPayment)}.`,
+        cta: "Ver propiedades compatibles",
         to: "/marketplace",
       };
     }
 
     return {
-      title: "Hoy todavía no hay una ruta clara",
+      title: "Todavía no vemos una ruta clara",
       subtitle:
-        "Con los datos actuales, todavía no aparece una opción de crédito sólida. Ajustar ingreso, entrada o valor de vivienda puede mejorar tu resultado.",
-        cta: "Ajustar mi escenario",
+        "Con los datos actuales, todavía no aparece una opción de crédito sólida. Ajustar ingreso, ahorro inicial o valor de vivienda puede mejorar tu resultado.",
+      cta: "Ajustar mi escenario",
       to: "/journey/full",
     };
   }, [
     summary?.unlocked,
+    hasCreditBlocker,
     homeRecommendation,
+    hasTargetPropertyValue,
     hasImmediateViableMortgage,
     estimatedMaxPropertyValue,
     estimatedMonthlyPayment,
   ]);
 
-  const heroHint =
-    homeRecommendation?.mainMessage ||
-    (hasImmediateViableMortgage
-      ? `Hoy sí vemos una ruta hipotecaria viable. Tu capacidad estimada llega alrededor de ${safeMoney(
-          estimatedMaxPropertyValue
-        )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
-      : toNum(estimatedMaxPropertyValue) > 0
-      ? `Aunque hoy todavía no veamos aprobación inmediata, tu capacidad financiera estimada llega alrededor de ${safeMoney(
-          estimatedMaxPropertyValue
-        )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
-      : "Con los datos actuales, todavía no aparece una opción de crédito viable. Ajustar ingreso, entrada o valor de vivienda puede mejorar tu resultado.");
+  const heroHint = hasCreditBlocker
+    ? "Tu capacidad financiera puede verse bien, pero tu historial crediticio declarado podría frenar una aprobación bancaria. Antes de avanzar con banco, conviene revisar o regularizar este punto."
+    : homeRecommendation?.mainMessage && hasTargetPropertyValue
+    ? homeRecommendation.mainMessage
+    : hasImmediateViableMortgage
+    ? `Hoy sí vemos una ruta hipotecaria viable. Tu capacidad estimada llega alrededor de ${safeMoney(
+        estimatedMaxPropertyValue
+      )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
+    : toNum(estimatedMaxPropertyValue) > 0
+    ? `Con tu perfil actual, hoy podrías apuntar aproximadamente a viviendas de hasta ${safeMoney(
+        estimatedMaxPropertyValue
+      )}, con una cuota referencial cercana a ${safeMoney(
+        estimatedMonthlyPayment
+      )}.`
+    : "Con los datos actuales, todavía no aparece una opción de crédito viable. Ajustar ingreso, ahorro inicial o valor de vivienda puede mejorar tu resultado.";
 
   const showConnecting = loading && !snapshot;
-
-  const homeProgressText = useMemo(() => {
-    if (!summary?.unlocked) {
-      return "Empieza tu simulación para ver tu avance.";
-    }
-
-    if (homeRecommendation?.progressMessage) {
-      return homeRecommendation.progressMessage;
-    }
-
-    if (hasImmediateViableMortgage) {
-      return "Vas muy bien. Hoy ya vemos una ruta hipotecaria viable.";
-    }
-
-    if (toNum(estimatedMaxPropertyValue) > 0) {
-      return "Vas bien. Ya vemos una capacidad financiera estimada y una ruta hipotecaria posible.";
-    }
-
-    return "Todavía puedes fortalecer tu perfil para abrir una mejor ruta hipotecaria.";
-  }, [
-    summary?.unlocked,
-    homeRecommendation,
-    hasImmediateViableMortgage,
-    estimatedMaxPropertyValue,
-  ]);
 
   const firstName = useMemo(() => {
     const customer = getCustomer?.() || {};
@@ -1305,7 +1489,16 @@ export default function Home() {
       });
     }
 
-    if (limitingFactor) {
+    if (hasCreditBlocker) {
+      items.push({
+        id: "credit",
+        label: "Alerta bancaria",
+        value: "Historial crediticio",
+        hint: "Tu capacidad puede verse bien, pero este punto puede frenar la aprobación.",
+      });
+    }
+
+    if (limitingFactor && !hasCreditBlocker) {
       items.push({
         id: "limitante",
         label: COPY.limitInsightLabel,
@@ -1321,6 +1514,7 @@ export default function Home() {
     estimatedMaxLoanAmount,
     limitingFactor,
     isGoalAboveCapacity,
+    hasCreditBlocker,
   ]);
 
   const primaryHeadlineValue = useMemo(() => {
@@ -1348,11 +1542,13 @@ export default function Home() {
 
   const primaryHeadlineHelp = isGoalAboveCapacity
     ? "Este es el rango donde tu perfil tiene mayor probabilidad de aprobación hoy."
+    : hasCreditBlocker
+    ? "Tu capacidad financiera existe, pero tu historial crediticio declarado debe revisarse antes de considerar una solicitud bancaria."
     : hasImmediateViableMortgage
     ? `Tu perfil ya tiene una ruta hipotecaria viable hoy${
         canonicalBestMortgage?.label ? ` con ${canonicalBestMortgage.label}` : ""
       }.`
-    : "Este valor resume la capacidad que hoy podría sostener tu perfil.";
+    : "Este valor resume el rango de vivienda al que hoy podrías apuntar con tu perfil actual.";
 
   const currentEntryAmount =
     toNum(journey?.form?.entradaDisponible) ??
@@ -1365,13 +1561,13 @@ export default function Home() {
     toNum(pickLegacyCompatible(snapshot, ["entradaDisponible"])) ??
     0;
 
-  const homePrimaryBlocker =
-    homeRecommendation?.blockers?.primary ||
-    limitingFactor ||
-    null;
+  const homePrimaryBlocker = hasCreditBlocker
+    ? "buro"
+    : homeRecommendation?.blockers?.primary || limitingFactor || null;
 
   const blockerExplanationTitle = useMemo(() => {
     if (!summary?.unlocked) return null;
+    if (homePrimaryBlocker === "buro") return "Qué podría frenar la aprobación bancaria";
     if (homePrimaryBlocker === "entrada") return "Qué está frenando tu capacidad hoy";
     if (homePrimaryBlocker === "cuota") return "Qué está frenando tu capacidad hoy";
     if (homePrimaryBlocker === "programa") return "Qué está frenando tu capacidad hoy";
@@ -1380,6 +1576,10 @@ export default function Home() {
 
   const blockerExplanationBody = useMemo(() => {
     if (!summary?.unlocked) return null;
+
+    if (homePrimaryBlocker === "buro") {
+      return "Tus números pueden mostrar capacidad de compra, pero una alerta crediticia declarada puede hacer que un banco no apruebe la solicitud hasta revisar o regularizar ese punto.";
+    }
 
     if (homePrimaryBlocker === "entrada") {
       return `Tu ingreso sí tiene potencial, pero con una entrada disponible de ${safeMoney(
@@ -1405,15 +1605,12 @@ export default function Home() {
 
   const heroAnim = useFadeIn(40);
   const resultInView = true;
-  const progressInView = true;
 
   const animatedScore = useCountUp(
     useCompactScoreDisplay ? 0 : Number(displayScoreValue) || 0,
     950,
     resultInView
   );
-
-  const animatedProgress = useCountUp(displayProgress, 950, progressInView);
 
   const isLockedHome = !summary?.unlocked;
 
@@ -1527,15 +1724,15 @@ export default function Home() {
             }}
           >
             <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
-              Tu resultado hoy
+              Tu capacidad hoy
             </div>
 
-            <Chip tone="good">
+            <Chip tone={hasCreditBlocker ? "neutral" : "good"}>
               <span
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
                 <CheckCircle2 size={13} strokeWidth={2.4} />
-                {COPY.scoreReady}
+                {hasCreditBlocker ? "Requiere revisión" : COPY.scoreReady}
               </span>
             </Chip>
           </div>
@@ -1567,7 +1764,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div style={{ fontSize: 42, fontWeight: 980, letterSpacing: -1 }}>
-                  {animatedScore}
+                  {safeMoney(estimatedMaxPropertyValue)}
                 </div>
               )}
 
@@ -1580,12 +1777,22 @@ export default function Home() {
                   maxWidth: 240,
                 }}
               >
-                {displayScoreLabel}
+                Hasta aquí podría llegar tu compra con tu perfil actual
               </div>
             </div>
 
-            <Chip tone={hasImmediateViableMortgage ? "good" : "neutral"}>
-              {hasImmediateViableMortgage
+            <Chip
+              tone={
+                hasCreditBlocker
+                  ? "neutral"
+                  : hasImmediateViableMortgage
+                  ? "good"
+                  : "neutral"
+              }
+            >
+              {hasCreditBlocker
+                ? "Buró por revisar"
+                : hasImmediateViableMortgage
                 ? "Ruta viable hoy"
                 : "Perfil en construcción"}
             </Chip>
@@ -1593,11 +1800,11 @@ export default function Home() {
 
           <ProbabilityBar
             valuePct={isGoalAboveCapacity ? null : prob?.pct}
-            valueText={isGoalAboveCapacity ? "Baja" : null}
+            valueText={isGoalAboveCapacity ? "Baja" : hasCreditBlocker ? "Media" : null}
             hint={heroHint}
           />
 
-          {homeActionHints.length > 0 ? (
+          {homeActionHints.length > 0 && !hasCreditBlocker ? (
             <AccordionSection
               title="Qué te conviene hacer ahora"
               subtitle="Te mostramos solo el siguiente mejor movimiento para avanzar."
@@ -1647,6 +1854,17 @@ export default function Home() {
           ) : null}
         </Card>
       </div>
+
+      {shouldShowCreditValidation ? (
+        <div style={visibleInViewStyle}>
+          <CreditValidationCard
+            creditAssessment={effectiveCreditAssessment}
+            readinessStatus={readinessStatus}
+            hasImmediateViableMortgage={hasImmediateViableMortgage}
+            onReview={() => go("/journey/full")}
+          />
+        </div>
+      ) : null}
 
       <div style={visibleInViewStyle}>
         <Card style={{ marginTop: 18 }}>
@@ -1702,62 +1920,12 @@ export default function Home() {
 
           <div style={{ marginTop: 12 }}>
             <PrimaryButton onClick={() => go(bestNext.to)}>
-              {isGoalAboveCapacity ? "Ver propiedades en mi rango" : bestNext.cta}
+              {hasCreditBlocker
+                ? "Actualizar historial crediticio"
+                : isGoalAboveCapacity
+                ? "Ver propiedades en mi rango"
+                : bestNext.cta}
             </PrimaryButton>
-          </div>
-        </Card>
-      </div>
-
-      <div style={visibleInViewStyle}>
-        <Card style={{ marginTop: 18 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "rgba(148,163,184,0.95)",
-                  fontWeight: 900,
-                }}
-              >
-                Tu progreso hacia comprar casa
-              </div>
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 28,
-                  fontWeight: 980,
-                  lineHeight: 1,
-                }}
-              >
-                {animatedProgress}%
-              </div>
-            </div>
-
-            <Chip tone={displayProgress >= 85 ? "good" : "neutral"}>
-              {displayProgress >= 85 ? "Vas muy bien" : "Sigue avanzando"}
-            </Chip>
-          </div>
-
-          <div style={{ marginTop: 10 }}>
-            <ProgressBar value={animatedProgress} />
-          </div>
-
-          <div
-            style={{
-              marginTop: 10,
-              fontSize: 12,
-              color: "rgba(148,163,184,0.92)",
-              lineHeight: 1.35,
-            }}
-          >
-            {homeProgressText}
           </div>
         </Card>
       </div>
@@ -1800,9 +1968,22 @@ export default function Home() {
               </div>
             </div>
 
-            <Chip tone={hasImmediateViableMortgage ? "good" : "neutral"}>
+            <Chip
+              tone={
+                hasCreditBlocker
+                  ? "neutral"
+                  : hasImmediateViableMortgage
+                  ? "good"
+                  : "neutral"
+              }
+            >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                {hasImmediateViableMortgage ? (
+                {hasCreditBlocker ? (
+                  <>
+                    <ShieldCheck size={13} strokeWidth={2.4} />
+                    Buró por revisar
+                  </>
+                ) : hasImmediateViableMortgage ? (
                   <>
                     <CheckCircle2 size={13} strokeWidth={2.4} />
                     Hoy viable
@@ -1848,7 +2029,23 @@ export default function Home() {
                     color: "rgba(148,163,184,0.88)",
                   }}
                 >
-                  La buena noticia: si aumentas tu entrada, tu capacidad puede subir mucho más rápido.
+                  La buena noticia: si aumentas tu entrada, tu capacidad puede
+                  subir mucho más rápido.
+                </div>
+              ) : null}
+
+              {homePrimaryBlocker === "buro" ? (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    lineHeight: 1.35,
+                    color: "rgba(148,163,184,0.88)",
+                  }}
+                >
+                  La buena noticia: esta alerta no borra tu capacidad financiera.
+                  Solo indica que antes de aplicar conviene revisar el historial
+                  crediticio.
                 </div>
               ) : null}
             </AccordionSection>
@@ -1873,10 +2070,7 @@ export default function Home() {
                   label="Tu objetivo de vivienda"
                   value={safeMoney(goalSummary?.targetPropertyValue)}
                 />
-                <SoftMetric
-                  label="Lo más realista hoy"
-                  value={primaryHeadlineValue}
-                />
+                <SoftMetric label="Lo más realista hoy" value={primaryHeadlineValue} />
               </div>
             </InnerCard>
           ) : null}
@@ -1895,9 +2089,9 @@ export default function Home() {
                   color: "rgba(226,232,240,0.90)",
                 }}
               >
-                Hoy tienes {safeMoney(entryTrajectory.entradaActual)} de entrada y podrías
-                destinar {safeMoney(entryTrajectory.capacidadMensual)} al mes para seguir
-                construyéndola.
+                Hoy tienes {safeMoney(entryTrajectory.entradaActual)} de entrada y
+                podrías destinar {safeMoney(entryTrajectory.capacidadMensual)} al
+                mes para seguir construyéndola.
               </div>
 
               {entryTrajectory.mejorRutaActual ? (
@@ -1913,14 +2107,18 @@ export default function Home() {
                     color: "rgba(226,232,240,0.88)",
                   }}
                 >
-                  Para tu rango más realista de hoy, la forma más rápida de fortalecer tu
-                  entrada sería con{" "}
-                  <strong>{entryTrajectory.mejorRutaActual.producto}</strong>. Manteniendo
-                  este ritmo, podrías completar una entrada referencial en{" "}
+                  Para tu rango más realista de hoy, la forma más rápida de
+                  fortalecer tu entrada sería con{" "}
+                  <strong>{entryTrajectory.mejorRutaActual.producto}</strong>.
+                  Manteniendo este ritmo, podrías completar una entrada
+                  referencial en{" "}
                   <strong>
                     {entryTrajectory.mejorRutaActual.mesesActual}{" "}
-                    {entryTrajectory.mejorRutaActual.mesesActual === 1 ? "mes" : "meses"}
-                  </strong>.
+                    {entryTrajectory.mejorRutaActual.mesesActual === 1
+                      ? "mes"
+                      : "meses"}
+                  </strong>
+                  .
                 </div>
               ) : null}
 
@@ -1937,12 +2135,15 @@ export default function Home() {
                     color: "rgba(226,232,240,0.88)",
                   }}
                 >
-                  Para acercarte a tu meta de vivienda, la ruta más rápida estimada sería
-                  con <strong>{entryTrajectory.mejorRutaMeta.producto}</strong>, y tomaría
-                  alrededor de{" "}
+                  Para acercarte a tu meta de vivienda, la ruta más rápida
+                  estimada sería con{" "}
+                  <strong>{entryTrajectory.mejorRutaMeta.producto}</strong>, y
+                  tomaría alrededor de{" "}
                   <strong>
                     {entryTrajectory.mejorRutaMeta.mesesMeta}{" "}
-                    {entryTrajectory.mejorRutaMeta.mesesMeta === 1 ? "mes" : "meses"}
+                    {entryTrajectory.mejorRutaMeta.mesesMeta === 1
+                      ? "mes"
+                      : "meses"}
                   </strong>{" "}
                   solo para fortalecer la entrada.
                 </div>
@@ -1956,8 +2157,9 @@ export default function Home() {
                   color: "rgba(148,163,184,0.85)",
                 }}
               >
-                Esto mejora tu capacidad de entrada. La aprobación final también dependerá
-                del programa y de tu perfil crediticio al momento de aplicar.
+                Esto mejora tu capacidad de entrada. La aprobación final también
+                dependerá del programa y de tu perfil crediticio al momento de
+                aplicar.
               </div>
             </AccordionSection>
           ) : null}
@@ -1965,8 +2167,14 @@ export default function Home() {
           <InsightGrid items={mainInsightItems} />
 
           <div style={{ marginTop: 12 }}>
-            <PrimaryButton onClick={() => go("/marketplace")}>
-              {isGoalAboveCapacity
+            <PrimaryButton
+              onClick={() =>
+                hasCreditBlocker ? go("/journey/full") : go("/marketplace")
+              }
+            >
+              {hasCreditBlocker
+                ? "Actualizar historial crediticio"
+                : isGoalAboveCapacity
                 ? "Ver propiedades en mi rango"
                 : "Ver propiedades compatibles"}
             </PrimaryButton>
@@ -1983,7 +2191,8 @@ export default function Home() {
           textAlign: "center",
         }}
       >
-        Los resultados de HabitaLibre son referenciales y pueden variar según la evaluación final de cada entidad financiera.
+        Los resultados de HabitaLibre son referenciales y pueden variar según la
+        evaluación final de cada entidad financiera.
       </div>
     </Screen>
   );

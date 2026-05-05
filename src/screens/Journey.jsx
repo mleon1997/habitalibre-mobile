@@ -53,6 +53,33 @@ const OBJETIVO_VIVIENDA_OPCIONES = [
   { value: "propiedad", label: "Sí, ya tengo una propiedad en mente" },
 ];
 
+const PREFERENCIA_PAGO_HIPOTECA_OPCIONES = [
+  {
+    value: "cuota_baja",
+    title: "Cuota más baja",
+    description:
+      "Prefiero pagar menos cada mes, aunque el crédito pueda durar más y pagar más intereses.",
+  },
+  {
+    value: "equilibrio",
+    title: "Equilibrio",
+    description:
+      "Busco una cuota manejable, pero sin alargar demasiado el crédito.",
+  },
+  {
+    value: "menos_intereses",
+    title: "Pagar menos intereses",
+    description:
+      "Prefiero una cuota más alta si eso ayuda a reducir el costo total.",
+  },
+  {
+    value: "no_estoy_seguro",
+    title: "No estoy seguro",
+    description:
+      "Quiero que HabitaLibre me recomiende la ruta más conveniente según mi perfil.",
+  },
+];
+
 function loadJSON(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -71,12 +98,7 @@ function saveJSON(key, val) {
 function normalizeSelectedProperty(raw) {
   if (!raw || typeof raw !== "object") return null;
 
-  const id =
-    raw.id ||
-    raw._id ||
-    raw.propertyId ||
-    raw._normalizedId ||
-    null;
+  const id = raw.id || raw._id || raw.propertyId || raw._normalizedId || null;
 
   const titulo =
     raw.titulo ||
@@ -104,17 +126,10 @@ function normalizeSelectedProperty(raw) {
     raw._normalizedPrice ??
     null;
 
-  const precio = Number.isFinite(Number(precioRaw))
-    ? Number(precioRaw)
-    : null;
+  const precio = Number.isFinite(Number(precioRaw)) ? Number(precioRaw) : null;
 
   const imagen =
-    raw.imagen ||
-    raw.image ||
-    raw.imageUrl ||
-    raw.foto ||
-    raw.cover ||
-    null;
+    raw.imagen || raw.image || raw.imageUrl || raw.foto || raw.cover || null;
 
   return {
     id,
@@ -214,6 +229,13 @@ function money(n) {
   return `$${Math.round(x).toLocaleString("en-US")}`;
 }
 
+function getPaymentPreferenceTitle(value) {
+  return (
+    PREFERENCIA_PAGO_HIPOTECA_OPCIONES.find((opt) => opt.value === value)
+      ?.title || "No estoy seguro"
+  );
+}
+
 function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
   const bestMortgage = resultado?.bestMortgage || null;
   const bestOption = resultado?.bestOption || null;
@@ -257,14 +279,10 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
     null;
 
   const bestRate =
-    effectiveBestMortgage?.annualRate ??
-    bestMortgageFull?.annualRate ??
-    null;
+    effectiveBestMortgage?.annualRate ?? bestMortgageFull?.annualRate ?? null;
 
   const bestCuota =
-    effectiveBestMortgage?.cuota ??
-    bestMortgageFull?.cuota ??
-    null;
+    effectiveBestMortgage?.cuota ?? bestMortgageFull?.cuota ?? null;
 
   const bestMonto =
     effectiveBestMortgage?.montoPrestamo ??
@@ -272,9 +290,7 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
     null;
 
   const bestPlazo =
-    effectiveBestMortgage?.termMonths ??
-    bestMortgageFull?.termMonths ??
-    null;
+    effectiveBestMortgage?.termMonths ?? bestMortgageFull?.termMonths ?? null;
 
   const bestPrecioMax =
     effectiveBestMortgage?.precioMaxVivienda ??
@@ -286,10 +302,7 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
     effectiveBestOption?.probabilidad ||
     null;
 
-  const bestScore =
-    effectiveBestMortgage?.score ??
-    effectiveBestOption?.score ??
-    0;
+  const bestScore = effectiveBestMortgage?.score ?? effectiveBestOption?.score ?? 0;
 
   const capacidadPago = bestCuota != null ? bestCuota * 3 : null;
 
@@ -406,8 +419,7 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
     fallbackRecommendation: fallbackRanked,
     tieneAlternativa,
     rankedMortgages,
-    recommendationExplanation:
-      resultado?.recommendationExplanation || null,
+    recommendationExplanation: resultado?.recommendationExplanation || null,
     eligibilityProducts,
     propertyRecommendationPolicy,
     matchedProperties: Array.isArray(resultado?.matchedProperties)
@@ -429,6 +441,7 @@ function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
       ingresoNetoMensual: entradaPayload?.ingresoNetoMensual ?? null,
       ciudadCompra: entradaPayload?.ciudadCompra ?? null,
       objetivoViviendaModo: entradaPayload?.objetivoViviendaModo ?? null,
+      preferenciaPagoHipoteca: entradaPayload?.preferenciaPagoHipoteca ?? null,
     },
   };
 }
@@ -835,6 +848,77 @@ function StepButton({ selected, onClick, children }) {
   );
 }
 
+function PaymentPreferenceCard({ selected, title, description, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: "100%",
+        borderRadius: 20,
+        padding: 16,
+        textAlign: "left",
+        border: selected
+          ? "1px solid rgba(37,211,166,0.68)"
+          : "1px solid rgba(255,255,255,0.12)",
+        background: selected
+          ? "rgba(37,211,166,0.12)"
+          : "rgba(255,255,255,0.06)",
+        color: "white",
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 14,
+        alignItems: "flex-start",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 15,
+            fontWeight: 950,
+            lineHeight: 1.2,
+          }}
+        >
+          {title}
+        </div>
+
+        <div
+          style={{
+            marginTop: 7,
+            fontSize: 12,
+            lineHeight: 1.42,
+            color: "rgba(148,163,184,0.92)",
+          }}
+        >
+          {description}
+        </div>
+      </div>
+
+      <span
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 999,
+          border: selected
+            ? "1px solid rgba(37,211,166,0.85)"
+            : "1px solid rgba(255,255,255,0.25)",
+          background: selected ? "#052019" : "transparent",
+          color: selected ? "#25d3a6" : "rgba(255,255,255,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 12,
+          fontWeight: 950,
+          flexShrink: 0,
+        }}
+      >
+        ✓
+      </span>
+    </button>
+  );
+}
+
 async function apiPost(path, body) {
   const token = getCustomerToken();
   const res = await fetch(`${API_BASE}${path}`, {
@@ -876,18 +960,14 @@ export default function Journey() {
       ? snapshotEnvelope.data
       : null;
 
-  const selectedPropertyGuardada =
-    selectedPropertyEnvelope?.ownerEmail &&
-    selectedPropertyEnvelope.ownerEmail === currentOwnerEmail
-      ? normalizeSelectedProperty(selectedPropertyEnvelope.data)
-      : null;
-
   const hasResult =
     !!snapshotGuardado?.hasResultado || !!snapshotGuardado?.unlocked;
 
   const [step, setStep] = useState(
-    hasResult ? 3 : existing?.step ? Number(existing.step) : 1
+    hasResult ? 1 : existing?.step ? Number(existing.step) : 1
   );
+
+  const [editMode, setEditMode] = useState(!hasResult);
 
   const [nacionalidad, setNacionalidad] = useState(
     existing?.form?.nacionalidad || "ecuatoriana"
@@ -954,6 +1034,29 @@ export default function Journey() {
   const [horizonteCompra, setHorizonteCompra] = useState(
     existing?.form?.horizonteCompra || ""
   );
+  const [preferenciaPagoHipoteca, setPreferenciaPagoHipoteca] = useState(
+    existing?.form?.preferenciaPagoHipoteca || "no_estoy_seguro"
+  );
+
+  const [creditHistoryStatus, setCreditHistoryStatus] = useState(
+  existing?.form?.creditHistoryStatus || "unknown"
+);
+
+const [hasActiveDelinquency, setHasActiveDelinquency] = useState(
+  existing?.form?.hasActiveDelinquency || "unknown"
+);
+
+const [delinquencyRange, setDelinquencyRange] = useState(
+  existing?.form?.delinquencyRange || "none"
+);
+
+const [recentCreditDenied, setRecentCreditDenied] = useState(
+  existing?.form?.recentCreditDenied || "unknown"
+);
+
+const [declaredCreditScore, setDeclaredCreditScore] = useState(
+  existing?.form?.declaredCreditScore || ""
+);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -965,6 +1068,14 @@ export default function Journey() {
   const esDependiente = tipoIngreso === "Dependiente";
   const esIndependiente = tipoIngreso === "Independiente";
   const esMixto = tipoIngreso === "Mixto";
+
+  const handleActiveDelinquencyChange = (value) => {
+  setHasActiveDelinquency(value);
+
+  if (value !== "yes") {
+    setDelinquencyRange("none");
+  }
+};
 
   const toNum = (v) => {
     const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
@@ -1006,31 +1117,37 @@ export default function Journey() {
       ...previousJourney,
       step,
       updatedAt: new Date().toISOString(),
-      form: {
-        nacionalidad,
-        estadoCivil,
-        edad,
-        tipoIngreso,
-        tipoContrato,
-        aniosEstabilidad,
-        mesesActividad,
-        sustentoIndependiente,
-        ingreso,
-        ingresoPareja,
-        deudas,
-        afiliadoIESS,
-        aportesTotales,
-        aportesConsecutivos,
-        ciudadCompra,
-        objetivoViviendaModo,
-        valorVivienda,
-        entrada,
-        capacidadEntradaMensual,
-        tieneVivienda,
-        primeraVivienda,
-        tipoVivienda,
-        horizonteCompra,
-      },
+     form: {
+  nacionalidad,
+  estadoCivil,
+  edad,
+  tipoIngreso,
+  tipoContrato,
+  aniosEstabilidad,
+  mesesActividad,
+  sustentoIndependiente,
+  ingreso,
+  ingresoPareja,
+  deudas,
+  afiliadoIESS,
+  aportesTotales,
+  aportesConsecutivos,
+  ciudadCompra,
+  objetivoViviendaModo,
+  valorVivienda,
+  entrada,
+  capacidadEntradaMensual,
+  tieneVivienda,
+  primeraVivienda,
+  tipoVivienda,
+  horizonteCompra,
+  preferenciaPagoHipoteca,
+  creditHistoryStatus,
+  hasActiveDelinquency,
+  delinquencyRange,
+  recentCreditDenied,
+  declaredCreditScore,
+},
     };
 
     saveJSON(LS_JOURNEY, {
@@ -1062,8 +1179,14 @@ export default function Journey() {
     tieneVivienda,
     primeraVivienda,
     tipoVivienda,
-    horizonteCompra,
-  ]);
+horizonteCompra,
+preferenciaPagoHipoteca,
+creditHistoryStatus,
+hasActiveDelinquency,
+delinquencyRange,
+recentCreditDenied,
+declaredCreditScore,
+]);
 
   function validate(s) {
     if (s === 1) {
@@ -1097,10 +1220,7 @@ export default function Journey() {
       }
 
       if (afiliadoBool) {
-        if (
-          toNum(aportesTotales) < 0 ||
-          toNum(aportesConsecutivos) < 0
-        ) {
+        if (toNum(aportesTotales) < 0 || toNum(aportesConsecutivos) < 0) {
           return "Revisa tus aportes IESS.";
         }
       }
@@ -1128,6 +1248,12 @@ export default function Journey() {
       }
     }
 
+    if (s === 4) {
+      if (!preferenciaPagoHipoteca) {
+        return "Selecciona cómo prefieres manejar tu futura cuota.";
+      }
+    }
+
     return null;
   }
 
@@ -1141,6 +1267,16 @@ export default function Journey() {
   const back = () => {
     setErr("");
     setStep((x) => Math.max(1, x - 1));
+  };
+
+  const startEditing = () => {
+    setErr("");
+    setEditMode(true);
+    setStep(1);
+  };
+
+  const viewCurrentResult = () => {
+    navigate("/", { replace: true });
   };
 
   function buildEntradaPayload() {
@@ -1172,7 +1308,16 @@ export default function Journey() {
       viviendaEstrenar: tipoVivienda === "por_estrenar",
       tipoVivienda,
       tiempoCompra: horizonteCompra || null,
-      origen: "journey_mobile",
+      horizonteCompra: horizonteCompra || null,
+     preferenciaPagoHipoteca,
+
+creditHistoryStatus,
+hasActiveDelinquency,
+delinquencyRange,
+recentCreditDenied,
+declaredCreditScore: declaredCreditScore ? toNum(declaredCreditScore) : null,
+
+origen: "journey_mobile",
     };
   }
 
@@ -1186,8 +1331,11 @@ export default function Journey() {
       return;
     }
 
-    const e = validate(3);
-    if (e) return setErr(e);
+    const e3 = validate(3);
+    if (e3) return setErr(e3);
+
+    const e4 = validate(4);
+    if (e4) return setErr(e4);
 
     setLoading(true);
     setErr("");
@@ -1256,33 +1404,40 @@ export default function Journey() {
           step: 4,
           updatedAt: new Date().toISOString(),
           form: {
-            nacionalidad,
-            estadoCivil,
-            edad,
-            tipoIngreso,
-            tipoContrato,
-            aniosEstabilidad,
-            mesesActividad,
-            sustentoIndependiente,
-            ingreso,
-            ingresoPareja,
-            deudas,
-            afiliadoIESS,
-            aportesTotales,
-            aportesConsecutivos,
-            ciudadCompra,
-            objetivoViviendaModo,
-            valorVivienda,
-            entrada,
-            capacidadEntradaMensual,
-            tieneVivienda,
-            primeraVivienda,
-            tipoVivienda,
-            horizonteCompra,
-          },
+  nacionalidad,
+  estadoCivil,
+  edad,
+  tipoIngreso,
+  tipoContrato,
+  aniosEstabilidad,
+  mesesActividad,
+  sustentoIndependiente,
+  ingreso,
+  ingresoPareja,
+  deudas,
+  afiliadoIESS,
+  aportesTotales,
+  aportesConsecutivos,
+  ciudadCompra,
+  objetivoViviendaModo,
+  valorVivienda,
+  entrada,
+  capacidadEntradaMensual,
+  tieneVivienda,
+  primeraVivienda,
+  tipoVivienda,
+  horizonteCompra,
+  preferenciaPagoHipoteca,
+  creditHistoryStatus,
+  hasActiveDelinquency,
+  delinquencyRange,
+  recentCreditDenied,
+  declaredCreditScore,
+},
           resultado: snapshot,
           propiedadElegida: !!reEvaluatedSelected,
-          propiedadId: reEvaluatedSelected?.id || previousJourney?.propiedadId || null,
+          propiedadId:
+            reEvaluatedSelected?.id || previousJourney?.propiedadId || null,
           propiedadSeleccionada: reEvaluatedSelected
             ? {
                 ...reEvaluatedSelected,
@@ -1302,6 +1457,16 @@ export default function Journey() {
       setLoading(false);
     }
   }
+
+  const recalculateSameInfo = () => {
+    setErr("");
+    setEditMode(true);
+    setStep(TOTAL_STEPS);
+
+    window.setTimeout(() => {
+      handleCalcular();
+    }, 80);
+  };
 
   const progress = (step / TOTAL_STEPS) * 100;
 
@@ -1337,7 +1502,11 @@ export default function Journey() {
               maxWidth: 320,
             }}
           >
-            {hasResult ? "Tu capacidad de compra" : "Completa tu perfil"}
+            {hasResult && !editMode
+              ? "Tu evaluación ya está lista"
+              : hasResult
+              ? "Actualiza tu evaluación"
+              : "Completa tu perfil"}
           </div>
 
           <div
@@ -1349,19 +1518,27 @@ export default function Journey() {
               color: "rgba(148,163,184,0.95)",
             }}
           >
-            {hasResult
-              ? "Ajusta tu escenario y actualiza tu cálculo para ver qué vivienda podrías comprar."
+            {hasResult && !editMode
+              ? "Puedes mantener tu resultado actual o probar con otra información para ver cómo cambia tu capacidad."
+              : hasResult
+              ? "Edita tu información paso a paso y actualiza tu cálculo al final."
               : "Te toma menos de 2 minutos. Te damos capacidad estimada, cuota y ruta sugerida."}
           </div>
         </div>
 
-        {!hasResult ? (
+        {!hasResult || editMode ? (
           <Pill>
             Paso {step}/{TOTAL_STEPS}
           </Pill>
         ) : (
           <Pill>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
               <Edit3 size={12} strokeWidth={2.2} />
               Editable
             </span>
@@ -1369,7 +1546,7 @@ export default function Journey() {
         )}
       </div>
 
-      {!hasResult ? (
+      {editMode ? (
         <div
           style={{
             marginTop: 16,
@@ -1391,16 +1568,18 @@ export default function Journey() {
         </div>
       ) : null}
 
-      {hasResult ? (
+      {hasResult && !editMode ? (
         <SectionCard
           style={{
-            background: "rgba(37,211,166,0.10)",
+            background:
+              "linear-gradient(180deg, rgba(37,211,166,0.10), rgba(255,255,255,0.05))",
             border: "1px solid rgba(37,211,166,0.22)",
           }}
         >
           <SectionTitle
-            title="Tu escenario actual"
-            subtitle="Un resumen rápido de lo que hoy podría sostener tu perfil."
+            eyebrow="Evaluación guardada"
+            title="Tu evaluación ya está lista"
+            subtitle="Ya calculamos tu capacidad con la información que ingresaste."
           />
 
           <div
@@ -1408,6 +1587,7 @@ export default function Journey() {
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
               gap: 12,
+              marginTop: 14,
             }}
           >
             <StatBox
@@ -1420,512 +1600,830 @@ export default function Journey() {
               accent
             />
           </div>
-        </SectionCard>
-      ) : null}
 
-      <SectionCard>
-        {step === 1 && (
-          <>
-            <SectionTitle
-              eyebrow="Paso 1"
-              title="Tu perfil base"
-              subtitle="Esto nos ayuda a entender qué tan sólido es tu perfil para aplicar."
-            />
-
-            <SelectField
-              label="Nacionalidad"
-              value={nacionalidad}
-              onChange={setNacionalidad}
-              options={[
-                { value: "ecuatoriana", label: "Ecuatoriana" },
-                { value: "otra", label: "Otra nacionalidad" },
-              ]}
-            />
-
-            <SelectField
-              label="Estado civil"
-              helper="Si estás casad@ o en unión de hecho, podremos considerar el ingreso de tu pareja."
-              value={estadoCivil}
-              onChange={setEstadoCivil}
-              options={[
-                { value: "soltero", label: "Soltero/a" },
-                { value: "casado", label: "Casado/a" },
-                { value: "union_de_hecho", label: "Unión de hecho" },
-                { value: "divorciado", label: "Divorciado/a" },
-                { value: "viudo", label: "Viudo/a" },
-              ]}
-            />
-
-            <SliderField
-              label="Edad"
-              min={21}
-              max={75}
-              step={1}
-              value={edad}
-              onChange={setEdad}
-              format={(v) => `${v} años`}
-            />
-
-            <SelectField
-              label="Tipo de ingreso"
-              value={tipoIngreso}
-              onChange={setTipoIngreso}
-              options={[
-                { value: "Dependiente", label: "Relación de dependencia" },
-                { value: "Independiente", label: "Independiente / actividad propia" },
-                { value: "Mixto", label: "Mixto" },
-              ]}
-            />
-
-            {(esDependiente || esMixto) && (
-              <>
-                <SectionTitle
-                  eyebrow="Ingresos dependientes"
-                  title="Tu estabilidad laboral"
-                />
-
-                <SelectField
-                  label="Tipo de contrato"
-                  value={tipoContrato}
-                  onChange={setTipoContrato}
-                  options={[
-                    { value: "indefinido", label: "Indefinido" },
-                    { value: "temporal", label: "Temporal" },
-                    { value: "servicios", label: "Servicios profesionales" },
-                  ]}
-                  helper="Algunos bancos son más favorables con contratos indefinidos."
-                />
-
-                <SliderField
-                  label="Años en tu trabajo actual"
-                  helper="Para ingresos dependientes normalmente se pide mínimo 1 año."
-                  min={0}
-                  max={40}
-                  step={1}
-                  value={aniosEstabilidad}
-                  onChange={setAniosEstabilidad}
-                  format={(v) => `${v} años`}
-                />
-              </>
-            )}
-
-            {(esIndependiente || esMixto) && (
-              <>
-                <SectionTitle
-                  eyebrow="Ingresos independientes"
-                  title="Tu trayectoria económica"
-                />
-
-                <SliderField
-                  label="Meses en tu actividad económica actual"
-                  helper="Para ingresos independientes normalmente se piden al menos 24 meses."
-                  min={0}
-                  max={240}
-                  step={1}
-                  value={mesesActividad}
-                  onChange={setMesesActividad}
-                  format={(v) => `${v} meses`}
-                />
-
-                <SelectField
-                  label="¿Cómo sustentas tus ingresos?"
-                  helper="Esto puede afectar la facilidad de aprobación."
-                  value={sustentoIndependiente}
-                  onChange={setSustentoIndependiente}
-                  options={[
-                    {
-                      value: "facturacion_ruc",
-                      label: "Facturación con RUC",
-                    },
-                    {
-                      value: "movimientos_bancarizados",
-                      label: "Ingresos bancarizados",
-                    },
-                    {
-                      value: "declaracion_sri",
-                      label: "Declaración SRI",
-                    },
-                    {
-                      value: "mixto",
-                      label: "Mixto",
-                    },
-                    {
-                      value: "informal",
-                      label: "No los puedo sustentar bien",
-                    },
-                  ]}
-                />
-              </>
-            )}
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            <SectionTitle
-              eyebrow="Paso 2"
-              title="Tu capacidad mensual"
-              subtitle="Aquí definimos cuánto podrías sostener de forma sana cada mes."
-            />
-
-            <SliderField
-              label="Tu ingreso neto mensual"
-              min={450}
-              max={15000}
-              step={50}
-              value={ingreso}
-              onChange={setIngreso}
-              format={(v) => money(v)}
-            />
-
-            {esParejaFormal && (
-              <SliderField
-                label="Ingreso neto mensual de tu pareja"
-                min={0}
-                max={15000}
-                step={50}
-                value={ingresoPareja}
-                onChange={setIngresoPareja}
-                format={(v) => money(v)}
-              />
-            )}
-
-            <SliderField
-              label="Otras deudas mensuales"
-              min={0}
-              max={5000}
-              step={50}
-              value={deudas}
-              onChange={setDeudas}
-              format={(v) => money(v)}
-            />
-
-            <SelectField
-              label="¿Estás afiliado al IESS?"
-              value={afiliadoIESS}
-              onChange={setAfiliadoIESS}
-              options={[
-                { value: "no", label: "No" },
-                { value: "sí", label: "Sí" },
-              ]}
-            />
-
-            {afiliadoBool && (
-              <>
-                <SectionTitle
-                  eyebrow="BIESS"
-                  title="Tus aportes"
-                  subtitle="Esto solo aplica si luego quieres evaluar una ruta BIESS."
-                />
-
-                <SliderField
-                  label="Aportes IESS totales"
-                  helper="Para BIESS suelen requerirse al menos 36 aportes totales."
-                  min={0}
-                  max={600}
-                  step={1}
-                  value={aportesTotales}
-                  onChange={setAportesTotales}
-                  format={(v) => `${v} meses`}
-                />
-
-                <SliderField
-                  label="Aportes IESS consecutivos"
-                  helper="Suelen pedir mínimo 13 aportes consecutivos."
-                  min={0}
-                  max={600}
-                  step={1}
-                  value={aportesConsecutivos}
-                  onChange={setAportesConsecutivos}
-                  format={(v) => `${v} meses`}
-                />
-              </>
-            )}
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <SectionTitle
-              eyebrow="Paso 3"
-              title="Tu punto de partida"
-              subtitle="Primero define tu entrada, tu ciudad y si ya tienes una vivienda en mente."
-            />
-
-            <SelectField
-              label="Ciudad donde quieres comprar"
-              value={ciudadCompra}
-              onChange={setCiudadCompra}
-              options={CIUDADES_COMPRA}
-              helper="Esto nos ayuda a darte una guía más útil según tu mercado objetivo."
-            />
-
-            <SelectField
-              label="¿Ya tienes una vivienda o un rango en mente?"
-              value={objetivoViviendaModo}
-              onChange={setObjetivoViviendaModo}
-              options={OBJETIVO_VIVIENDA_OPCIONES}
-              helper="Si todavía no sabes el valor, no pasa nada. Primero calculamos qué sí podrías comprar."
-            />
-
-            {shouldAskTargetValue ? (
-              <>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
-                    marginBottom: 16,
-                  }}
-                >
-                  <StatBox label="Valor objetivo" value={money(valorVivienda)} />
-                  <StatBox
-                    label="Entrada aprox."
-                    value={`${money(entrada)} (${entradaPct}%)`}
-                    accent
-                  />
-                </div>
-
-                <SliderField
-                  label={
-                    objetivoViviendaModo === "propiedad"
-                      ? "Valor aproximado de la propiedad (USD)"
-                      : "Valor aproximado del rango que te interesa (USD)"
-                  }
-                  min={30000}
-                  max={500000}
-                  step={1000}
-                  value={valorVivienda || "30000"}
-                  onChange={setValorVivienda}
-                  format={(v) => money(v)}
-                />
-              </>
-            ) : null}
-
-            <SliderField
-              label="Entrada disponible (USD)"
-              helper="Incluye ahorros, cesantía, fondos de reserva u otros."
-              min={0}
-              max={500000}
-              step={500}
-              value={entrada}
-              onChange={setEntrada}
-              format={(v) => money(v)}
-            />
-
-            <SliderField
-              label="¿Cuánto podrías pagar al mes para completar la entrada?"
-              helper="Útil sobre todo en proyectos en construcción, donde puedes completar la entrada durante la obra."
-              min={0}
-              max={2000}
-              step={50}
-              value={capacidadEntradaMensual}
-              onChange={setCapacidadEntradaMensual}
-              format={(v) => money(v)}
-            />
-
-            <SectionTitle
-              eyebrow="Condiciones"
-              title="Tu situación actual"
-            />
-
-            <SelectField
-              label="¿Tienes actualmente una vivienda?"
-              value={tieneVivienda}
-              onChange={setTieneVivienda}
-              options={[
-                { value: "no", label: "No" },
-                { value: "sí", label: "Sí" },
-              ]}
-            />
-
-            <SelectField
-              label="¿Es tu primera vivienda?"
-              value={primeraVivienda}
-              onChange={setPrimeraVivienda}
-              options={[
-                { value: "sí", label: "Sí" },
-                { value: "no", label: "No" },
-              ]}
-            />
-
-            <SelectField
-              label="Estado de la vivienda"
-              value={tipoVivienda}
-              onChange={setTipoVivienda}
-              options={[
-                {
-                  value: "por_estrenar",
-                  label: "Por estrenar / proyecto nuevo",
-                },
-                { value: "usada", label: "Usada / segunda mano" },
-              ]}
-            />
-
-            <SectionTitle
-              eyebrow="Horizonte"
-              title="¿En qué plazo te gustaría adquirir tu vivienda?"
-            />
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-              }}
-            >
-              {HORIZONTE_OPCIONES.map((opt) => {
-                const selected = horizonteCompra === opt.value;
-                return (
-                  <StepButton
-                    key={opt.value}
-                    selected={selected}
-                    onClick={() => setHorizonteCompra(opt.value)}
-                  >
-                    {opt.label}
-                  </StepButton>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {step === 4 && !hasResult && (
-          <>
-            <SectionTitle
-              eyebrow="Último paso"
-              title="Listo para ver tu resultado"
-              subtitle="Vamos a estimar tu capacidad, tu cuota y tu mejor ruta posible."
-            />
-
-            <div style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
-              Ciudad objetivo:{" "}
-              <strong style={{ color: "white" }}>{ciudadCompra || "—"}</strong>
-            </div>
-
-            {shouldAskTargetValue ? (
-              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
-                Monto referencial a analizar:{" "}
-                <strong style={{ color: "white" }}>
-                  {money(toNum(valorVivienda) - toNum(entrada))}
-                </strong>
-              </div>
-            ) : (
-              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
-                Vamos a estimar primero tu capacidad máxima de compra con tu perfil actual.
-              </div>
-            )}
-
-            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.45 }}>
-              Capacidad mensual para completar entrada:{" "}
-              <strong style={{ color: "white" }}>
-                {money(toNum(capacidadEntradaMensual))}
-              </strong>
-            </div>
-
-            <div
-              style={{
-                marginTop: 14,
-                fontSize: 12,
-                opacity: 0.72,
-                lineHeight: 1.4,
-                color: "rgba(148,163,184,0.92)",
-              }}
-            >
-              Las precalificaciones son estimaciones referenciales. No constituyen aprobación ni oferta formal.
-            </div>
-          </>
-        )}
-
-        {err ? (
           <div
             style={{
-              marginTop: 14,
-              padding: 12,
-              borderRadius: 16,
-              background: "rgba(244,63,94,0.12)",
-              border: "1px solid rgba(244,63,94,0.30)",
-              fontSize: 12,
-              fontWeight: 800,
+              marginTop: 18,
+              display: "grid",
+              gap: 10,
             }}
           >
-            {err}
-          </div>
-        ) : null}
-
-        <div
-          style={{
-            marginTop: 28,
-            marginBottom: 18,
-            display: "flex",
-            gap: 10,
-            position: "relative",
-            zIndex: 2,
-          }}
-        >
-          {step > 1 ? (
             <button
-              onClick={back}
+              type="button"
+              onClick={startEditing}
               style={{
-                flex: 1,
-                padding: 14,
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(255,255,255,0.06)",
-                color: "white",
-                fontWeight: 900,
-                fontSize: 14,
-              }}
-            >
-              Atrás
-            </button>
-          ) : null}
-
-          {step < 3 ? (
-            <button
-              onClick={next}
-              style={{
-                flex: 1,
-                padding: 14,
-                borderRadius: 18,
-                border: "none",
-                background: "#25d3a6",
-                color: "#052019",
-                fontWeight: 900,
-                fontSize: 14,
-              }}
-            >
-              Siguiente
-            </button>
-          ) : (
-            <button
-              onClick={handleCalcular}
-              disabled={loading}
-              style={{
-                flex: 1,
+                width: "100%",
                 minHeight: 58,
-                padding: "16px 18px",
                 borderRadius: 20,
                 border: "none",
                 background: "#25d3a6",
                 color: "#052019",
                 fontWeight: 950,
                 fontSize: 16,
-                opacity: loading ? 0.7 : 1,
-                boxShadow: "0 12px 28px rgba(37,211,166,0.18)",
               }}
             >
-              {loading
-                ? "Analizando…"
-                : hasResult
-                ? "Actualizar"
-                : getCustomerToken()
-                ? "Ver resultados"
-                : "Entrar para ver resultados"}
+              Actualizar mi información
             </button>
-          )}
-        </div>
-      </SectionCard>
+
+            <button
+              type="button"
+              onClick={recalculateSameInfo}
+              disabled={loading}
+              style={{
+                width: "100%",
+                minHeight: 56,
+                borderRadius: 20,
+                border: "1px solid rgba(255,255,255,0.14)",
+                background: "rgba(255,255,255,0.06)",
+                color: "white",
+                fontWeight: 900,
+                fontSize: 15,
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? "Recalculando…" : "Recalcular con la misma información"}
+            </button>
+
+            <button
+              type="button"
+              onClick={viewCurrentResult}
+              style={{
+                width: "100%",
+                minHeight: 56,
+                borderRadius: 20,
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(2,6,23,0.20)",
+                color: "rgba(226,232,240,0.96)",
+                fontWeight: 900,
+                fontSize: 15,
+              }}
+            >
+              Ver mi resultado actual
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              fontSize: 12,
+              lineHeight: 1.4,
+              color: "rgba(148,163,184,0.92)",
+            }}
+          >
+            Si cambias ingresos, deudas, entrada o preferencia de pago,
+            HabitaLibre actualizará tu capacidad y tus rutas hipotecarias.
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {editMode ? (
+        <>
+          {hasResult ? (
+            <SectionCard
+              style={{
+                background: "rgba(37,211,166,0.10)",
+                border: "1px solid rgba(37,211,166,0.22)",
+              }}
+            >
+              <SectionTitle
+                title="Tu escenario actual"
+                subtitle="Referencia actual antes de recalcular."
+              />
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <StatBox
+                  label="Vivienda aprox."
+                  value={capacidadActual ? money(capacidadActual) : "—"}
+                />
+                <StatBox
+                  label="Cuota estimada"
+                  value={cuotaActual ? money(cuotaActual) : "—"}
+                  accent
+                />
+              </div>
+            </SectionCard>
+          ) : null}
+
+          <SectionCard>
+            {step === 1 && (
+              <>
+                <SectionTitle
+                  eyebrow="Paso 1"
+                  title="Tu perfil base"
+                  subtitle="Esto nos ayuda a entender qué tan sólido es tu perfil para aplicar."
+                />
+
+                <SelectField
+                  label="Nacionalidad"
+                  value={nacionalidad}
+                  onChange={setNacionalidad}
+                  options={[
+                    { value: "ecuatoriana", label: "Ecuatoriana" },
+                    { value: "otra", label: "Otra nacionalidad" },
+                  ]}
+                />
+
+                <SelectField
+                  label="Estado civil"
+                  helper="Si estás casad@ o en unión de hecho, podremos considerar el ingreso de tu pareja."
+                  value={estadoCivil}
+                  onChange={setEstadoCivil}
+                  options={[
+                    { value: "soltero", label: "Soltero/a" },
+                    { value: "casado", label: "Casado/a" },
+                    { value: "union_de_hecho", label: "Unión de hecho" },
+                    { value: "divorciado", label: "Divorciado/a" },
+                    { value: "viudo", label: "Viudo/a" },
+                  ]}
+                />
+
+                <SliderField
+                  label="Edad"
+                  min={21}
+                  max={75}
+                  step={1}
+                  value={edad}
+                  onChange={setEdad}
+                  format={(v) => `${v} años`}
+                />
+
+                <SelectField
+                  label="Tipo de ingreso"
+                  value={tipoIngreso}
+                  onChange={setTipoIngreso}
+                  options={[
+                    {
+                      value: "Dependiente",
+                      label: "Relación de dependencia",
+                    },
+                    {
+                      value: "Independiente",
+                      label: "Independiente / actividad propia",
+                    },
+                    { value: "Mixto", label: "Mixto" },
+                  ]}
+                />
+
+                {(esDependiente || esMixto) && (
+                  <>
+                    <SectionTitle
+                      eyebrow="Ingresos dependientes"
+                      title="Tu estabilidad laboral"
+                    />
+
+                    <SelectField
+                      label="Tipo de contrato"
+                      value={tipoContrato}
+                      onChange={setTipoContrato}
+                      options={[
+                        { value: "indefinido", label: "Indefinido" },
+                        { value: "temporal", label: "Temporal" },
+                        {
+                          value: "servicios",
+                          label: "Servicios profesionales",
+                        },
+                      ]}
+                      helper="Algunos bancos son más favorables con contratos indefinidos."
+                    />
+
+                    <SliderField
+                      label="Años en tu trabajo actual"
+                      helper="Para ingresos dependientes normalmente se pide mínimo 1 año."
+                      min={0}
+                      max={40}
+                      step={1}
+                      value={aniosEstabilidad}
+                      onChange={setAniosEstabilidad}
+                      format={(v) => `${v} años`}
+                    />
+                  </>
+                )}
+
+                {(esIndependiente || esMixto) && (
+                  <>
+                    <SectionTitle
+                      eyebrow="Ingresos independientes"
+                      title="Tu trayectoria económica"
+                    />
+
+                    <SliderField
+                      label="Meses en tu actividad económica actual"
+                      helper="Para ingresos independientes normalmente se piden al menos 24 meses."
+                      min={0}
+                      max={240}
+                      step={1}
+                      value={mesesActividad}
+                      onChange={setMesesActividad}
+                      format={(v) => `${v} meses`}
+                    />
+
+                    <SelectField
+                      label="¿Cómo sustentas tus ingresos?"
+                      helper="Esto puede afectar la facilidad de aprobación."
+                      value={sustentoIndependiente}
+                      onChange={setSustentoIndependiente}
+                      options={[
+                        {
+                          value: "facturacion_ruc",
+                          label: "Facturación con RUC",
+                        },
+                        {
+                          value: "movimientos_bancarizados",
+                          label: "Ingresos bancarizados",
+                        },
+                        {
+                          value: "declaracion_sri",
+                          label: "Declaración SRI",
+                        },
+                        {
+                          value: "mixto",
+                          label: "Mixto",
+                        },
+                        {
+                          value: "informal",
+                          label: "No los puedo sustentar bien",
+                        },
+                      ]}
+                    />
+                  </>
+                )}
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <SectionTitle
+                  eyebrow="Paso 2"
+                  title="Tu capacidad mensual"
+                  subtitle="Aquí definimos cuánto podrías sostener de forma sana cada mes."
+                />
+
+                <SliderField
+                  label="Tu ingreso neto mensual"
+                  min={450}
+                  max={15000}
+                  step={50}
+                  value={ingreso}
+                  onChange={setIngreso}
+                  format={(v) => money(v)}
+                />
+
+                {esParejaFormal && (
+                  <SliderField
+                    label="Ingreso neto mensual de tu pareja"
+                    min={0}
+                    max={15000}
+                    step={50}
+                    value={ingresoPareja}
+                    onChange={setIngresoPareja}
+                    format={(v) => money(v)}
+                  />
+                )}
+
+                <SliderField
+                  label="Otras deudas mensuales"
+                  min={0}
+                  max={5000}
+                  step={50}
+                  value={deudas}
+                  onChange={setDeudas}
+                  format={(v) => money(v)}
+                />
+
+                <SelectField
+                  label="¿Estás afiliado al IESS?"
+                  value={afiliadoIESS}
+                  onChange={setAfiliadoIESS}
+                  options={[
+                    { value: "no", label: "No" },
+                    { value: "sí", label: "Sí" },
+                  ]}
+                />
+
+                {afiliadoBool && (
+                  <>
+                    <SectionTitle
+                      eyebrow="BIESS"
+                      title="Tus aportes"
+                      subtitle="Esto solo aplica si luego quieres evaluar una ruta BIESS."
+                    />
+
+                    <SliderField
+                      label="Aportes IESS totales"
+                      helper="Para BIESS suelen requerirse al menos 36 aportes totales."
+                      min={0}
+                      max={600}
+                      step={1}
+                      value={aportesTotales}
+                      onChange={setAportesTotales}
+                      format={(v) => `${v} meses`}
+                    />
+
+                    <SliderField
+                      label="Aportes IESS consecutivos"
+                      helper="Suelen pedir mínimo 13 aportes consecutivos."
+                      min={0}
+                      max={600}
+                      step={1}
+                      value={aportesConsecutivos}
+                      onChange={setAportesConsecutivos}
+                      format={(v) => `${v} meses`}
+                    />
+                  </>
+                )}
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <SectionTitle
+                  eyebrow="Paso 3"
+                  title="Tu punto de partida"
+                  subtitle="Primero define tu entrada, tu ciudad y si ya tienes una vivienda en mente."
+                />
+
+                <SelectField
+                  label="Ciudad donde quieres comprar"
+                  value={ciudadCompra}
+                  onChange={setCiudadCompra}
+                  options={CIUDADES_COMPRA}
+                  helper="Esto nos ayuda a darte una guía más útil según tu mercado objetivo."
+                />
+
+                <SelectField
+                  label="¿Ya tienes una vivienda o un rango en mente?"
+                  value={objetivoViviendaModo}
+                  onChange={setObjetivoViviendaModo}
+                  options={OBJETIVO_VIVIENDA_OPCIONES}
+                  helper="Si todavía no sabes el valor, no pasa nada. Primero calculamos qué sí podrías comprar."
+                />
+
+                {shouldAskTargetValue ? (
+                  <>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 12,
+                        marginBottom: 16,
+                      }}
+                    >
+                      <StatBox
+                        label="Valor objetivo"
+                        value={money(valorVivienda)}
+                      />
+                      <StatBox
+                        label="Entrada aprox."
+                        value={`${money(entrada)} (${entradaPct}%)`}
+                        accent
+                      />
+                    </div>
+
+                    <SliderField
+                      label={
+                        objetivoViviendaModo === "propiedad"
+                          ? "Valor aproximado de la propiedad (USD)"
+                          : "Valor aproximado del rango que te interesa (USD)"
+                      }
+                      min={30000}
+                      max={500000}
+                      step={1000}
+                      value={valorVivienda || "30000"}
+                      onChange={setValorVivienda}
+                      format={(v) => money(v)}
+                    />
+                  </>
+                ) : null}
+
+                <SliderField
+                  label="¿Cuánto tienes ahorrado hoy para empezar?"
+                  helper="Incluye ahorros, cesantía, fondos de reserva o dinero que sí podrías usar para tu compra."
+                  min={0}
+                  max={500000}
+                  step={500}
+                  value={entrada}
+                  onChange={setEntrada}
+                  format={(v) => money(v)}
+                />
+
+                <SliderField
+                  label="¿Cuánto podrías pagar al mes para completar la entrada?"
+                  helper="Esto nos ayuda a ver si podrías completar lo que te falta más adelante, sobre todo en proyectos en construcción."
+                  min={0}
+                  max={2000}
+                  step={50}
+                  value={capacidadEntradaMensual}
+                  onChange={setCapacidadEntradaMensual}
+                  format={(v) => money(v)}
+                />
+
+                <SectionTitle eyebrow="Condiciones" title="Tu situación actual" />
+
+                <SelectField
+                  label="¿Tienes actualmente una vivienda?"
+                  value={tieneVivienda}
+                  onChange={setTieneVivienda}
+                  options={[
+                    { value: "no", label: "No" },
+                    { value: "sí", label: "Sí" },
+                  ]}
+                />
+
+                <SelectField
+                  label="¿Es tu primera vivienda?"
+                  value={primeraVivienda}
+                  onChange={setPrimeraVivienda}
+                  options={[
+                    { value: "sí", label: "Sí" },
+                    { value: "no", label: "No" },
+                  ]}
+                />
+
+                <SelectField
+                  label="Estado de la vivienda"
+                  value={tipoVivienda}
+                  onChange={setTipoVivienda}
+                  options={[
+                    {
+                      value: "por_estrenar",
+                      label: "Por estrenar / proyecto nuevo",
+                    },
+                    { value: "usada", label: "Usada / segunda mano" },
+                  ]}
+                />
+
+                <SectionTitle
+                  eyebrow="Horizonte"
+                  title="¿En qué plazo te gustaría adquirir tu vivienda?"
+                />
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                  }}
+                >
+                  {HORIZONTE_OPCIONES.map((opt) => {
+                    const selected = horizonteCompra === opt.value;
+                    return (
+                      <StepButton
+                        key={opt.value}
+                        selected={selected}
+                        onClick={() => setHorizonteCompra(opt.value)}
+                      >
+                        {opt.label}
+                      </StepButton>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {step === 4 && (
+              <>
+               <SectionTitle
+  eyebrow="Paso 4"
+  title="Historial crediticio y estilo de hipoteca"
+  subtitle="Esto nos ayuda a estimar no solo tu capacidad de pago, sino también qué tan listo estaría tu perfil para una revisión bancaria."
+/>
+
+<SectionCard
+  style={{
+    marginTop: 0,
+    marginBottom: 16,
+    background: "rgba(2,6,23,0.20)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "none",
+  }}
+>
+  <SectionTitle
+    eyebrow="Validación crediticia"
+    title="Tu historial de pagos"
+    subtitle="Los bancos también revisan tu comportamiento de pago. Si no estás seguro, puedes marcarlo así y continuar."
+  />
+
+  <SelectField
+    label="¿Cómo consideras tu historial crediticio?"
+    value={creditHistoryStatus}
+    onChange={setCreditHistoryStatus}
+    options={[
+      {
+        value: "excellent",
+        label: "Excelente — siempre pago a tiempo",
+      },
+      {
+        value: "good",
+        label: "Bueno — he tenido atrasos pequeños",
+      },
+      {
+        value: "regular",
+        label: "Regular — he tenido atrasos importantes",
+      },
+      {
+        value: "complicated",
+        label: "Complicado — tengo deudas vencidas o reportes negativos",
+      },
+      {
+        value: "unknown",
+        label: "No estoy seguro",
+      },
+    ]}
+  />
+
+  <SelectField
+    label="¿Tienes actualmente alguna deuda vencida o en mora?"
+    value={hasActiveDelinquency}
+    onChange={handleActiveDelinquencyChange}
+    options={[
+      { value: "no", label: "No" },
+      { value: "yes", label: "Sí" },
+      { value: "unknown", label: "No estoy seguro" },
+    ]}
+  />
+
+  {hasActiveDelinquency === "yes" ? (
+    <SelectField
+      label="¿Hace cuánto está vencida aproximadamente?"
+      value={delinquencyRange}
+      onChange={setDelinquencyRange}
+      options={[
+        { value: "less_than_30", label: "Menos de 30 días" },
+        { value: "30_to_90", label: "Entre 30 y 90 días" },
+        { value: "more_than_90", label: "Más de 90 días" },
+        { value: "unknown", label: "No estoy seguro" },
+      ]}
+    />
+  ) : null}
+
+  <SelectField
+    label="¿Te han negado recientemente un crédito por historial crediticio?"
+    value={recentCreditDenied}
+    onChange={setRecentCreditDenied}
+    options={[
+      { value: "no", label: "No" },
+      { value: "yes", label: "Sí" },
+      { value: "unknown", label: "No estoy seguro" },
+    ]}
+  />
+
+  <SliderField
+    label="Score crediticio aproximado"
+    helper="Opcional. Si no lo conoces, déjalo en 0. Más adelante podremos ayudarte a interpretarlo."
+    min={0}
+    max={1000}
+    step={10}
+    value={declaredCreditScore || "0"}
+    onChange={setDeclaredCreditScore}
+    format={(v) => (Number(v) > 0 ? `${v}` : "No lo sé")}
+  />
+</SectionCard>
+
+<SectionTitle
+  eyebrow="Preferencia de pago"
+  title="Tu estilo de hipoteca"
+  subtitle="Esto no define una oferta final, pero nos ayuda a recomendarte una ruta más alineada con lo que prefieres."
+/>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  {PREFERENCIA_PAGO_HIPOTECA_OPCIONES.map((opt) => {
+                    const selected = preferenciaPagoHipoteca === opt.value;
+
+                    return (
+                      <PaymentPreferenceCard
+                        key={opt.value}
+                        selected={selected}
+                        title={opt.title}
+                        description={opt.description}
+                        onClick={() => setPreferenciaPagoHipoteca(opt.value)}
+                      />
+                    );
+                  })}
+                </div>
+
+                <SectionCard
+                  style={{
+                    marginTop: 16,
+                    background: "rgba(2,6,23,0.20)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    boxShadow: "none",
+                  }}
+                >
+                  <SectionTitle
+                    title="Resumen antes de calcular"
+                    subtitle="Con esto estimaremos capacidad, cuota y rutas hipotecarias compatibles."
+                  />
+
+                  <div
+                    style={{
+                      fontSize: 13,
+                      opacity: 0.82,
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    Ciudad objetivo:{" "}
+                    <strong style={{ color: "white" }}>
+                      {ciudadCompra || "—"}
+                    </strong>
+                  </div>
+
+                  {shouldAskTargetValue ? (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontSize: 13,
+                        opacity: 0.82,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      Monto referencial a analizar:{" "}
+                      <strong style={{ color: "white" }}>
+                        {money(toNum(valorVivienda) - toNum(entrada))}
+                      </strong>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontSize: 13,
+                        opacity: 0.82,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      Primero estimaremos tu capacidad máxima de compra con tu
+                      perfil actual.
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 13,
+                      opacity: 0.82,
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    Capacidad mensual para completar entrada:{" "}
+                    <strong style={{ color: "white" }}>
+                      {money(toNum(capacidadEntradaMensual))}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 13,
+                      opacity: 0.82,
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    Preferencia de pago:{" "}
+                    <strong style={{ color: "white" }}>
+                      {getPaymentPreferenceTitle(preferenciaPagoHipoteca)}
+                    </strong>
+
+                    <div
+  style={{
+    marginTop: 8,
+    fontSize: 13,
+    opacity: 0.82,
+    lineHeight: 1.55,
+  }}
+>
+  Historial crediticio declarado:{" "}
+  <strong style={{ color: "white" }}>
+    {creditHistoryStatus === "excellent"
+      ? "Excelente"
+      : creditHistoryStatus === "good"
+      ? "Bueno"
+      : creditHistoryStatus === "regular"
+      ? "Regular"
+      : creditHistoryStatus === "complicated"
+      ? "Complicado"
+      : "No estoy seguro"}
+  </strong>
+</div>
+                  </div>
+                </SectionCard>
+
+                <div
+                  style={{
+                    marginTop: 14,
+                    fontSize: 12,
+                    opacity: 0.72,
+                    lineHeight: 1.4,
+                    color: "rgba(148,163,184,0.92)",
+                  }}
+                >
+                  Esta preferencia no garantiza un plazo específico. HabitaLibre
+                  la usa para ordenar y explicar rutas dentro de las reglas
+                  reales de cada producto hipotecario.
+                </div>
+              </>
+            )}
+
+            {err ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 12,
+                  borderRadius: 16,
+                  background: "rgba(244,63,94,0.12)",
+                  border: "1px solid rgba(244,63,94,0.30)",
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                {err}
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                marginTop: 28,
+                marginBottom: 18,
+                display: "flex",
+                gap: 10,
+                position: "relative",
+                zIndex: 2,
+              }}
+            >
+              {step > 1 ? (
+                <button
+                  onClick={back}
+                  style={{
+                    flex: 1,
+                    padding: 14,
+                    borderRadius: 18,
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    background: "rgba(255,255,255,0.06)",
+                    color: "white",
+                    fontWeight: 900,
+                    fontSize: 14,
+                  }}
+                >
+                  Atrás
+                </button>
+              ) : null}
+
+              {step < TOTAL_STEPS ? (
+                <button
+                  onClick={next}
+                  style={{
+                    flex: 1,
+                    padding: 14,
+                    borderRadius: 18,
+                    border: "none",
+                    background: "#25d3a6",
+                    color: "#052019",
+                    fontWeight: 900,
+                    fontSize: 14,
+                  }}
+                >
+                  Siguiente
+                </button>
+              ) : (
+                <button
+                  onClick={handleCalcular}
+                  disabled={loading}
+                  style={{
+                    flex: 1,
+                    minHeight: 58,
+                    padding: "16px 18px",
+                    borderRadius: 20,
+                    border: "none",
+                    background: "#25d3a6",
+                    color: "#052019",
+                    fontWeight: 950,
+                    fontSize: 16,
+                    opacity: loading ? 0.7 : 1,
+                    boxShadow: "0 12px 28px rgba(37,211,166,0.18)",
+                  }}
+                >
+                  {loading
+                    ? "Analizando…"
+                    : hasResult
+                    ? "Actualizar resultado"
+                    : getCustomerToken()
+                    ? "Ver resultados"
+                    : "Entrar para ver resultados"}
+                </button>
+              )}
+            </div>
+          </SectionCard>
+        </>
+      ) : null}
 
       <div
         style={{

@@ -2,235 +2,256 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setSeenOnboarding } from "../lib/appOnboarding.js";
 
+import onboarding1 from "../assets/onboarding/onboarding-1.png";
+import onboarding2 from "../assets/onboarding/onboarding-2.png";
+import onboarding3 from "../assets/onboarding/onboarding-3.png";
+import onboarding4 from "../assets/onboarding/onboarding-4.png";
+
 const slides = [
   {
     id: 1,
     accent: "Tu punto de partida",
-    title: "Empieza entendiendo tu capacidad",
-    body: "Revisa tu perfil financiero, tu capacidad estimada y tu punto de partida.",
-    cards: [
-      { label: "Preparación", value: "Más claridad" },
-      { label: "Enfoque", value: "Primer paso correcto" },
-    ],
+    title: "Descubre cuánto podrías comprar",
+    body: "Conoce tu capacidad estimada y entiende desde dónde empieza tu camino.",
+    image: onboarding1,
+    imagePosition: "center 67%",
   },
   {
     id: 2,
     accent: "Claridad antes de decidir",
-    title: "Revisa si hoy ya estás listo",
-    body: "La app analiza tu perfil y te muestra si ya tienes una ruta posible o qué te falta para avanzar.",
-    cards: [
-      { label: "Estado actual", value: "Listo hoy o cerca" },
-      { label: "Diagnóstico", value: "Qué te falta" },
-    ],
+    title: "Encuentra tu mejor ruta hipotecaria",
+    body: "Comparamos rutas como VIS, VIP, BIESS y banca privada según tu perfil.",
+    image: onboarding2,
+    imagePosition: "center 58%",
   },
   {
     id: 3,
-    accent: "Datos que sí te sirven",
-    title: "Ve tu capacidad estimada",
-    body: "Revisa un rango estimado, una cuota de referencia y una meta posible según tu perfil.",
-    cards: [
-      { label: "Capacidad real", value: "Cuota y rango" },
-      { label: "Meta", value: "Objetivo viable" },
-    ],
+    accent: "Opciones que sí encajan",
+    title: "Explora propiedades compatibles",
+    body: "Mira viviendas alineadas con tu capacidad, cuota y entrada disponible.",
+    image: onboarding3,
+    imagePosition: "center 58%",
   },
   {
     id: 4,
     accent: "Tu camino, paso a paso",
-    title: "Sigue una ruta personalizada",
-    body: "Guarda tu progreso y revisa los siguientes pasos según tu perfil y tu avance.",
-    cards: [
-      { label: "Progreso", value: "Guardado" },
-      { label: "Próximo paso", value: "Ruta personalizada" },
-    ],
+    title: "Avanza con una ruta clara",
+    body: "Guarda tu progreso y sigue los próximos pasos según tu perfil.",
+    image: onboarding4,
+    imagePosition: "center 58%",
   },
 ];
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    minHeight: "100dvh",
+    width: "100%",
     backgroundColor: "#081120",
     backgroundImage:
-      "radial-gradient(circle at top, rgba(17,58,130,0.22) 0%, rgba(8,17,32,1) 36%, rgba(3,9,22,1) 100%)",
+      "radial-gradient(900px 620px at 50% 18%, rgba(45,212,191,0.12), transparent 56%), radial-gradient(circle at top, rgba(17,58,130,0.20) 0%, rgba(8,17,32,1) 36%, rgba(3,9,22,1) 100%)",
     color: "#FFFFFF",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
-    padding: "10px 20px 30px",
+    boxSizing: "border-box",
+    padding:
+      "calc(env(safe-area-inset-top, 0px) + 18px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px)",
+    overflow: "hidden",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif',
   },
+
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    paddingTop: "max(18px, env(safe-area-inset-top))",
     gap: 16,
+    flexShrink: 0,
   },
+
   brandWrap: {
     display: "flex",
     flexDirection: "column",
     gap: 10,
     minWidth: 0,
   },
+
   logoFrame: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
+    width: 58,
+    height: 58,
+    borderRadius: 21,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)",
-    border: "1px solid rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.22)",
     overflow: "hidden",
   },
+
   logo: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
     display: "block",
   },
+
   brandText: {
     display: "flex",
     flexDirection: "column",
     gap: 6,
   },
+
   fallbackWordmark: {
-    fontSize: 22,
-    fontWeight: 900,
-    letterSpacing: "-0.03em",
+    fontSize: 23,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
     lineHeight: 1,
     color: "#FFFFFF",
   },
+
   tagline: {
     fontSize: 14,
     color: "rgba(255,255,255,0.70)",
     lineHeight: 1.35,
-    maxWidth: 210,
+    maxWidth: 250,
   },
+
   skipBtn: {
-    marginTop: 6,
+    marginTop: 8,
     background: "transparent",
     border: "none",
     color: "rgba(255,255,255,0.88)",
     fontSize: 16,
-    fontWeight: 700,
+    fontWeight: 850,
     cursor: "pointer",
-    padding: "6px 4px",
+    padding: "8px 4px 8px 10px",
     flexShrink: 0,
   },
-centerWrap: {
-  flex: 1,
-  display: "flex",
-  alignItems: "center",
-  paddingTop: 4,
-  paddingBottom: 8,
-},
+
+  centerWrap: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    paddingTop: 14,
+    paddingBottom: 10,
+    minHeight: 0,
+  },
+
   centerInner: {
     width: "100%",
     maxWidth: 560,
     margin: "0 auto",
   },
-  card: {
-    width: "100%",
-    minHeight: 355,
-    borderRadius: 28,
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "0 22px 60px rgba(0,0,0,0.24)",
-    padding: 28,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    backdropFilter: "blur(10px)",
+
+  slideContent: {
+    animation: "hlOnboardingSlideIn 260ms ease both",
   },
+
+  heroFrame: {
+    width: "100%",
+height: "min(37vh, 335px)",
+minHeight: 265,
+    borderRadius: 34,
+    overflow: "hidden",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(3,9,22,0.30))",
+    border: "1px solid rgba(255,255,255,0.11)",
+    boxShadow: "0 28px 70px rgba(0,0,0,0.34)",
+    position: "relative",
+  },
+
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+
+  textBlock: {
+    marginTop: 18,
+  },
+
   accentPill: {
     display: "inline-flex",
+    alignItems: "center",
     padding: "8px 14px",
     borderRadius: 999,
     background: "rgba(143,227,212,0.14)",
+    border: "1px solid rgba(143,227,212,0.18)",
     color: "#8FE3D4",
-    fontWeight: 800,
+    fontWeight: 900,
     fontSize: 13,
-    marginBottom: 20,
+    marginBottom: 12,
   },
+
   title: {
     margin: 0,
     fontSize: 30,
-    lineHeight: 1.08,
-    fontWeight: 900,
-    letterSpacing: "-0.035em",
+    lineHeight: 1.04,
+    fontWeight: 980,
+    letterSpacing: "-0.045em",
+    maxWidth: 430,
   },
+
   body: {
-    marginTop: 18,
+    marginTop: 11,
     marginBottom: 0,
     fontSize: 16,
-    lineHeight: 1.7,
-    color: "rgba(255,255,255,0.78)",
+    lineHeight: 1.42,
+    color: "rgba(255,255,255,0.76)",
+    maxWidth: 420,
   },
-  cardsGrid: {
-    marginTop: 24,
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 12,
-  },
-  statCard: {
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    padding: 16,
-    minHeight: 108,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-  },
-  statLabel: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.62)",
-  },
-  statValue: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: 800,
-    lineHeight: 1.25,
-  },
+
   footer: {
     width: "100%",
     maxWidth: 560,
     margin: "0 auto",
+    flexShrink: 0,
   },
+
   dots: {
     display: "flex",
     justifyContent: "center",
+    alignItems: "center",
     gap: 8,
-    marginBottom: 22,
+    marginBottom: 18,
   },
-  dot: {
+
+  dotButton: {
     height: 8,
     borderRadius: 999,
+    border: "none",
     transition: "all 0.25s ease",
+    padding: 0,
+    cursor: "pointer",
   },
+
   primaryBtn: {
     width: "100%",
-    height: 58,
+    height: 60,
     border: "none",
-    borderRadius: 20,
-    background: "#8FE3D4",
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, rgba(143,227,212,1), rgba(45,212,191,1))",
     color: "#081120",
     fontSize: 18,
-    fontWeight: 900,
+    fontWeight: 950,
     cursor: "pointer",
-    boxShadow: "0 12px 32px rgba(143,227,212,0.20)",
+    boxShadow: "0 14px 34px rgba(45,212,191,0.22)",
   },
+
   secondaryBtn: {
     width: "100%",
-    marginTop: 12,
-    height: 54,
-    borderRadius: 20,
+    marginTop: 11,
+    height: 56,
+    borderRadius: 21,
     border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.04)",
+    background: "rgba(255,255,255,0.035)",
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: 800,
+    fontWeight: 850,
     cursor: "pointer",
   },
 };
@@ -249,15 +270,11 @@ function HeaderBrand() {
             onError={() => setLogoFailed(true)}
           />
         </div>
-      ) : (
-        <div style={styles.brandText}>
-          <div style={styles.fallbackWordmark}>HabitaLibre</div>
-        </div>
-      )}
+      ) : null}
 
       <div style={styles.brandText}>
-        {!logoFailed && <div style={styles.fallbackWordmark}>HabitaLibre</div>}
-      <div style={styles.tagline}>Tu camino a tu primera vivienda</div>
+        <div style={styles.fallbackWordmark}>HabitaLibre</div>
+        <div style={styles.tagline}>Tu camino a tu primera vivienda</div>
       </div>
     </div>
   );
@@ -276,6 +293,7 @@ export default function Onboarding() {
       navigate("/register");
       return;
     }
+
     setCurrentIndex((prev) => prev + 1);
   };
 
@@ -303,22 +321,25 @@ export default function Onboarding() {
 
       <div style={styles.centerWrap}>
         <div style={styles.centerInner}>
-          <div style={styles.card}>
-            <div>
+          <div key={currentSlide.id} style={styles.slideContent}>
+            <div style={styles.heroFrame}>
+              <img
+                src={currentSlide.image}
+                alt=""
+                draggable={false}
+                style={{
+                  ...styles.heroImage,
+                  objectPosition: currentSlide.imagePosition || "center 58%",
+                }}
+              />
+            </div>
+
+            <div style={styles.textBlock}>
               <div style={styles.accentPill}>{currentSlide.accent}</div>
 
               <h1 style={styles.title}>{currentSlide.title}</h1>
 
               <p style={styles.body}>{currentSlide.body}</p>
-            </div>
-
-            <div style={styles.cardsGrid}>
-              {currentSlide.cards.map((item) => (
-                <div key={item.label} style={styles.statCard}>
-                  <div style={styles.statLabel}>{item.label}</div>
-                  <div style={styles.statValue}>{item.value}</div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
@@ -326,32 +347,50 @@ export default function Onboarding() {
 
       <div style={styles.footer}>
         <div style={styles.dots}>
-          {slides.map((slide, idx) => (
-            <div
-              key={slide.id}
-              style={{
-                ...styles.dot,
-                width: idx === currentIndex ? 28 : 8,
-                background:
-                  idx === currentIndex
+          {slides.map((slide, idx) => {
+            const active = idx === currentIndex;
+
+            return (
+              <button
+                key={slide.id}
+                type="button"
+                onClick={() => setCurrentIndex(idx)}
+                aria-label={`Ir al slide ${idx + 1}`}
+                style={{
+                  ...styles.dotButton,
+                  width: active ? 30 : 8,
+                  background: active
                     ? "#8FE3D4"
-                    : "rgba(255,255,255,0.20)",
-              }}
-            />
-          ))}
+                    : "rgba(255,255,255,0.22)",
+                }}
+              />
+            );
+          })}
         </div>
 
         <button onClick={handleNext} style={styles.primaryBtn}>
           {isLast ? "Empezar" : "Continuar"}
         </button>
 
-        <button
-          onClick={handleAlreadyHaveAccount}
-          style={styles.secondaryBtn}
-        >
+        <button onClick={handleAlreadyHaveAccount} style={styles.secondaryBtn}>
           Ya tengo cuenta
         </button>
       </div>
+
+      <style>
+        {`
+          @keyframes hlOnboardingSlideIn {
+            from {
+              opacity: 0;
+              transform: translateY(10px) scale(0.985);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
+          }
+        `}
+      </style>
     </div>
   );
 }
