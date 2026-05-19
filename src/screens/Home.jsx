@@ -1,3 +1,4 @@
+// src/screens/Home.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -8,16 +9,16 @@ import {
   Target,
   MapPin,
   Lock,
-  ChevronDown,
   Calculator,
   Building2,
   ShieldCheck,
   ArrowRight,
+  FileText,
+  KeyRound,
+  Landmark,
 } from "lucide-react";
-import { summarizeProfile } from "../lib/profileSummary.js";
+
 import { moneyUSD } from "../lib/money";
-import { apiGet } from "../lib/api";
-import { buildPlan } from "../lib/planEngine.js";
 import { getCustomerToken, getCustomer } from "../lib/customerSession.js";
 import { fetchLatestSnapshot } from "../lib/snapshots.js";
 
@@ -34,35 +35,445 @@ import {
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
+const LS_DOCS_CHECKLIST = "hl_docs_checklist_v1";
+const LS_SELECTED_MORTGAGE_ROUTE = "hl_selected_mortgage_route_v1";
 
 const COPY = {
-  appSubtitle:
-    "Descubre cuánto podrías comprar hoy y cuál debería ser tu siguiente paso.",
-  guideTag: "Tu guía",
-  guideResultTag: "Tu resultado",
-
-  scoreTitle: "Tu perfil para comprar casa",
-  scoreLocked: "Completa tu simulación para ver tu resultado",
-  scoreReady: "Listo",
-  scoreMissing: "Falta info",
-
-  probabilityTitle: "Qué tan sólido se ve hoy tu perfil",
+  connecting: "Recuperando tu camino…",
+  scoreReady: "Estimado",
+  probabilityTitle: "Compatibilidad estimada de tu perfil",
   probabilityFallback: "Estimación",
-
-  quotaInsightLabel: "Pago mensual aprox.",
-  quotaInsightHint: "Una referencia mensual para este escenario.",
-
-  rateInsightLabel: "Interés aprox.",
-  rateInsightHint: "Tasa estimada para este escenario.",
-
-  amountInsightLabel: "Monto de préstamo",
-  amountInsightHint: "Monto estimado del crédito para este escenario.",
-
-  limitInsightLabel: "Factor limitante",
-  limitInsightHint: "Lo que más está limitando tu capacidad hoy.",
-
-  connecting: "Conectando con HabitaLibre…",
+  quotaInsightLabel: "Cuota referencial",
+  rateInsightLabel: "Tasa referencial",
+  amountInsightLabel: "Monto estimado a financiar",
+  limitInsightLabel: "Variable principal",
 };
+
+const isFiniteNum = (v) => typeof v === "number" && Number.isFinite(v);
+
+function toNum(v) {
+  if (isFiniteNum(v)) return v;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function moneySafe(v) {
+  const n = toNum(v);
+  return n == null ? "—" : moneyUSD(n);
+}
+
+function safePctFromRate(rate) {
+  const x = Number(rate);
+  if (!Number.isFinite(x)) return "—";
+  const pctRate = x <= 1 ? x * 100 : x;
+  return `${pctRate.toFixed(2)}%`;
+}
+
+function normalizeLimitingFactor(v) {
+  const s = String(v || "").toLowerCase();
+
+  if (s === "cuota") return "Cuota";
+  if (s === "entrada") return "Entrada";
+  if (s === "programa") return "Programa";
+  if (s === "deudas") return "Deudas";
+  if (s === "rango_minimo_producto") return "Rango mínimo";
+
+  return "—";
+}
+
+function loadJSON(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveJSON(key, val) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
+function getStorageOwnerEmail() {
+  try {
+    const email = String(getCustomer()?.email || "").trim().toLowerCase();
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
+function loadOwnedData(key) {
+  const ownerEmail = getStorageOwnerEmail();
+  const envelope = loadJSON(key);
+
+  if (!envelope) return null;
+
+  if (envelope?.ownerEmail && "data" in envelope) {
+    if (
+      ownerEmail &&
+      String(envelope.ownerEmail).trim().toLowerCase() === ownerEmail
+    ) {
+      return envelope.data ?? null;
+    }
+
+    return null;
+  }
+
+  return envelope;
+}
+
+function clearLocalScenarioState() {
+  try {
+    localStorage.removeItem(LS_SNAPSHOT);
+    localStorage.removeItem(LS_JOURNEY);
+    localStorage.removeItem(LS_SELECTED_PROPERTY);
+    localStorage.removeItem(LS_DOCS_CHECKLIST);
+    localStorage.removeItem(LS_SELECTED_MORTGAGE_ROUTE);
+  } catch {}
+}
+
+function pickMatcherFirst(snapshot, keys) {
+  if (!snapshot) return null;
+
+  for (const k of keys) {
+    if (snapshot?.[k] != null) return snapshot[k];
+  }
+
+  for (const k of keys) {
+    if (snapshot?.output?.[k] != null) return snapshot.output[k];
+  }
+
+  return null;
+}
+
+function parseAnyToPctUniversal(x) {
+  const clampPct = (p) => {
+    if (!Number.isFinite(p)) return null;
+    return Math.max(0, Math.min(100, p));
+  };
+
+  if (x == null) return null;
+
+  if (typeof x === "number") {
+    return clampPct(x <= 1 ? x * 100 : x);
+  }
+
+  if (typeof x === "string") {
+    const s0 = x.trim();
+
+    if (!s0) return null;
+
+    const lower = s0.toLowerCase();
+
+    if (lower === "alta") return 85;
+    if (lower === "media") return 60;
+    if (lower === "baja") return 35;
+    if (lower === "muy baja") return 15;
+    if (lower.includes("sin oferta")) return 0;
+
+    const normalized =
+      s0.includes(",") && !s0.includes(".") ? s0.replace(",", ".") : s0;
+
+    const match = normalized.match(/(\d+(\.\d+)?)/);
+
+    if (!match) return null;
+
+    const n = Number(match[1]);
+
+    if (!Number.isFinite(n)) return null;
+
+    return clampPct(normalized.includes("%") ? n : n <= 1 ? n * 100 : n);
+  }
+
+  if (typeof x === "object") {
+    return (
+      parseAnyToPctUniversal(x.pct) ??
+      parseAnyToPctUniversal(x.value) ??
+      parseAnyToPctUniversal(x.total) ??
+      parseAnyToPctUniversal(x.probabilidad) ??
+      parseAnyToPctUniversal(x.prob) ??
+      parseAnyToPctUniversal(x.score)
+    );
+  }
+
+  return null;
+}
+
+function normalizeProbability(prob, fallbackScore = null) {
+  if (prob != null) {
+    if (typeof prob === "string") {
+      const s = prob.trim().toLowerCase();
+
+      if (s === "alta") return { label: "Alta", pct: 85 };
+      if (s === "media") return { label: "Media", pct: 60 };
+      if (s === "baja") return { label: "Baja", pct: 35 };
+      if (s === "muy baja") return { label: "Muy baja", pct: 15 };
+      if (s.includes("sin oferta")) {
+        return { label: "Sin ruta estimada hoy", pct: 0 };
+      }
+    }
+
+    const pctValue = parseAnyToPctUniversal(prob);
+
+    if (pctValue != null) {
+      return { label: `${Math.round(pctValue)}%`, pct: pctValue };
+    }
+  }
+
+  const s = Number(fallbackScore);
+
+  if (Number.isFinite(s)) {
+    const pct =
+      s >= 0 && s <= 100
+        ? Math.max(0, Math.min(100, s))
+        : Math.max(0, Math.min(100, ((s - 300) / (850 - 300)) * 100));
+
+    return { label: `${Math.round(pct)}%`, pct };
+  }
+
+  return { label: COPY.probabilityFallback, pct: null };
+}
+
+function hasCompletedEvaluation(snapshot) {
+  if (!snapshot) return false;
+
+  const input =
+    snapshot?.input ||
+    snapshot?.perfilInput ||
+    snapshot?.__entrada ||
+    snapshot?.inputNormalizado ||
+    snapshot?.output?.input ||
+    snapshot?.output?.perfilInput ||
+    snapshot?.output?.__entrada ||
+    snapshot?.output?.inputNormalizado ||
+    null;
+
+  const ingreso =
+    toNum(input?.ingresoNetoMensual) ??
+    toNum(input?.ingreso) ??
+    toNum(snapshot?.ingresoNetoMensual) ??
+    toNum(snapshot?.ingreso) ??
+    toNum(snapshot?.output?.ingresoNetoMensual) ??
+    toNum(snapshot?.output?.ingreso) ??
+    null;
+
+  const tipoIngreso =
+    input?.tipoIngreso ||
+    snapshot?.tipoIngreso ||
+    snapshot?.output?.tipoIngreso ||
+    null;
+
+  const hasValidIncome = ingreso != null && ingreso > 0;
+  const hasValidIncomeType =
+    tipoIngreso != null && String(tipoIngreso).trim() !== "";
+
+  const hasResultFlag =
+    snapshot?.hasResultado === true ||
+    snapshot?.completed === true ||
+    snapshot?.unlocked === true ||
+    snapshot?.ok === true ||
+    snapshot?.output?.hasResultado === true ||
+    snapshot?.output?.completed === true ||
+    snapshot?.output?.unlocked === true ||
+    snapshot?.output?.ok === true;
+
+  const hasFinancialNumbers =
+    toNum(snapshot?.precioMaxVivienda) > 0 ||
+    toNum(snapshot?.maxCompra) > 0 ||
+    toNum(snapshot?.montoMaximo) > 0 ||
+    toNum(snapshot?.cuotaEstimada) > 0 ||
+    toNum(snapshot?.cuotaMensual) > 0 ||
+    toNum(snapshot?.output?.precioMaxVivienda) > 0 ||
+    toNum(snapshot?.output?.maxCompra) > 0 ||
+    toNum(snapshot?.output?.montoMaximo) > 0 ||
+    toNum(snapshot?.output?.cuotaEstimada) > 0 ||
+    toNum(snapshot?.output?.cuotaMensual) > 0;
+
+  const hasMortgageOrRoute =
+    snapshot?.bestMortgage != null ||
+    snapshot?.output?.bestMortgage != null ||
+    snapshot?.fallbackRecommendation != null ||
+    snapshot?.output?.fallbackRecommendation != null ||
+    Array.isArray(snapshot?.rankedMortgages) ||
+    Array.isArray(snapshot?.output?.rankedMortgages) ||
+    Array.isArray(snapshot?.scenarios) ||
+    Array.isArray(snapshot?.output?.scenarios) ||
+    snapshot?.financialCapacity != null ||
+    snapshot?.output?.financialCapacity != null ||
+    snapshot?.homeRecommendation != null ||
+    snapshot?.output?.homeRecommendation != null;
+
+  return (
+    hasValidIncome &&
+    hasValidIncomeType &&
+    hasResultFlag &&
+    (hasFinancialNumbers || hasMortgageOrRoute)
+  );
+}
+
+function snapshotLooksValid(snapshot) {
+  return hasCompletedEvaluation(snapshot);
+}
+
+function unwrapRemoteSnapshot(res) {
+  if (!res) return null;
+
+  const candidate =
+    res?.snapshot ||
+    res?.data?.snapshot ||
+    res?.data ||
+    res?.latestSnapshot ||
+    res?.latest ||
+    res?.item ||
+    res;
+
+  if (!candidate || typeof candidate !== "object") return null;
+
+  if (candidate?.output && typeof candidate.output === "object") {
+    return {
+      ...candidate.output,
+      input:
+        candidate.input ||
+        candidate.output.input ||
+        candidate.output.perfilInput,
+      perfilInput:
+        candidate.perfilInput ||
+        candidate.output.perfilInput ||
+        candidate.input ||
+        candidate.output.input,
+      __entrada:
+        candidate.__entrada ||
+        candidate.output.__entrada ||
+        candidate.input ||
+        candidate.output.input,
+      createdAt: candidate.createdAt || candidate.output.createdAt,
+      updatedAt: candidate.updatedAt || candidate.output.updatedAt,
+      _id: candidate._id || candidate.output._id,
+    };
+  }
+
+  return candidate;
+}
+
+function getFirstAlternative(homeRecommendation, kind = null) {
+  const alternatives = Array.isArray(homeRecommendation?.alternatives)
+    ? homeRecommendation.alternatives
+    : [];
+
+  if (!kind) return alternatives[0] || null;
+
+  return alternatives.find((a) => a?.kind === kind) || null;
+}
+
+function getHomeRecommendationType(homeRecommendation, readinessStatus) {
+  return (
+    homeRecommendation?.type ||
+    readinessStatus ||
+    "unknown"
+  );
+}
+
+function isCreditRepairState({ readinessStatus, homeRecommendation, creditAssessment }) {
+  return (
+    readinessStatus === "credit_repair_needed" ||
+    homeRecommendation?.type === "credit_repair_needed" ||
+    creditAssessment?.blocksBankSubmission === true
+  );
+}
+
+function isFutureRouteState({
+  hasImmediateViableMortgage,
+  plannedEntryMax,
+  homeRecommendation,
+}) {
+  if (hasImmediateViableMortgage) return false;
+
+  if (homeRecommendation?.type === "future_entry_route") return true;
+
+  const futureAlt = getFirstAlternative(homeRecommendation, "entry_installments");
+
+  return plannedEntryMax != null && plannedEntryMax > 0 && !!futureAlt;
+}
+
+function getPrimaryRangeLabel({
+  hasImmediateViableMortgage,
+  isFutureRoute,
+  hasCreditBlocker,
+  hasSubmittedCase,
+}) {
+  if (hasSubmittedCase) return "Rango guardado";
+  if (hasCreditBlocker) return "Rango referencial";
+  if (hasImmediateViableMortgage) return "Tu rango estimado hoy";
+  if (isFutureRoute) return "Ruta futura estimada";
+  return "Orientación actual";
+}
+
+function getPrimaryRangeDescription({
+  hasImmediateViableMortgage,
+  isFutureRoute,
+  hasCreditBlocker,
+}) {
+  if (hasCreditBlocker) {
+    return "Rango financiero referencial. Historial financiero declarado por revisar.";
+  }
+
+  if (hasImmediateViableMortgage) {
+    return "Rango referencial según tus datos actuales.";
+  }
+
+  if (isFutureRoute) {
+    return "Rango referencial que podrías construir si completas tu entrada durante obra.";
+  }
+
+  return "Con los datos actuales, todavía no aparece una ruta hipotecaria referencial clara.";
+}
+
+function useFadeIn(delay = 0) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), delay);
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  return {
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateY(0px)" : "translateY(10px)",
+    transition: "opacity 0.45s ease, transform 0.45s ease",
+  };
+}
+
+const visibleInViewStyle = {
+  opacity: 1,
+  transform: "translateY(0px)",
+  transition: "opacity 0.5s ease, transform 0.5s ease",
+};
+
+function FinancialDisclaimer({ compact = false, style = {} }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: compact ? 10.5 : 11,
+        lineHeight: 1.42,
+        ...style,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Las cifras mostradas son estimaciones para orientación de compra de vivienda. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de entidades externas reguladas."}
+    </div>
+  );
+}
 
 function ProbabilityBar({ valuePct, hint, valueText = null }) {
   const v =
@@ -81,6 +492,7 @@ function ProbabilityBar({ valuePct, hint, valueText = null }) {
         >
           {COPY.probabilityTitle}
         </div>
+
         <div style={{ fontSize: 12, opacity: 0.95, fontWeight: 950 }}>
           {valueText || (v == null ? "—" : `${Math.round(v)}%`)}
         </div>
@@ -109,103 +521,12 @@ function ProbabilityBar({ valuePct, hint, valueText = null }) {
   );
 }
 
-function loadJSON(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveJSON(key, val) {
-  try {
-    localStorage.setItem(key, JSON.stringify(val));
-  } catch {}
-}
-
-function clearLocalScenarioState() {
-  try {
-    localStorage.removeItem(LS_SNAPSHOT);
-    localStorage.removeItem(LS_JOURNEY);
-    localStorage.removeItem(LS_SELECTED_PROPERTY);
-  } catch {}
-}
-
-function getStorageOwnerEmail() {
-  try {
-    const email = String(getCustomer()?.email || "")
-      .trim()
-      .toLowerCase();
-    return email || null;
-  } catch {
-    return null;
-  }
-}
-
-function snapshotLooksValid(snap) {
-  return Boolean(
-    snap?.unlocked === true ||
-      snap?.output?.unlocked === true ||
-      snap?.ok === true ||
-      snap?.output?.ok === true ||
-      snap?.score != null ||
-      snap?.output?.score != null ||
-      snap?.financialCapacity?.estimatedMaxPropertyValue != null ||
-      snap?.output?.financialCapacity?.estimatedMaxPropertyValue != null
-  );
-}
-
-function InsightGrid({ items, cols = 2 }) {
-  if (!items?.length) return null;
-
-  return (
-    <div
-      style={{
-        marginTop: 12,
-        display: "grid",
-        gridTemplateColumns: cols === 3 ? "1fr 1fr 1fr" : "1fr 1fr",
-        gap: 10,
-      }}
-    >
-      {items.slice(0, 4).map((it) => (
-        <div
-          key={it.id}
-          style={{
-            padding: 12,
-            borderRadius: 16,
-            border: "1px solid rgba(148,163,184,0.16)",
-            background: "rgba(2,6,23,0.18)",
-          }}
-        >
-          <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)" }}>
-            {it.label}
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 950 }}>
-            {it.value}
-          </div>
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 12,
-              color: "rgba(148,163,184,0.90)",
-              lineHeight: 1.25,
-            }}
-          >
-            {it.hint}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SoftMetric({ label, value, hint }) {
+function MetricCard({ label, value, hint = null }) {
   return (
     <div
       style={{
         padding: 12,
-        borderRadius: 14,
+        borderRadius: 16,
         border: "1px solid rgba(148,163,184,0.16)",
         background: "rgba(2,6,23,0.18)",
       }}
@@ -213,14 +534,18 @@ function SoftMetric({ label, value, hint }) {
       <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)" }}>
         {label}
       </div>
-      <div style={{ marginTop: 6, fontSize: 18, fontWeight: 980 }}>{value}</div>
+
+      <div style={{ marginTop: 6, fontSize: 18, fontWeight: 950 }}>
+        {value}
+      </div>
+
       {hint ? (
         <div
           style={{
             marginTop: 6,
             fontSize: 12,
             color: "rgba(148,163,184,0.90)",
-            lineHeight: 1.3,
+            lineHeight: 1.25,
           }}
         >
           {hint}
@@ -230,62 +555,489 @@ function SoftMetric({ label, value, hint }) {
   );
 }
 
-function CreditValidationCard({
-  creditAssessment,
-  readinessStatus,
+function InsightGrid({ items }) {
+  if (!items?.length) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 10,
+      }}
+    >
+      {items.slice(0, 4).map((item) => (
+        <MetricCard
+          key={item.id}
+          label={item.label}
+          value={item.value}
+          hint={item.hint}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BenefitCard({ icon, title, body }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        borderRadius: 16,
+        border: "1px solid rgba(148,163,184,0.14)",
+        background: "rgba(255,255,255,0.04)",
+      }}
+    >
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontWeight: 900,
+          color: "rgba(226,232,240,0.98)",
+          marginBottom: 8,
+          fontSize: 14,
+        }}
+      >
+        {icon}
+        {title}
+      </div>
+
+      <div
+        style={{
+          fontSize: 13,
+          lineHeight: 1.4,
+          color: "rgba(148,163,184,0.95)",
+        }}
+      >
+        {body}
+      </div>
+    </div>
+  );
+}
+
+function LockedHomeExperience({ firstName, onStart }) {
+  return (
+    <>
+      <div style={visibleInViewStyle}>
+        <div
+          style={{
+            fontSize: 13,
+            color: "rgba(148,163,184,0.95)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span>{firstName ? `Hola, ${firstName}` : "Hola"}</span>
+          <Sparkles size={14} strokeWidth={2.2} />
+        </div>
+
+        <div
+          style={{
+            marginTop: 10,
+            fontSize: 32,
+            letterSpacing: -1.1,
+            fontWeight: 980,
+            lineHeight: 1.03,
+            color: "rgba(226,232,240,0.98)",
+            maxWidth: 390,
+          }}
+        >
+          Descubre tu rango de compra
+        </div>
+
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 15,
+            lineHeight: 1.45,
+            color: "rgba(226,232,240,0.84)",
+            maxWidth: 390,
+          }}
+        >
+          En menos de 2 minutos entiende cuánto podrías comprar, tu cuota
+          referencial y tu siguiente paso.
+        </div>
+      </div>
+
+      <Card
+        style={{
+          marginTop: 18,
+          padding: 18,
+          borderRadius: 28,
+          background:
+            "linear-gradient(180deg, rgba(15,23,42,0.78), rgba(15,23,42,0.58))",
+          border: "1px solid rgba(148,163,184,0.16)",
+          boxShadow: "0 18px 54px rgba(0,0,0,0.28)",
+          ...visibleInViewStyle,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 14,
+          }}
+        >
+          <Chip tone="brand">
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <HomeIcon size={13} strokeWidth={2.2} />
+              Tu primer paso
+            </span>
+          </Chip>
+
+          <Chip tone="neutral">
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Lock size={13} strokeWidth={2.2} />
+              Pendiente
+            </span>
+          </Chip>
+        </div>
+
+        <div
+          style={{
+            fontSize: 22,
+            lineHeight: 1.12,
+            fontWeight: 980,
+            color: "rgba(226,232,240,0.98)",
+            letterSpacing: -0.5,
+            maxWidth: 360,
+          }}
+        >
+          Completa tu orientación inicial
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 14,
+            lineHeight: 1.42,
+            color: "rgba(148,163,184,0.95)",
+            maxWidth: 370,
+          }}
+        >
+          No necesitas documentos. Solo responde algunas preguntas básicas para
+          ver una estimación referencial.
+        </div>
+
+        <div style={{ marginTop: 16, display: "grid", gap: 9 }}>
+          <BenefitCard
+            icon={<Calculator size={15} />}
+            title="Rango estimado"
+            body="Una referencia inicial de compra según tus datos."
+          />
+
+          <BenefitCard
+            icon={<Compass size={15} />}
+            title="Cuota referencial"
+            body="Una cuota mensual estimada para comparar escenarios."
+          />
+
+          <BenefitCard
+            icon={<Building2 size={15} />}
+            title="Propiedades en tu rango"
+            body="Opciones más alineadas con tu escenario estimado."
+          />
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <PrimaryButton onClick={onStart}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              Empezar orientación
+              <ArrowRight size={16} />
+            </span>
+          </PrimaryButton>
+        </div>
+
+        <FinancialDisclaimer compact style={{ marginTop: 14 }} />
+      </Card>
+    </>
+  );
+}
+
+function StatusPill({
+  hasSubmittedCase,
+  hasOperationalProgress,
+  hasCreditBlocker,
   hasImmediateViableMortgage,
-  onReview,
+  isFutureRoute,
 }) {
+  let label = "Perfil en construcción";
+  let tone = "neutral";
+  let icon = <MapPin size={13} strokeWidth={2.4} />;
+
+  if (hasSubmittedCase) {
+    label = "Caso enviado";
+    tone = "good";
+    icon = <CheckCircle2 size={13} strokeWidth={2.4} />;
+  } else if (hasCreditBlocker) {
+    label = "Historial por revisar";
+    tone = "neutral";
+    icon = <ShieldCheck size={13} strokeWidth={2.4} />;
+  } else if (hasImmediateViableMortgage) {
+    label = "Ruta estimada hoy";
+    tone = "good";
+    icon = <CheckCircle2 size={13} strokeWidth={2.4} />;
+  } else if (isFutureRoute) {
+    label = "Ruta futura";
+    tone = "brand";
+    icon = <Compass size={13} strokeWidth={2.4} />;
+  } else if (hasOperationalProgress) {
+    label = "Ruta avanzada";
+    tone = "brand";
+    icon = <Compass size={13} strokeWidth={2.4} />;
+  }
+
+  return (
+    <Chip tone={tone}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        {icon}
+        {label}
+      </span>
+    </Chip>
+  );
+}
+
+function CaseStatusCard({
+  hasSubmittedCase,
+  caseStatusLabel,
+  projectStatus,
+  bankStatus,
+  selectedProperty,
+  docsCompletedCount,
+  selectedMortgageRoute,
+  onGoRuta,
+}) {
+  if (!hasSubmittedCase) return null;
+
+  return (
+    <Card
+      style={{
+        marginTop: 18,
+        background:
+          "linear-gradient(135deg, rgba(16,185,129,0.13), rgba(37,211,166,0.07))",
+        border: "1px solid rgba(16,185,129,0.24)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 12,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "rgba(167,243,208,0.95)",
+              fontWeight: 950,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <CheckCircle2 size={14} strokeWidth={2.4} />
+            Caso enviado
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 20,
+              fontWeight: 980,
+              lineHeight: 1.15,
+              color: "rgba(226,232,240,0.98)",
+            }}
+          >
+            {caseStatusLabel || "Caso recibido por HabitaLibre"}
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 13,
+              lineHeight: 1.4,
+              color: "rgba(226,232,240,0.88)",
+            }}
+          >
+            Ya recuperamos tu propiedad seleccionada, tus documentos marcados y
+            tu ruta hipotecaria referencial. Puedes continuar desde tu ruta sin
+            volver a empezar.
+          </div>
+        </div>
+
+        <Chip tone="good">Activo</Chip>
+      </div>
+
+      <div
+        style={{
+          marginTop: 14,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+        }}
+      >
+        <MetricCard
+          label="Propiedad"
+          value={
+            selectedProperty?.titulo ||
+            selectedProperty?.title ||
+            selectedProperty?.nombre ||
+            selectedProperty?.name ||
+            "Seleccionada"
+          }
+          hint={
+            selectedProperty?.precio || selectedProperty?.price
+              ? moneySafe(selectedProperty?.precio || selectedProperty?.price)
+              : "Guardada en tu ruta"
+          }
+        />
+
+        <MetricCard
+          label="Documentos"
+          value={`${docsCompletedCount} marcados`}
+          hint="Checklist recuperada"
+        />
+
+        <MetricCard
+          label="Proyecto"
+          value={
+            projectStatus === "enviado"
+              ? "Enviado"
+              : projectStatus === "por_revisar"
+              ? "Por revisar"
+              : "Pendiente"
+          }
+          hint="Estado interno HabitaLibre"
+        />
+
+        <MetricCard
+          label="Entidad"
+          value={
+            bankStatus === "enviado"
+              ? "Enviado"
+              : bankStatus === "por_revisar"
+              ? "Por revisar"
+              : "Pendiente"
+          }
+          hint="Estado interno HabitaLibre"
+        />
+      </div>
+
+      {selectedMortgageRoute ? (
+        <InnerCard
+          style={{
+            marginTop: 12,
+            background: "rgba(2,6,23,0.18)",
+            border: "1px solid rgba(148,163,184,0.12)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              color: "rgba(148,163,184,0.95)",
+              fontWeight: 900,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Landmark size={13} />
+            Ruta hipotecaria aceptada
+          </div>
+
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 14,
+              fontWeight: 900,
+              color: "rgba(226,232,240,0.95)",
+            }}
+          >
+            {selectedMortgageRoute?.label ||
+              selectedMortgageRoute?.productLabel ||
+              selectedMortgageRoute?.tipoProducto ||
+              selectedMortgageRoute?.tipo ||
+              selectedMortgageRoute?.banco ||
+              "Ruta referencial guardada"}
+          </div>
+        </InnerCard>
+      ) : null}
+
+      <FinancialDisclaimer compact />
+
+      <div style={{ marginTop: 14 }}>
+        <PrimaryButton onClick={onGoRuta}>Ver estado de mi caso</PrimaryButton>
+      </div>
+    </Card>
+  );
+}
+
+function CreditValidationCard({ creditAssessment, readinessStatus, onReview }) {
   const level = String(creditAssessment?.level || "unknown");
-  const blocksBankSubmission =
-    creditAssessment?.blocksBankSubmission === true;
+  const blocksBankSubmission = creditAssessment?.blocksBankSubmission === true;
 
   const reasons = Array.isArray(creditAssessment?.reasons)
     ? creditAssessment.reasons
     : [];
 
-  let title = "Validación crediticia pendiente";
+  const primaryReason = reasons[0] || null;
+
+  let title = "Historial financiero declarado por revisar";
   let subtitle =
-    "Tus números ya fueron analizados. Falta entender mejor tu historial crediticio para estimar qué tan listo estás para banco.";
+    "Antes de conversar con una entidad financiera, conviene revisar mejor tu comportamiento de pago declarado.";
   let chip = "Por revisar";
   let tone = "neutral";
   let border = "1px solid rgba(148,163,184,0.16)";
   let background = "rgba(255,255,255,0.04)";
 
   if (level === "healthy" || level === "low_risk") {
-    title = "Historial crediticio favorable";
+    title = "Historial financiero declarado favorable";
     subtitle =
-      "Tu historial declarado se ve alineado con una revisión bancaria más sólida.";
-    chip = hasImmediateViableMortgage ? "Listo para banco" : "Favorable";
+      "Según la información que declaraste, este punto luce más ordenado para una futura conversación con una entidad.";
+    chip = "Favorable";
     tone = "good";
     border = "1px solid rgba(16,185,129,0.24)";
     background = "rgba(16,185,129,0.08)";
   }
 
   if (level === "medium_risk") {
-    title = "Historial crediticio por revisar";
+    title = "Historial financiero declarado por revisar";
     subtitle =
-      "Tu capacidad puede verse bien, pero tu historial declarado podría requerir revisión antes de avanzar con un banco.";
-    chip = "Revisión recomendada";
+      "Tu rango estimado puede verse bien, pero este dato podría requerir más claridad antes de avanzar con una entidad financiera.";
+    chip = "Revisión";
     tone = "neutral";
     border = "1px solid rgba(245,158,11,0.24)";
     background = "rgba(245,158,11,0.08)";
   }
 
   if (blocksBankSubmission || level === "high_risk") {
-    title = "Primero conviene revisar tu perfil crediticio";
+    title = "Primero revisa tu historial financiero declarado";
     subtitle =
-      "Tienes una alerta crediticia declarada que podría frenar una aprobación bancaria, incluso si tu capacidad de pago se ve bien.";
-    chip = "No enviar aún";
+      "Tu rango estimado puede existir, pero una alerta declarada podría requerir revisión adicional en un proceso externo.";
+    chip = "Revisar primero";
     tone = "neutral";
     border = "1px solid rgba(244,63,94,0.26)";
     background = "rgba(244,63,94,0.08)";
   }
 
   if (readinessStatus === "ready_financially_credit_pending") {
-    title = "Capacidad lista, buró pendiente";
+    title = "Rango estimado disponible, historial pendiente";
     subtitle =
-      "Financieramente te ves bien, pero falta validar tu historial crediticio antes de considerarte listo para banco.";
+      "La estimación financiera luce positiva, pero falta revisar el historial declarado antes de considerarlo un perfil más completo.";
     chip = "Pendiente";
   }
 
@@ -311,7 +1063,7 @@ function CreditValidationCard({
             }}
           >
             <ShieldCheck size={14} strokeWidth={2.4} />
-            Validación crediticia
+            Historial financiero declarado
           </div>
 
           <div
@@ -356,7 +1108,7 @@ function CreditValidationCard({
               fontWeight: 900,
             }}
           >
-            Recomendación
+            Sugerencia orientativa
           </div>
 
           <div
@@ -372,646 +1124,115 @@ function CreditValidationCard({
         </InnerCard>
       ) : null}
 
-      {reasons.length > 0 ? (
+      {primaryReason ? (
         <div
           style={{
             marginTop: 10,
-            display: "grid",
-            gap: 8,
+            padding: "10px 12px",
+            borderRadius: 12,
+            background: "rgba(2,6,23,0.16)",
+            border: "1px solid rgba(148,163,184,0.10)",
+            fontSize: 12,
+            lineHeight: 1.35,
+            color: "rgba(148,163,184,0.92)",
           }}
         >
-          {reasons.slice(0, 2).map((reason, idx) => (
-            <div
-              key={`${reason}-${idx}`}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                background: "rgba(2,6,23,0.16)",
-                border: "1px solid rgba(148,163,184,0.10)",
-                fontSize: 12,
-                lineHeight: 1.35,
-                color: "rgba(148,163,184,0.92)",
-              }}
-            >
-              {reason}
-            </div>
-          ))}
+          {primaryReason}
         </div>
       ) : null}
 
+      <FinancialDisclaimer compact />
+
       <div style={{ marginTop: 12 }}>
         <SecondaryButton onClick={onReview}>
-          Actualizar historial crediticio
+          Actualizar historial financiero
         </SecondaryButton>
       </div>
     </Card>
   );
 }
 
-function AccordionSection({
-  title,
-  subtitle = null,
-  open,
-  onToggle,
-  children,
-  style = {},
-}) {
+function AlternativesCard({ alternatives = [], onGo }) {
+  if (!Array.isArray(alternatives) || !alternatives.length) return null;
+
+  const visible = alternatives.slice(0, 2);
+
   return (
-    <InnerCard
-      style={{
-        marginTop: 12,
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(148,163,184,0.16)",
-        overflow: "hidden",
-        ...style,
-      }}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
+    <Card style={{ marginTop: 18 }}>
+      <div
         style={{
-          all: "unset",
-          cursor: "pointer",
-          width: "100%",
-          display: "block",
+          fontSize: 12,
+          color: "rgba(148,163,184,0.95)",
+          fontWeight: 950,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div>
+        <Compass size={13} strokeWidth={2.3} />
+        Opciones sugeridas
+      </div>
+
+      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+        {visible.map((alt, index) => (
+          <InnerCard
+            key={`${alt?.kind || "alt"}-${index}`}
+            style={{
+              background: "rgba(2,6,23,0.18)",
+              border: "1px solid rgba(148,163,184,0.12)",
+            }}
+          >
             <div
               style={{
-                fontSize: 12,
-                fontWeight: 900,
-                color: "rgba(148,163,184,0.95)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 10,
               }}
             >
-              {title}
+              <div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 950,
+                    color: "rgba(226,232,240,0.96)",
+                  }}
+                >
+                  {alt?.title || "Opción sugerida"}
+                </div>
+
+                {alt?.description ? (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 12,
+                      lineHeight: 1.38,
+                      color: "rgba(148,163,184,0.95)",
+                    }}
+                  >
+                    {alt.description}
+                  </div>
+                ) : null}
+              </div>
+
+              {alt?.alternativePrice || alt?.rangeMax ? (
+                <Chip tone="neutral">
+                  {moneySafe(alt?.alternativePrice || alt?.rangeMax)}
+                </Chip>
+              ) : null}
             </div>
 
-            {subtitle ? (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  lineHeight: 1.35,
-                  color: "rgba(148,163,184,0.86)",
-                }}
-              >
-                {subtitle}
+            {alt?.ctaLabel ? (
+              <div style={{ marginTop: 10 }}>
+                <SecondaryButton onClick={() => onGo(alt?.ctaPath || "/marketplace")}>
+                  {alt.ctaLabel}
+                </SecondaryButton>
               </div>
             ) : null}
-          </div>
-
-          <div
-            style={{
-              marginTop: 1,
-              transform: open ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.25s ease",
-              color: "rgba(226,232,240,0.82)",
-              flexShrink: 0,
-            }}
-          >
-            <ChevronDown size={18} strokeWidth={2.4} />
-          </div>
-        </div>
-      </button>
-
-      <div
-        style={{
-          maxHeight: open ? 1200 : 0,
-          opacity: open ? 1 : 0,
-          overflow: "hidden",
-          transition: "max-height 0.35s ease, opacity 0.25s ease",
-        }}
-      >
-        <div style={{ paddingTop: open ? 12 : 0 }}>{children}</div>
+          </InnerCard>
+        ))}
       </div>
-    </InnerCard>
-  );
-}
-
-const isFiniteNum = (v) => typeof v === "number" && Number.isFinite(v);
-
-const toNum = (v) => {
-  if (isFiniteNum(v)) return v;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-};
-
-function pickLegacyCompatible(snapshot, keys) {
-  if (!snapshot) return null;
-  for (const k of keys) {
-    if (snapshot?.[k] != null) return snapshot[k];
-    if (snapshot?.output?.[k] != null) return snapshot.output[k];
-    if (snapshot?.legacy?.[k] != null) return snapshot.legacy[k];
-    if (snapshot?.output?.legacy?.[k] != null) return snapshot.output.legacy[k];
-  }
-  return null;
-}
-
-function pickMatcherFirst(snapshot, keys) {
-  if (!snapshot) return null;
-
-  for (const k of keys) {
-    if (snapshot?.[k] != null) return snapshot[k];
-  }
-
-  for (const k of keys) {
-    if (snapshot?.output?.[k] != null) return snapshot.output[k];
-  }
-
-  return null;
-}
-
-function safeMoney(n) {
-  const x = toNum(n);
-  return x == null ? "—" : moneyUSD(x);
-}
-
-function withTimeout(promise, ms, msg = "ping timeout") {
-  let t;
-  const timeout = new Promise((_, rej) => {
-    t = setTimeout(() => rej(new Error(msg)), ms);
-  });
-  return Promise.race([promise.finally(() => clearTimeout(t)), timeout]);
-}
-
-function parseAnyToPctUniversal(x) {
-  const clampPct = (p) => {
-    if (!Number.isFinite(p)) return null;
-    return Math.max(0, Math.min(100, p));
-  };
-
-  if (x == null) return null;
-
-  if (typeof x === "number") return clampPct(x <= 1 ? x * 100 : x);
-
-  if (typeof x === "string") {
-    const s0 = x.trim();
-    if (!s0) return null;
-
-    const lower = s0.toLowerCase();
-    if (lower === "alta") return 85;
-    if (lower === "media") return 60;
-    if (lower === "baja") return 35;
-    if (lower.includes("sin oferta")) return 0;
-
-    const s = s0.includes(",") && !s0.includes(".") ? s0.replace(",", ".") : s0;
-
-    const m = s.match(/(\d+(\.\d+)?)/);
-    if (!m) return null;
-
-    const n = Number(m[1]);
-    if (!Number.isFinite(n)) return null;
-
-    const p = s.includes("%") ? n : n <= 1 ? n * 100 : n;
-    return clampPct(p);
-  }
-
-  if (typeof x === "object") {
-    const direct =
-      parseAnyToPctUniversal(x.pct) ??
-      parseAnyToPctUniversal(x.value) ??
-      parseAnyToPctUniversal(x.total) ??
-      parseAnyToPctUniversal(x.pTotal) ??
-      parseAnyToPctUniversal(x.prob) ??
-      parseAnyToPctUniversal(x.probabilidad) ??
-      parseAnyToPctUniversal(x.aprobacion) ??
-      parseAnyToPctUniversal(x.score);
-
-    if (direct != null) return direct;
-  }
-
-  return null;
-}
-
-function normalizeProbability(prob) {
-  if (prob == null) return { label: COPY.probabilityFallback, pct: null };
-
-  if (typeof prob === "string") {
-    const s = prob.trim().toLowerCase();
-    if (s === "alta") return { label: "Alta", pct: 85 };
-    if (s === "media") return { label: "Media", pct: 60 };
-    if (s === "baja") return { label: "Baja", pct: 35 };
-    if (s.includes("sin oferta")) return { label: "Sin oferta hoy", pct: 0 };
-  }
-
-  const pctValue = parseAnyToPctUniversal(prob);
-
-  return pctValue == null
-    ? { label: COPY.probabilityFallback, pct: null }
-    : { label: `${Math.round(pctValue)}%`, pct: pctValue };
-}
-
-function scoreToPctFallback(score) {
-  const s = Number(score);
-  if (!Number.isFinite(s)) return null;
-
-  if (s >= 0 && s <= 100) {
-    return Math.max(0, Math.min(100, s));
-  }
-
-  const pct = ((s - 300) / (850 - 300)) * 100;
-  return Math.max(0, Math.min(100, pct));
-}
-
-function safePctFromRate(rate) {
-  const x = Number(rate);
-  if (!Number.isFinite(x)) return "—";
-  const pctRate = x <= 1 ? x * 100 : x;
-  return `${pctRate.toFixed(2)}%`;
-}
-
-function normalizeLimitingFactor(v) {
-  const s = String(v || "").toLowerCase();
-  if (s === "cuota") return "Cuota";
-  if (s === "entrada") return "Entrada";
-  if (s === "programa") return "Programa";
-  return "—";
-}
-
-function calculateProgressFromSnapshot(
-  snapshot,
-  {
-    hasImmediateViableMortgage = false,
-    estimatedMaxPropertyValue = null,
-    probabilityPct = null,
-  }
-) {
-  if (!snapshot) return 0;
-
-  const unlocked =
-    snapshot?.unlocked === true ||
-    snapshot?.output?.unlocked === true ||
-    snapshot?.ok === true ||
-    snapshot?.output?.ok === true;
-
-  if (!unlocked) return 0;
-
-  if (hasImmediateViableMortgage) {
-    const pct = toNum(probabilityPct);
-    if (pct != null) {
-      if (pct >= 80) return 100;
-      if (pct >= 60) return 88;
-      if (pct >= 40) return 76;
-      return 68;
-    }
-    return 82;
-  }
-
-  if (toNum(estimatedMaxPropertyValue) > 0) {
-    const pct = toNum(probabilityPct);
-    if (pct != null) {
-      if (pct >= 80) return 82;
-      if (pct >= 60) return 74;
-      if (pct >= 40) return 66;
-      return 58;
-    }
-    return 72;
-  }
-
-  return 35;
-}
-
-function useCountUp(target, duration = 900, enabled = true) {
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    const finalValue = Number(target);
-
-    if (!enabled) return;
-    if (!Number.isFinite(finalValue)) {
-      setValue(0);
-      return;
-    }
-
-    let frameId = null;
-    let startTime = null;
-    const startValue = 0;
-
-    const tick = (ts) => {
-      if (startTime == null) startTime = ts;
-      const elapsed = ts - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const next = startValue + (finalValue - startValue) * eased;
-
-      setValue(next);
-
-      if (progress < 1) {
-        frameId = requestAnimationFrame(tick);
-      }
-    };
-
-    setValue(0);
-    frameId = requestAnimationFrame(tick);
-
-    return () => {
-      if (frameId) cancelAnimationFrame(frameId);
-    };
-  }, [target, duration, enabled]);
-
-  return Math.round(value);
-}
-
-function useFadeIn(delay = 0) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(t);
-  }, [delay]);
-
-  return {
-    opacity: visible ? 1 : 0,
-    transform: visible ? "translateY(0px)" : "translateY(10px)",
-    transition: "opacity 0.45s ease, transform 0.45s ease",
-  };
-}
-
-const visibleInViewStyle = {
-  opacity: 1,
-  transform: "translateY(0px)",
-  transition: "opacity 0.5s ease, transform 0.5s ease",
-};
-
-function BenefitCard({ icon, title, body }) {
-  return (
-    <div
-      style={{
-        padding: 14,
-        borderRadius: 16,
-        border: "1px solid rgba(148,163,184,0.14)",
-        background: "rgba(255,255,255,0.04)",
-      }}
-    >
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          fontWeight: 900,
-          color: "rgba(226,232,240,0.98)",
-          marginBottom: 8,
-          fontSize: 14,
-        }}
-      >
-        {icon}
-        {title}
-      </div>
-
-      <div
-        style={{
-          fontSize: 13,
-          lineHeight: 1.4,
-          color: "rgba(148,163,184,0.95)",
-        }}
-      >
-        {body}
-      </div>
-    </div>
-  );
-}
-
-function LockedHomeExperience({ firstName, onStart, onUnlock }) {
-  return (
-    <>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 12,
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: 13,
-              color: "rgba(148,163,184,0.95)",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <span>{firstName ? `Hola, ${firstName}` : "Hola"}</span>
-            <Sparkles
-              size={14}
-              strokeWidth={2.2}
-              style={{ opacity: 0.95, flexShrink: 0 }}
-            />
-          </div>
-
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 31,
-              letterSpacing: -1,
-              maxWidth: 330,
-              fontWeight: 980,
-              lineHeight: 1.02,
-            }}
-          >
-            Descubre si hoy ya podrías comprar vivienda
-          </div>
-
-          <div
-            style={{
-              color: "rgba(226,232,240,0.88)",
-              marginTop: 10,
-              fontSize: 14,
-              lineHeight: 1.4,
-              maxWidth: 340,
-            }}
-          >
-            En menos de 2 minutos te mostramos cuánto podrías comprar, cuánto
-            pagarías al mes y cuál podría ser tu mejor camino.
-          </div>
-        </div>
-
-        <Chip tone="neutral">
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <HomeIcon size={13} strokeWidth={2.2} />
-            Tu primer paso
-          </span>
-        </Chip>
-      </div>
-
-      <Card style={{ marginTop: 18 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 12,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "rgba(148,163,184,0.95)",
-                fontWeight: 900,
-              }}
-            >
-              Empieza por aquí
-            </div>
-
-            <div
-              style={{
-                marginTop: 8,
-                fontWeight: 980,
-                fontSize: 22,
-                lineHeight: 1.1,
-                color: "rgba(226,232,240,0.98)",
-                maxWidth: 340,
-              }}
-            >
-              Completa tu evaluación para ver tu resultado
-            </div>
-
-            <div
-              style={{
-                marginTop: 10,
-                fontSize: 14,
-                lineHeight: 1.45,
-                color: "rgba(148,163,184,0.95)",
-                maxWidth: 360,
-              }}
-            >
-              Todavía necesitamos tu información base para mostrarte una
-              capacidad estimada real, una cuota referencial y opciones que sí
-              hagan match contigo.
-            </div>
-          </div>
-
-          <Chip tone="good">
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Lock size={13} strokeWidth={2.2} />
-              Resultado bloqueado
-            </span>
-          </Chip>
-        </div>
-
-        <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
-          <BenefitCard
-            icon={<Calculator size={15} />}
-            title="Capacidad estimada"
-            body="Te mostramos hasta cuánto podrías comprar hoy según tu perfil."
-          />
-          <BenefitCard
-            icon={<Compass size={15} />}
-            title="Cuota mensual referencial"
-            body="Entiende cuánto podrías pagar al mes en un escenario realista."
-          />
-          <BenefitCard
-            icon={<Building2 size={15} />}
-            title="Propiedades que sí hacen match"
-            body="Verás opciones más alineadas contigo, no inventario genérico."
-          />
-        </div>
-
-        <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
-          <PrimaryButton onClick={onStart}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              Empezar mi evaluación
-              <ArrowRight size={16} />
-            </span>
-          </PrimaryButton>
-
-          <SecondaryButton onClick={onUnlock}>
-            Explorar sin crear cuenta
-          </SecondaryButton>
-        </div>
-
-        <div
-          style={{
-            marginTop: 12,
-            fontSize: 12,
-            lineHeight: 1.4,
-            color: "rgba(148,163,184,0.86)",
-          }}
-        >
-          No necesitas documentos para empezar. Solo tu información básica.
-        </div>
-      </Card>
-
-      <Card style={{ marginTop: 18 }}>
-        <div
-          style={{
-            fontSize: 12,
-            color: "rgba(148,163,184,0.95)",
-            fontWeight: 900,
-          }}
-        >
-          En 2 minutos vas a obtener
-        </div>
-
-        <div
-          style={{
-            marginTop: 10,
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-          }}
-        >
-          <SoftMetric
-            label="Tiempo"
-            value="2 min"
-            hint="Una primera evaluación rápida."
-          />
-          <SoftMetric
-            label="Resultado"
-            value="Tu ruta"
-            hint="Capacidad, cuota y siguiente paso."
-          />
-        </div>
-
-        <div
-          style={{
-            marginTop: 12,
-            padding: 12,
-            borderRadius: 14,
-            border: "1px solid rgba(148,163,184,0.14)",
-            background: "rgba(2,6,23,0.18)",
-          }}
-        >
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontWeight: 900,
-              fontSize: 14,
-              color: "rgba(226,232,240,0.98)",
-              marginBottom: 8,
-            }}
-          >
-            <ShieldCheck size={15} />
-            Luego podrás guardar todo
-          </div>
-
-          <div
-            style={{
-              fontSize: 13,
-              lineHeight: 1.4,
-              color: "rgba(148,163,184,0.95)",
-            }}
-          >
-            Cuando quieras guardar tu resultado, tu ruta y retomar después, ahí sí
-            podrás entrar con tu cuenta.
-          </div>
-        </div>
-      </Card>
-    </>
+    </Card>
   );
 }
 
@@ -1020,208 +1241,51 @@ export default function Home() {
 
   const [raw, setRaw] = useState(null);
   const [journey, setJourney] = useState(null);
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  const [docsChecklist, setDocsChecklist] = useState({});
+  const [selectedMortgageRoute, setSelectedMortgageRoute] = useState(null);
 
   const [loading, setLoading] = useState(true);
-  const [, setIsOnline] = useState(false);
-  const [, setErr] = useState("");
 
-  const [expandedSections, setExpandedSections] = useState({
-    actionGuide: false,
-    blocker: false,
-    rhythm: false,
-  });
-
-  function toggleSection(key) {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  }
+  const snapshot = raw || null;
 
   function go(path) {
     navigate(path);
   }
 
-  const snapshot = raw || null;
+  function refreshOperationalStateFromLocalStorage() {
+    const currentOwnerEmail = getStorageOwnerEmail();
 
-  const targetPropertyValue =
-    toNum(snapshot?.input?.valorVivienda) ??
-    toNum(snapshot?.perfilInput?.valorVivienda) ??
-    toNum(snapshot?.__entrada?.valorVivienda) ??
-    toNum(snapshot?.inputNormalizado?.valorVivienda) ??
-    null;
+    const journeyEnvelope = loadJSON(LS_JOURNEY);
+    const j =
+      journeyEnvelope?.ownerEmail &&
+      journeyEnvelope.ownerEmail === currentOwnerEmail
+        ? journeyEnvelope.data
+        : null;
 
-  const hasTargetPropertyValue =
-    targetPropertyValue != null && targetPropertyValue > 0;
+    const storedSelectedProperty = loadOwnedData(LS_SELECTED_PROPERTY);
+    const storedDocsChecklist = loadOwnedData(LS_DOCS_CHECKLIST);
+    const storedMortgageRoute = loadOwnedData(LS_SELECTED_MORTGAGE_ROUTE);
 
-  const snapshotEngine = snapshot?.engine || snapshot?.output?.engine || null;
-
-  const canonicalBestMortgage =
-    snapshot?.bestMortgage ?? snapshot?.output?.bestMortgage ?? null;
-
-  const financialCapacity =
-    snapshot?.financialCapacity ?? snapshot?.output?.financialCapacity ?? null;
-
-  const hasImmediateViableMortgage =
-    !!financialCapacity?.hasImmediateViableMortgage;
-
-  const estimatedMaxPropertyValue =
-    toNum(financialCapacity?.estimatedMaxPropertyValue) ??
-    toNum(canonicalBestMortgage?.precioMaxVivienda) ??
-    toNum(pickMatcherFirst(snapshot, ["precioMaxVivienda", "propertyPrice"])) ??
-    null;
-
-  const estimatedMaxLoanAmount =
-    toNum(financialCapacity?.estimatedMaxLoanAmount) ??
-    toNum(canonicalBestMortgage?.montoPrestamo) ??
-    toNum(pickMatcherFirst(snapshot, ["montoMaximo", "loanAmount"])) ??
-    null;
-
-  const estimatedMonthlyPayment =
-    toNum(financialCapacity?.estimatedMonthlyPayment) ??
-    toNum(canonicalBestMortgage?.cuota) ??
-    toNum(pickMatcherFirst(snapshot, ["cuotaEstimada", "monthlyPayment"])) ??
-    null;
-
-  const estimatedAnnualRate =
-    toNum(financialCapacity?.estimatedAnnualRate) ??
-    toNum(canonicalBestMortgage?.annualRate) ??
-    toNum(pickMatcherFirst(snapshot, ["tasaAnual", "annualRate"])) ??
-    null;
-
-  const limitingFactor =
-    financialCapacity?.limitingFactor ||
-    canonicalBestMortgage?.factorLimitante ||
-    null;
-
-  const homeRecommendation =
-    snapshot?.homeRecommendation ?? snapshot?.output?.homeRecommendation ?? null;
-
-  const homeActionHints = Array.isArray(homeRecommendation?.actionHints)
-    ? homeRecommendation.actionHints
-    : [];
-
-  const creditAssessment =
-    snapshot?.creditAssessment ??
-    snapshot?.output?.creditAssessment ??
-    homeRecommendation?.creditAssessment ??
-    null;
-
-  const creditWarnings =
-    snapshot?.creditWarnings ?? snapshot?.output?.creditWarnings ?? null;
-
-  const readinessStatus =
-    snapshot?.readinessStatus ??
-    snapshot?.output?.readinessStatus ??
-    homeRecommendation?.readinessStatus ??
-    null;
-
-  const effectiveCreditAssessment =
-    creditAssessment ||
-    (creditWarnings
-      ? {
-          level: creditWarnings?.level || "unknown",
-          label: creditWarnings?.label || "Validación crediticia pendiente",
-          blocksBankSubmission:
-            creditWarnings?.blocksBankSubmission === true,
-          reasons: creditWarnings?.reasons || [],
-          recommendedAction: creditWarnings?.recommendedAction || null,
-        }
-      : null);
-
-  const realityCheck = homeRecommendation?.realityCheck || null;
-  const goalSummary = homeRecommendation?.goalSummary || null;
-
-  const probabilityRaw =
-    pickMatcherFirst(snapshot, ["probabilidad"]) ??
-    canonicalBestMortgage?.probabilidad ??
-    summarizeProfile(snapshot)?.probability ??
-    null;
-
-  const summary = useMemo(() => {
-    const base = summarizeProfile(snapshot) || {};
-
-    const unlocked =
-      snapshot?.unlocked === true ||
-      snapshot?.output?.unlocked === true ||
-      snapshot?.ok === true ||
-      snapshot?.output?.ok === true ||
-      snapshot?.score != null ||
-      snapshot?.output?.score != null ||
-      financialCapacity?.estimatedMaxPropertyValue != null;
-
-    const score =
-      snapshot?.score ??
-      snapshot?.output?.score ??
-      canonicalBestMortgage?.score ??
-      base?.score ??
-      null;
-
-    const probability =
-      snapshot?.probabilidad ??
-      snapshot?.output?.probabilidad ??
-      canonicalBestMortgage?.probabilidad ??
-      base?.probability ??
-      null;
-
-    return {
-      ...base,
-      unlocked,
-      score,
-      probability,
-      progress: base?.progress ?? 0,
-    };
-  }, [snapshot, financialCapacity, canonicalBestMortgage]);
-
-  const shouldShowCreditValidation =
-    summary?.unlocked && !!effectiveCreditAssessment && !!readinessStatus;
-
-  const hasCreditBlocker =
-    readinessStatus === "credit_repair_needed" ||
-    effectiveCreditAssessment?.blocksBankSubmission === true;
-
-  const plan = useMemo(() => {
-    try {
-      return buildPlan({ journey, snapshot });
-    } catch (e) {
-      console.error("[HL] buildPlan error:", e);
-      return null;
-    }
-  }, [journey, snapshot]);
-
-  const entryTrajectory = plan?.entryTrajectory || null;
-
-  async function checkBackend() {
-    setLoading(true);
-    setErr("");
-
-    try {
-      await withTimeout(
-        apiGet("/api/precalificar/ping"),
-        12000,
-        "El servidor está despertando (ping timeout)."
-      );
-      setIsOnline(true);
-    } catch (e) {
-      setIsOnline(false);
-      const msg = e?.message || "No se pudo conectar con el servidor";
-      setErr(msg);
-    } finally {
-      setLoading(false);
-    }
+    setJourney(j || null);
+    setSelectedProperty(storedSelectedProperty || null);
+    setDocsChecklist(storedDocsChecklist || {});
+    setSelectedMortgageRoute(storedMortgageRoute || null);
   }
 
   async function syncLatestSnapshotFromBackend() {
     try {
-      const t = getCustomerToken();
-      if (!t) {
+      const token = getCustomerToken();
+
+      if (!token) {
         clearLocalScenarioState();
         setRaw(null);
+        setJourney(null);
         return;
       }
 
       const res = await fetchLatestSnapshot();
-      const snap = res?.snapshot ?? null;
+      const snap = unwrapRemoteSnapshot(res);
 
       if (!snapshotLooksValid(snap)) {
         return;
@@ -1243,209 +1307,285 @@ export default function Home() {
     let alive = true;
 
     (async () => {
-      await checkBackend();
-      if (!alive) return;
+      try {
+        const token = getCustomerToken();
 
-      const token = getCustomerToken();
+        if (!token) {
+          clearLocalScenarioState();
+          setRaw(null);
+          setJourney(null);
+          return;
+        }
 
-      if (!token) {
-        clearLocalScenarioState();
-        setRaw(null);
-        setJourney(null);
-        return;
+        const currentOwnerEmail = getStorageOwnerEmail();
+
+        const snapEnvelope = loadJSON(LS_SNAPSHOT);
+        const snap =
+          snapEnvelope?.ownerEmail &&
+          snapEnvelope.ownerEmail === currentOwnerEmail
+            ? snapEnvelope.data
+            : null;
+
+        if (snapshotLooksValid(snap)) {
+          setRaw(snap);
+        } else {
+          setRaw(null);
+        }
+
+        refreshOperationalStateFromLocalStorage();
+
+        await syncLatestSnapshotFromBackend();
+
+        if (!alive) return;
+
+        refreshOperationalStateFromLocalStorage();
+      } finally {
+        if (alive) setLoading(false);
       }
-
-      const currentOwnerEmail = getStorageOwnerEmail();
-
-      const snapEnvelope = loadJSON(LS_SNAPSHOT);
-      const journeyEnvelope = loadJSON(LS_JOURNEY);
-
-      const snap =
-        snapEnvelope?.ownerEmail && snapEnvelope.ownerEmail === currentOwnerEmail
-          ? snapEnvelope.data
-          : null;
-
-      const j =
-        journeyEnvelope?.ownerEmail &&
-        journeyEnvelope.ownerEmail === currentOwnerEmail
-          ? journeyEnvelope.data
-          : null;
-
-      if (snapshotLooksValid(snap)) {
-        setRaw(snap);
-      } else {
-        setRaw(null);
-      }
-
-      setJourney(j || null);
-
-      await syncLatestSnapshotFromBackend();
     })();
+
+    function handleHydrated() {
+      refreshOperationalStateFromLocalStorage();
+      void syncLatestSnapshotFromBackend();
+    }
+
+    window.addEventListener("hl:user-app-state-hydrated", handleHydrated);
 
     return () => {
       alive = false;
+      window.removeEventListener("hl:user-app-state-hydrated", handleHydrated);
     };
   }, []);
 
-  useEffect(() => {
-    if (!snapshot) return;
-    console.log("[HOME] snapshotEngine:", snapshotEngine);
-    console.log("[HOME] canonicalBestMortgage:", canonicalBestMortgage);
-    console.log("[HOME] financialCapacity:", snapshot?.financialCapacity);
-    console.log("[HOME] homeRecommendation:", snapshot?.homeRecommendation);
-    console.log("[HOME] creditAssessment:", effectiveCreditAssessment);
-    console.log("[HOME] readinessStatus:", readinessStatus);
-    console.log("[HOME] plan:", plan);
-  }, [
-    snapshot,
-    snapshotEngine,
-    canonicalBestMortgage,
-    effectiveCreditAssessment,
+  const snapshotEngine = snapshot?.engine || snapshot?.output?.engine || null;
+
+  const canonicalBestMortgage =
+    snapshot?.bestMortgage ??
+    snapshot?.output?.bestMortgage ??
+    snapshot?.fallbackRecommendation ??
+    snapshot?.output?.fallbackRecommendation ??
+    snapshot?.rankedMortgages?.[0] ??
+    snapshot?.output?.rankedMortgages?.[0] ??
+    null;
+
+  const financialCapacity =
+    snapshot?.financialCapacity ?? snapshot?.output?.financialCapacity ?? null;
+
+  const homeRecommendation =
+    snapshot?.homeRecommendation ?? snapshot?.output?.homeRecommendation ?? null;
+
+  const creditAssessment =
+    snapshot?.creditAssessment ??
+    snapshot?.output?.creditAssessment ??
+    homeRecommendation?.creditAssessment ??
+    null;
+
+  const creditWarnings =
+    snapshot?.creditWarnings ?? snapshot?.output?.creditWarnings ?? null;
+
+  const readinessStatus =
+    snapshot?.readinessStatus ??
+    snapshot?.output?.readinessStatus ??
+    homeRecommendation?.readinessStatus ??
+    null;
+
+  const effectiveCreditAssessment =
+    creditAssessment ||
+    (creditWarnings
+      ? {
+          level: creditWarnings?.level || "unknown",
+          label: creditWarnings?.label || "Historial financiero pendiente",
+          blocksBankSubmission: creditWarnings?.blocksBankSubmission === true,
+          reasons: creditWarnings?.reasons || [],
+          recommendedAction: creditWarnings?.recommendedAction || null,
+        }
+      : null);
+
+  const hasCreditBlocker = isCreditRepairState({
     readinessStatus,
-    plan,
-  ]);
+    homeRecommendation,
+    creditAssessment: effectiveCreditAssessment,
+  });
 
-  const prob = useMemo(() => {
-    const normal = normalizeProbability(probabilityRaw);
+  const hasImmediateViableMortgage =
+    typeof financialCapacity?.hasImmediateViableMortgage === "boolean"
+      ? financialCapacity.hasImmediateViableMortgage
+      : canonicalBestMortgage?.targetViable === true ||
+        canonicalBestMortgage?.viable === true;
 
-    if ((normal?.pct == null || normal?.pct === 0) && summary?.unlocked) {
-      const fb = scoreToPctFallback(summary?.score);
-      if (fb != null) return { label: `${Math.round(fb)}%`, pct: fb };
-    }
+  const estimatedMaxPropertyValue =
+    toNum(financialCapacity?.estimatedMaxPropertyValue) ??
+    toNum(canonicalBestMortgage?.precioMaxVivienda) ??
+    toNum(pickMatcherFirst(snapshot, ["precioMaxVivienda", "propertyPrice"])) ??
+    null;
 
-    return normal;
-  }, [probabilityRaw, summary?.unlocked, summary?.score]);
+  const estimatedMaxLoanAmount =
+    toNum(financialCapacity?.estimatedMaxLoanAmount) ??
+    toNum(financialCapacity?.montoMaximo) ??
+    toNum(canonicalBestMortgage?.montoPrestamo) ??
+    toNum(pickMatcherFirst(snapshot, ["montoMaximo", "loanAmount"])) ??
+    null;
 
-  const isGoalAboveCapacity =
-    hasTargetPropertyValue &&
-    homeRecommendation?.type === "goal_above_capacity";
+  const estimatedMonthlyPayment =
+    toNum(financialCapacity?.estimatedMonthlyPayment) ??
+    toNum(canonicalBestMortgage?.cuota) ??
+    toNum(pickMatcherFirst(snapshot, ["cuotaEstimada", "monthlyPayment"])) ??
+    null;
 
-  const isImmediateRoute =
-    homeRecommendation?.type === "immediate_viable" && !hasCreditBlocker;
+  const estimatedAnnualRate =
+    toNum(financialCapacity?.estimatedAnnualRate) ??
+    toNum(canonicalBestMortgage?.annualRate) ??
+    toNum(pickMatcherFirst(snapshot, ["tasaAnual", "annualRate"])) ??
+    null;
 
-  const useCompactScoreDisplay = isGoalAboveCapacity;
+  const limitingFactor =
+    financialCapacity?.limitingFactor ||
+    canonicalBestMortgage?.factorLimitante ||
+    null;
 
-  const displayScoreBadge = useMemo(() => {
-    if (!summary?.unlocked) return "—";
-    if (isGoalAboveCapacity) return "Meta aspiracional";
-    return null;
-  }, [summary?.unlocked, isGoalAboveCapacity]);
+  const plannedEntry = financialCapacity?.plannedEntry || null;
 
-  const displayScoreValue = useMemo(() => {
-    if (!summary?.unlocked) return "—";
+  const plannedEntryMax =
+    toNum(plannedEntry?.estimatedMaxPropertyValue) ??
+    toNum(getFirstAlternative(homeRecommendation, "entry_installments")?.alternativePrice) ??
+    null;
 
-    const baseScore = toNum(summary?.score);
-    if (baseScore != null && baseScore > 0) return baseScore;
-
-    const fb = scoreToPctFallback(prob?.pct);
-    if (fb != null) return Math.round(fb);
-
-    return 0;
-  }, [summary?.unlocked, summary?.score, prob?.pct]);
-
-  const displayScoreLabel = useMemo(() => {
-    if (!summary?.unlocked) return COPY.scoreLocked;
-    if (isGoalAboveCapacity) return "Meta por encima de capacidad actual";
-    if (hasCreditBlocker) return "Revisión crediticia necesaria";
-    if (hasImmediateViableMortgage) return prob?.label || COPY.probabilityFallback;
-    if (toNum(estimatedMaxPropertyValue) > 0) return "Capacidad estimada detectada";
-    return prob?.label || COPY.probabilityFallback;
-  }, [
-    summary?.unlocked,
-    isGoalAboveCapacity,
-    hasCreditBlocker,
+  const isFutureRoute = isFutureRouteState({
     hasImmediateViableMortgage,
-    prob?.label,
-    estimatedMaxPropertyValue,
-  ]);
+    plannedEntryMax,
+    homeRecommendation,
+  });
 
-  const bestNext = useMemo(() => {
-    if (!summary?.unlocked) {
-      return {
-        title: "Descubre si hoy ya podrías comprar casa",
-        subtitle:
-          "Te toma menos de 2 minutos. Te mostramos cuánto podrías comprar, cuánto pagarías al mes y cuál podría ser tu mejor camino.",
-        cta: "Ver mi resultado",
-        to: "/journey/full",
-      };
-    }
+  const homeRecommendationType = getHomeRecommendationType(
+    homeRecommendation,
+    readinessStatus
+  );
 
-    if (hasCreditBlocker) {
-      return {
-        title: "Primero revisa tu historial crediticio",
-        subtitle:
-          "Tu capacidad financiera puede verse bien, pero tu historial declarado podría frenar una aprobación bancaria. Antes de enviar tu caso, conviene revisar o regularizar este punto.",
-        cta: "Actualizar historial crediticio",
-        to: "/journey/full",
-      };
-    }
+  const displayPrimaryRange =
+    hasImmediateViableMortgage && toNum(estimatedMaxPropertyValue) > 0
+      ? estimatedMaxPropertyValue
+      : isFutureRoute && toNum(plannedEntryMax) > 0
+      ? plannedEntryMax
+      : toNum(estimatedMaxPropertyValue) > 0
+      ? estimatedMaxPropertyValue
+      : null;
 
-    if (hasTargetPropertyValue && homeRecommendation) {
-      return {
-        title: homeRecommendation?.title || "Tu mejor siguiente paso",
-        subtitle:
-          homeRecommendation?.subtitle ||
-          "Ya tenemos una recomendación base para seguir avanzando.",
-        cta: homeRecommendation?.cta?.label || "Continuar",
-        to: homeRecommendation?.cta?.path || "/marketplace",
-      };
-    }
+  const displayPrimaryPayment =
+    hasImmediateViableMortgage && toNum(estimatedMonthlyPayment) > 0
+      ? estimatedMonthlyPayment
+      : null;
 
-    if (hasImmediateViableMortgage) {
-      return {
-        title: "Hoy ya tienes una ruta hipotecaria clara",
-        subtitle:
-          "Tu perfil sí muestra una opción de crédito viable hoy. Ahora lo más útil es revisar propiedades que encajen con esa capacidad.",
-        cta: "Ver propiedades compatibles",
-        to: "/marketplace",
-      };
-    }
+  const primaryRangeLabel = getPrimaryRangeLabel({
+    hasImmediateViableMortgage,
+    isFutureRoute,
+    hasCreditBlocker,
+    hasSubmittedCase: false,
+  });
 
-    if (toNum(estimatedMaxPropertyValue) > 0) {
-      return {
-        title: "Esto es lo que hoy sí podrías comprar",
-        subtitle: `Con tu perfil actual, hoy podrías apuntar aproximadamente a viviendas de hasta ${safeMoney(
-          estimatedMaxPropertyValue
-        )} con una cuota cercana a ${safeMoney(estimatedMonthlyPayment)}.`,
-        cta: "Ver propiedades compatibles",
-        to: "/marketplace",
-      };
-    }
+  const primaryRangeDescription = getPrimaryRangeDescription({
+    hasImmediateViableMortgage,
+    isFutureRoute,
+    hasCreditBlocker,
+  });
+
+  const summary = useMemo(() => {
+    const unlocked = hasCompletedEvaluation(snapshot);
+
+    const score =
+      snapshot?.score ??
+      snapshot?.output?.score ??
+      canonicalBestMortgage?.score ??
+      null;
+
+    const probability =
+      snapshot?.probabilidad ??
+      snapshot?.output?.probabilidad ??
+      canonicalBestMortgage?.probabilidad ??
+      null;
 
     return {
-      title: "Todavía no vemos una ruta clara",
-      subtitle:
-        "Con los datos actuales, todavía no aparece una opción de crédito sólida. Ajustar ingreso, ahorro inicial o valor de vivienda puede mejorar tu resultado.",
-      cta: "Ajustar mi escenario",
-      to: "/journey/full",
+      unlocked,
+      score,
+      probability,
     };
-  }, [
-    summary?.unlocked,
-    hasCreditBlocker,
-    homeRecommendation,
-    hasTargetPropertyValue,
-    hasImmediateViableMortgage,
-    estimatedMaxPropertyValue,
-    estimatedMonthlyPayment,
-  ]);
+  }, [snapshot, canonicalBestMortgage]);
 
-  const heroHint = hasCreditBlocker
-    ? "Tu capacidad financiera puede verse bien, pero tu historial crediticio declarado podría frenar una aprobación bancaria. Antes de avanzar con banco, conviene revisar o regularizar este punto."
-    : homeRecommendation?.mainMessage && hasTargetPropertyValue
-    ? homeRecommendation.mainMessage
-    : hasImmediateViableMortgage
-    ? `Hoy sí vemos una ruta hipotecaria viable. Tu capacidad estimada llega alrededor de ${safeMoney(
-        estimatedMaxPropertyValue
-      )} con una cuota aproximada de ${safeMoney(estimatedMonthlyPayment)}.`
-    : toNum(estimatedMaxPropertyValue) > 0
-    ? `Con tu perfil actual, hoy podrías apuntar aproximadamente a viviendas de hasta ${safeMoney(
-        estimatedMaxPropertyValue
-      )}, con una cuota referencial cercana a ${safeMoney(
-        estimatedMonthlyPayment
-      )}.`
-    : "Con los datos actuales, todavía no aparece una opción de crédito viable. Ajustar ingreso, ahorro inicial o valor de vivienda puede mejorar tu resultado.";
+  const caseStatusGeneral =
+    journey?.activationRequestStatus || journey?.statusGeneral || null;
 
-  const showConnecting = loading && !snapshot;
+  const projectStatus = journey?.projectStatus || null;
+  const bankStatus = journey?.bankStatus || null;
+
+  const hasSubmittedCase = Boolean(
+    journey?.activationRequestId ||
+      caseStatusGeneral === "pendiente_revision_habitalibre" ||
+      caseStatusGeneral === "enviado"
+  );
+
+  const caseStatusLabel =
+    caseStatusGeneral === "pendiente_revision_habitalibre"
+      ? "Caso recibido por HabitaLibre"
+      : caseStatusGeneral === "enviado"
+      ? "Caso compartido"
+      : hasSubmittedCase
+      ? "Caso enviado"
+      : null;
+
+  const effectiveSelectedProperty =
+    selectedProperty ||
+    journey?.selectedProperty ||
+    journey?.propiedadSeleccionada ||
+    null;
+
+  const effectiveDocsChecklist =
+    docsChecklist && Object.keys(docsChecklist).length
+      ? docsChecklist
+      : journey?.docsChecklist || {};
+
+  const docsCompletedCount = Object.values(effectiveDocsChecklist || {}).filter(
+    Boolean
+  ).length;
+
+  const effectiveMortgageRoute =
+    selectedMortgageRoute ||
+    journey?.mortgageRoute ||
+    journey?.selectedMortgageRoute ||
+    null;
+
+  const hasOperationalProgress = Boolean(
+    effectiveSelectedProperty ||
+      docsCompletedCount > 0 ||
+      effectiveMortgageRoute ||
+      journey?.mortgageRouteConfirmed
+  );
+
+  const probabilityRaw =
+    pickMatcherFirst(snapshot, ["probabilidad"]) ??
+    canonicalBestMortgage?.probabilidad ??
+    summary?.probability ??
+    null;
+
+  const prob = useMemo(
+    () => normalizeProbability(probabilityRaw, summary?.score),
+    [probabilityRaw, summary?.score]
+  );
+
+  const hasUsableSnapshot =
+    summary?.unlocked &&
+    (toNum(estimatedMaxPropertyValue) > 0 ||
+      toNum(plannedEntryMax) > 0 ||
+      toNum(estimatedMonthlyPayment) > 0 ||
+      canonicalBestMortgage ||
+      snapshot?.fallbackRecommendation ||
+      snapshot?.output?.fallbackRecommendation ||
+      snapshot?.rankedMortgages?.length ||
+      snapshot?.output?.rankedMortgages?.length ||
+      homeRecommendation);
+
+  const isLockedHome =
+    !hasUsableSnapshot && !hasSubmittedCase && !hasOperationalProgress;
+
+  const showConnecting = loading && !snapshot && !hasOperationalProgress;
 
   const firstName = useMemo(() => {
     const customer = getCustomer?.() || {};
@@ -1459,42 +1599,204 @@ export default function Home() {
     return String(nombre).trim().split(" ")[0] || "";
   }, [journey]);
 
+  const heroAnim = useFadeIn(40);
+
+  const heroHint = hasSubmittedCase
+    ? "Tu caso ya fue recibido. Puedes revisar el estado y continuar desde tu ruta."
+    : hasCreditBlocker
+    ? "Tu rango estimado puede verse bien, pero tu historial financiero declarado podría requerir revisión adicional en el proceso externo de una entidad financiera."
+    : hasImmediateViableMortgage && toNum(displayPrimaryRange) > 0
+    ? `Con tu perfil actual, hoy podrías apuntar referencialmente a viviendas de hasta ${moneySafe(
+        displayPrimaryRange
+      )}${
+        displayPrimaryPayment
+          ? `, con una cuota cercana a ${moneySafe(displayPrimaryPayment)}.`
+          : "."
+      }`
+    : isFutureRoute && toNum(displayPrimaryRange) > 0
+    ? `Hoy todavía necesitas preparar tu entrada, pero podrías construir una ruta futura hacia viviendas de hasta ${moneySafe(
+        displayPrimaryRange
+      )}.`
+    : "Con los datos actuales, todavía no aparece una ruta hipotecaria referencial clara. Ajustar ingreso, ahorro inicial o valor de vivienda puede mejorar tu orientación.";
+
+  const bestNext = useMemo(() => {
+    const futureAlt = getFirstAlternative(homeRecommendation, "entry_installments");
+    const firstAlt = getFirstAlternative(homeRecommendation);
+
+    if (hasSubmittedCase) {
+      return {
+        title: caseStatusLabel || "Tu caso ya fue enviado",
+        subtitle:
+          "Ya recibimos tu información, tu propiedad seleccionada y tus documentos marcados. El siguiente paso es revisar el estado de tu ruta.",
+        cta: "Ver estado de mi caso",
+        to: "/ruta",
+      };
+    }
+
+    if (hasOperationalProgress && effectiveSelectedProperty) {
+      return {
+        title: "Tu camino ya está avanzado",
+        subtitle:
+          "Ya tienes una propiedad seleccionada y avances guardados. Puedes continuar desde tu ruta sin volver a empezar.",
+        cta: "Continuar mi ruta",
+        to: "/ruta",
+      };
+    }
+
+    if (!hasUsableSnapshot) {
+      return {
+        title: "Descubre tu rango estimado para comprar casa",
+        subtitle:
+          "Te toma menos de 2 minutos. Te mostramos un rango de compra, una cuota referencial y una ruta orientativa.",
+        cta: "Ver mi orientación",
+        to: "/journey/full",
+      };
+    }
+
+    if (hasCreditBlocker) {
+      return {
+        title: "Siguiente paso: revisar tu historial financiero declarado",
+        subtitle:
+          "Tu rango estimado puede verse bien. Antes de conversar con una entidad financiera, conviene revisar o aclarar este punto.",
+        cta: "Actualizar historial financiero",
+        to: "/journey/full",
+      };
+    }
+
+    if (isFutureRoute) {
+      return {
+        title:
+          homeRecommendation?.title ||
+          "Puedes construir una ruta futura de compra",
+        subtitle:
+          futureAlt?.description ||
+          homeRecommendation?.subtitle ||
+          `Si completas tu entrada durante obra, podrías acercarte a un rango de hasta ${moneySafe(
+            plannedEntryMax
+          )}.`,
+        cta: futureAlt?.ctaLabel || "Ver proyectos con entrada en cuotas",
+        to: futureAlt?.ctaPath || "/marketplace",
+      };
+    }
+
+    if (
+      homeRecommendationType === "no_clear_route" ||
+      homeRecommendation?.type === "financial_preparation_needed"
+    ) {
+      return {
+        title: homeRecommendation?.title || "Hoy todavía debes preparar tu ruta",
+        subtitle:
+          homeRecommendation?.subtitle ||
+          "Con los datos actuales todavía no aparece una opción sólida de compra. Puedes ajustar tu escenario para encontrar una ruta más clara.",
+        cta: "Actualizar mi escenario",
+        to: "/journey/full",
+      };
+    }
+
+    if (homeRecommendation) {
+      const immediateMessage = homeRecommendation?.immediateGuidance?.message;
+
+      return {
+        title: homeRecommendation?.title || "Tu siguiente paso sugerido",
+        subtitle:
+          immediateMessage ||
+          homeRecommendation?.subtitle ||
+          "Ya tienes una orientación base para seguir avanzando.",
+        cta:
+          homeRecommendation?.cta?.label ||
+          firstAlt?.ctaLabel ||
+          "Ver propiedades compatibles",
+        to:
+          homeRecommendation?.cta?.path ||
+          firstAlt?.ctaPath ||
+          "/marketplace",
+      };
+    }
+
+    if (toNum(displayPrimaryRange) > 0) {
+      return {
+        title: hasImmediateViableMortgage
+          ? "Esto es lo que hoy podrías explorar"
+          : "Esto es lo que podrías construir",
+        subtitle: hasImmediateViableMortgage
+          ? `Con tu perfil actual, podrías apuntar referencialmente a viviendas de hasta ${moneySafe(
+              displayPrimaryRange
+            )}${
+              displayPrimaryPayment
+                ? ` con una cuota cercana a ${moneySafe(displayPrimaryPayment)}.`
+                : "."
+            }`
+          : `Con ahorro durante obra, podrías acercarte referencialmente a viviendas de hasta ${moneySafe(
+              displayPrimaryRange
+            )}.`,
+        cta: hasImmediateViableMortgage
+          ? "Ver propiedades compatibles"
+          : "Ver proyectos con entrada en cuotas",
+        to: "/marketplace",
+      };
+    }
+
+    return {
+      title: "Tu orientación ya fue generada",
+      subtitle:
+        "Ya tenemos una base referencial. Puedes actualizar tu escenario si quieres comparar otra opción.",
+      cta: "Actualizar mi escenario",
+      to: "/journey/full",
+    };
+  }, [
+    hasSubmittedCase,
+    caseStatusLabel,
+    hasOperationalProgress,
+    effectiveSelectedProperty,
+    hasUsableSnapshot,
+    hasCreditBlocker,
+    isFutureRoute,
+    homeRecommendation,
+    homeRecommendationType,
+    plannedEntryMax,
+    displayPrimaryRange,
+    displayPrimaryPayment,
+    hasImmediateViableMortgage,
+  ]);
+
   const mainInsightItems = useMemo(() => {
     const items = [];
 
-    if (estimatedMonthlyPayment != null) {
+    if (displayPrimaryPayment != null) {
       items.push({
         id: "cuota",
         label: COPY.quotaInsightLabel,
-        value: safeMoney(estimatedMonthlyPayment),
-        hint: COPY.quotaInsightHint,
+        value: moneySafe(displayPrimaryPayment),
+        hint: "Una referencia mensual para comparar escenarios.",
       });
     }
 
-    if (!isGoalAboveCapacity && estimatedAnnualRate != null) {
+    if (estimatedAnnualRate != null && hasImmediateViableMortgage) {
       items.push({
         id: "tasa",
         label: COPY.rateInsightLabel,
         value: safePctFromRate(estimatedAnnualRate),
-        hint: COPY.rateInsightHint,
+        hint: "Tasa anual estimada de mercado para esta ruta.",
       });
     }
 
-    if (!isGoalAboveCapacity && estimatedMaxLoanAmount != null) {
+    if (estimatedMaxLoanAmount != null && hasImmediateViableMortgage) {
       items.push({
         id: "monto",
         label: COPY.amountInsightLabel,
-        value: safeMoney(estimatedMaxLoanAmount),
-        hint: COPY.amountInsightHint,
+        value: moneySafe(estimatedMaxLoanAmount),
+        hint: "Valor referencial usado para orientar este escenario.",
       });
     }
 
-    if (hasCreditBlocker) {
+    if (isFutureRoute && plannedEntry?.futureEntry != null) {
       items.push({
-        id: "credit",
-        label: "Alerta bancaria",
-        value: "Historial crediticio",
-        hint: "Tu capacidad puede verse bien, pero este punto puede frenar la aprobación.",
+        id: "future-entry",
+        label: "Entrada futura",
+        value: moneySafe(plannedEntry.futureEntry),
+        hint: `Estimación con ahorro durante ${
+          plannedEntry?.months || "varios"
+        } meses.`,
       });
     }
 
@@ -1503,130 +1805,80 @@ export default function Home() {
         id: "limitante",
         label: COPY.limitInsightLabel,
         value: normalizeLimitingFactor(limitingFactor),
-        hint: COPY.limitInsightHint,
+        hint: "El dato que más influye en tu rango estimado hoy.",
       });
     }
 
     return items.slice(0, 4);
   }, [
-    estimatedMonthlyPayment,
+    displayPrimaryPayment,
     estimatedAnnualRate,
     estimatedMaxLoanAmount,
     limitingFactor,
-    isGoalAboveCapacity,
     hasCreditBlocker,
+    hasImmediateViableMortgage,
+    isFutureRoute,
+    plannedEntry,
   ]);
 
-  const primaryHeadlineValue = useMemo(() => {
-    if (isGoalAboveCapacity) {
-      const min = toNum(realityCheck?.recommendedSearchMin);
-      const max = toNum(realityCheck?.recommendedSearchMax);
+  const shouldShowCreditValidation =
+    hasUsableSnapshot &&
+    !!effectiveCreditAssessment &&
+    !!readinessStatus &&
+    !hasSubmittedCase;
 
-      if (min != null && max != null) {
-        return `${safeMoney(min)} – ${safeMoney(max)}`;
-      }
-
-      if (max != null) {
-        return safeMoney(max);
-      }
+  const safeBottomCta = useMemo(() => {
+    if (hasSubmittedCase) {
+      return {
+        label: "Ver estado de mi caso",
+        to: "/ruta",
+      };
     }
 
-    return safeMoney(
-      realityCheck?.currentMaxPropertyValue ?? estimatedMaxPropertyValue
-    );
-  }, [isGoalAboveCapacity, realityCheck, estimatedMaxPropertyValue]);
-
-  const primaryHeadlineLabel = isGoalAboveCapacity
-    ? "Rango recomendado hoy"
-    : "Capacidad financiera estimada";
-
-  const primaryHeadlineHelp = isGoalAboveCapacity
-    ? "Este es el rango donde tu perfil tiene mayor probabilidad de aprobación hoy."
-    : hasCreditBlocker
-    ? "Tu capacidad financiera existe, pero tu historial crediticio declarado debe revisarse antes de considerar una solicitud bancaria."
-    : hasImmediateViableMortgage
-    ? `Tu perfil ya tiene una ruta hipotecaria viable hoy${
-        canonicalBestMortgage?.label ? ` con ${canonicalBestMortgage.label}` : ""
-      }.`
-    : "Este valor resume el rango de vivienda al que hoy podrías apuntar con tu perfil actual.";
-
-  const currentEntryAmount =
-    toNum(journey?.form?.entradaDisponible) ??
-    toNum(journey?.entradaDisponible) ??
-    toNum(snapshot?.input?.entradaDisponible) ??
-    toNum(snapshot?.perfilInput?.entradaDisponible) ??
-    toNum(snapshot?.__entrada?.entradaDisponible) ??
-    toNum(snapshot?.inputNormalizado?.entradaDisponible) ??
-    toNum(snapshot?.entradaDisponible) ??
-    toNum(pickLegacyCompatible(snapshot, ["entradaDisponible"])) ??
-    0;
-
-  const homePrimaryBlocker = hasCreditBlocker
-    ? "buro"
-    : homeRecommendation?.blockers?.primary || limitingFactor || null;
-
-  const blockerExplanationTitle = useMemo(() => {
-    if (!summary?.unlocked) return null;
-    if (homePrimaryBlocker === "buro") return "Qué podría frenar la aprobación bancaria";
-    if (homePrimaryBlocker === "entrada") return "Qué está frenando tu capacidad hoy";
-    if (homePrimaryBlocker === "cuota") return "Qué está frenando tu capacidad hoy";
-    if (homePrimaryBlocker === "programa") return "Qué está frenando tu capacidad hoy";
-    return null;
-  }, [summary?.unlocked, homePrimaryBlocker]);
-
-  const blockerExplanationBody = useMemo(() => {
-    if (!summary?.unlocked) return null;
-
-    if (homePrimaryBlocker === "buro") {
-      return "Tus números pueden mostrar capacidad de compra, pero una alerta crediticia declarada puede hacer que un banco no apruebe la solicitud hasta revisar o regularizar ese punto.";
+    if (hasCreditBlocker) {
+      return {
+        label: "Actualizar historial financiero",
+        to: "/journey/full",
+      };
     }
 
-    if (homePrimaryBlocker === "entrada") {
-      return `Tu ingreso sí tiene potencial, pero con una entrada disponible de ${safeMoney(
-        currentEntryAmount
-      )} hoy tu rango más realista baja a ${primaryHeadlineValue}.`;
+    if (isFutureRoute) {
+      return {
+        label: "Ver proyectos con entrada en cuotas",
+        to: "/marketplace",
+      };
     }
 
-    if (homePrimaryBlocker === "cuota") {
-      return "Tu ingreso sí tiene base, pero hoy la cuota que el sistema considera sana todavía limita el rango al que podrías apuntar con más probabilidad de aprobación.";
+    if (hasImmediateViableMortgage) {
+      return {
+        label: "Ver propiedades compatibles",
+        to: "/marketplace",
+      };
     }
 
-    if (homePrimaryBlocker === "programa") {
-      return "Hoy no solo influye tu perfil financiero. También te limita el tipo de programa o segmento de vivienda al que estás apuntando.";
-    }
-
-    return null;
+    return {
+      label: "Actualizar mi escenario",
+      to: "/journey/full",
+    };
   }, [
-    summary?.unlocked,
-    homePrimaryBlocker,
-    currentEntryAmount,
-    primaryHeadlineValue,
+    hasSubmittedCase,
+    hasCreditBlocker,
+    isFutureRoute,
+    hasImmediateViableMortgage,
   ]);
-
-  const heroAnim = useFadeIn(40);
-  const resultInView = true;
-
-  const animatedScore = useCountUp(
-    useCompactScoreDisplay ? 0 : Number(displayScoreValue) || 0,
-    950,
-    resultInView
-  );
-
-  const isLockedHome = !summary?.unlocked;
 
   if (isLockedHome) {
     return (
       <Screen
         style={{
           padding: 22,
-          paddingTop: 78,
-          paddingBottom: 110,
+          paddingTop: 74,
+          paddingBottom: 120,
         }}
       >
         <LockedHomeExperience
           firstName={firstName}
           onStart={() => go("/journey/full")}
-          onUnlock={() => go("/unlock")}
         />
       </Screen>
     );
@@ -1637,19 +1889,18 @@ export default function Home() {
       style={{
         padding: 22,
         paddingTop: 78,
-        paddingBottom: 18,
+        paddingBottom: 150,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 12,
-          ...heroAnim,
-        }}
-      >
-        <div>
+      <div style={{ ...heroAnim }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
           <div
             style={{
               fontSize: 13,
@@ -1657,6 +1908,7 @@ export default function Home() {
               display: "flex",
               alignItems: "center",
               gap: 6,
+              minWidth: 0,
             }}
           >
             <span>{firstName ? `Hola, ${firstName}` : "Hola"}</span>
@@ -1667,38 +1919,56 @@ export default function Home() {
             />
           </div>
 
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 31,
-              letterSpacing: -1,
-              maxWidth: 320,
-              fontWeight: 980,
-              lineHeight: 1.02,
-            }}
-          >
-            Tu avance para comprar vivienda
-          </div>
-
-          <div
-            style={{
-              color: "rgba(226,232,240,0.88)",
-              marginTop: 10,
-              fontSize: 14,
-              lineHeight: 1.4,
-              maxWidth: 330,
-            }}
-          >
-            {COPY.appSubtitle}
-          </div>
+          <StatusPill
+            hasSubmittedCase={hasSubmittedCase}
+            hasOperationalProgress={hasOperationalProgress}
+            hasCreditBlocker={hasCreditBlocker}
+            hasImmediateViableMortgage={hasImmediateViableMortgage}
+            isFutureRoute={isFutureRoute}
+          />
         </div>
 
-        <Chip tone="neutral">
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <HomeIcon size={13} strokeWidth={2.2} />
-            Camino a Casa
-          </span>
-        </Chip>
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 31,
+            letterSpacing: -1,
+            fontWeight: 980,
+            lineHeight: 1.02,
+            color: "rgba(226,232,240,0.98)",
+            maxWidth: 390,
+          }}
+        >
+          {hasSubmittedCase
+            ? "Tu caso ya está en camino"
+            : hasCreditBlocker
+            ? "Primero revisemos tu historial"
+            : isFutureRoute
+            ? "Tu ruta futura de compra"
+            : hasImmediateViableMortgage
+            ? "Tu rango estimado de compra"
+            : "Tu orientación de compra"}
+        </div>
+
+        <div
+          style={{
+            color: "rgba(226,232,240,0.88)",
+            marginTop: 10,
+            fontSize: 14,
+            lineHeight: 1.4,
+            maxWidth: 380,
+          }}
+        >
+          {hasSubmittedCase
+            ? "Ya recuperamos tu progreso guardado. Puedes continuar desde tu ruta."
+            : hasCreditBlocker
+            ? "Tu rango financiero puede existir, pero antes de avanzar conviene aclarar tu historial declarado."
+            : isFutureRoute
+            ? "Hoy todavía debes preparar tu entrada, pero ya tienes una ruta de avance."
+            : hasImmediateViableMortgage
+            ? "Consulta tu estimación referencial de compra y tu siguiente paso."
+            : "Ajusta tu escenario para encontrar una ruta hipotecaria más clara."}
+        </div>
       </div>
 
       {showConnecting ? (
@@ -1713,6 +1983,17 @@ export default function Home() {
         </div>
       ) : null}
 
+      <CaseStatusCard
+        hasSubmittedCase={hasSubmittedCase}
+        caseStatusLabel={caseStatusLabel}
+        projectStatus={projectStatus}
+        bankStatus={bankStatus}
+        selectedProperty={effectiveSelectedProperty}
+        docsCompletedCount={docsCompletedCount}
+        selectedMortgageRoute={effectiveMortgageRoute}
+        onGoRuta={() => go("/ruta")}
+      />
+
       <div style={visibleInViewStyle}>
         <Card style={{ marginTop: 18 }}>
           <div
@@ -1724,15 +2005,42 @@ export default function Home() {
             }}
           >
             <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
-              Tu capacidad hoy
+              {primaryRangeLabel}
             </div>
 
-            <Chip tone={hasCreditBlocker ? "neutral" : "good"}>
+            <Chip
+              tone={
+                hasSubmittedCase
+                  ? "good"
+                  : hasCreditBlocker
+                  ? "neutral"
+                  : hasImmediateViableMortgage
+                  ? "good"
+                  : isFutureRoute
+                  ? "brand"
+                  : "neutral"
+              }
+            >
               <span
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                <CheckCircle2 size={13} strokeWidth={2.4} />
-                {hasCreditBlocker ? "Requiere revisión" : COPY.scoreReady}
+                {hasImmediateViableMortgage || hasSubmittedCase ? (
+                  <CheckCircle2 size={13} strokeWidth={2.4} />
+                ) : isFutureRoute ? (
+                  <Compass size={13} strokeWidth={2.4} />
+                ) : (
+                  <MapPin size={13} strokeWidth={2.4} />
+                )}
+
+                {hasSubmittedCase
+                  ? "Guardado"
+                  : hasCreditBlocker
+                  ? "Por revisar"
+                  : hasImmediateViableMortgage
+                  ? COPY.scoreReady
+                  : isFutureRoute
+                  ? "Futuro"
+                  : "En preparación"}
               </span>
             </Chip>
           </div>
@@ -1748,25 +2056,9 @@ export default function Home() {
             }}
           >
             <div>
-              {useCompactScoreDisplay ? (
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(148,163,184,0.16)",
-                    background: "rgba(255,255,255,0.04)",
-                    fontSize: 13,
-                    fontWeight: 950,
-                    color: "rgba(226,232,240,0.95)",
-                  }}
-                >
-                  {displayScoreBadge}
-                </div>
-              ) : (
-                <div style={{ fontSize: 42, fontWeight: 980, letterSpacing: -1 }}>
-                  {safeMoney(estimatedMaxPropertyValue)}
-                </div>
-              )}
+              <div style={{ fontSize: 42, fontWeight: 980, letterSpacing: -1 }}>
+                {moneySafe(displayPrimaryRange)}
+              </div>
 
               <div
                 style={{
@@ -1774,84 +2066,47 @@ export default function Home() {
                   color: "rgba(148,163,184,0.95)",
                   fontSize: 13,
                   lineHeight: 1.35,
-                  maxWidth: 240,
+                  maxWidth: 270,
                 }}
               >
-                Hasta aquí podría llegar tu compra con tu perfil actual
+                {primaryRangeDescription}
               </div>
             </div>
 
             <Chip
               tone={
-                hasCreditBlocker
+                hasSubmittedCase
+                  ? "good"
+                  : hasCreditBlocker
                   ? "neutral"
                   : hasImmediateViableMortgage
                   ? "good"
+                  : isFutureRoute
+                  ? "brand"
                   : "neutral"
               }
             >
-              {hasCreditBlocker
-                ? "Buró por revisar"
+              {hasSubmittedCase
+                ? "Caso enviado"
+                : hasCreditBlocker
+                ? "Historial por revisar"
                 : hasImmediateViableMortgage
-                ? "Ruta viable hoy"
+                ? "Ruta estimada hoy"
+                : isFutureRoute
+                ? "Ruta futura"
                 : "Perfil en construcción"}
             </Chip>
           </div>
 
           <ProbabilityBar
-            valuePct={isGoalAboveCapacity ? null : prob?.pct}
-            valueText={isGoalAboveCapacity ? "Baja" : hasCreditBlocker ? "Media" : null}
+            valuePct={hasCreditBlocker ? null : prob?.pct}
+            valueText={hasCreditBlocker ? "En revisión" : null}
             hint={heroHint}
           />
 
-          {homeActionHints.length > 0 && !hasCreditBlocker ? (
-            <AccordionSection
-              title="Qué te conviene hacer ahora"
-              subtitle="Te mostramos solo el siguiente mejor movimiento para avanzar."
-              open={expandedSections.actionGuide}
-              onToggle={() => toggleSection("actionGuide")}
-              style={{
-                background: isImmediateRoute
-                  ? "rgba(16,185,129,0.10)"
-                  : "rgba(37,211,166,0.08)",
-                border: isImmediateRoute
-                  ? "1px solid rgba(16,185,129,0.22)"
-                  : "1px solid rgba(37,211,166,0.20)",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gap: 8,
-                }}
-              >
-                {homeActionHints.slice(0, 3).map((hint, idx) => (
-                  <div
-                    key={`${hint}-${idx}`}
-                    style={{
-                      fontSize: 13,
-                      lineHeight: 1.35,
-                      color: "rgba(226,232,240,0.88)",
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      background: "rgba(2,6,23,0.18)",
-                      border: "1px solid rgba(148,163,184,0.12)",
-                    }}
-                  >
-                    {idx + 1}. {hint}
-                  </div>
-                ))}
-              </div>
+          <FinancialDisclaimer compact />
 
-              <div style={{ marginTop: 12 }}>
-                <SecondaryButton onClick={() => go(bestNext.to)}>
-                  {isGoalAboveCapacity
-                    ? "Ver propiedades en mi rango"
-                    : bestNext.cta}
-                </SecondaryButton>
-              </div>
-            </AccordionSection>
-          ) : null}
+          <InsightGrid items={mainInsightItems} />
         </Card>
       </div>
 
@@ -1860,7 +2115,6 @@ export default function Home() {
           <CreditValidationCard
             creditAssessment={effectiveCreditAssessment}
             readinessStatus={readinessStatus}
-            hasImmediateViableMortgage={hasImmediateViableMortgage}
             onReview={() => go("/journey/full")}
           />
         </div>
@@ -1891,9 +2145,24 @@ export default function Home() {
                 strokeWidth={2.3}
                 style={{ opacity: 0.95, flexShrink: 0 }}
               />
-              {COPY.guideTag}
+              Tu guía
             </div>
-            <Chip tone="neutral">{COPY.guideResultTag}</Chip>
+
+            <Chip
+              tone={
+                hasSubmittedCase
+                  ? "good"
+                  : isFutureRoute
+                  ? "brand"
+                  : "neutral"
+              }
+            >
+              {hasSubmittedCase
+                ? "Caso activo"
+                : isFutureRoute
+                ? "Ruta futura"
+                : "Orientación"}
+            </Chip>
           </div>
 
           <div
@@ -1920,15 +2189,115 @@ export default function Home() {
 
           <div style={{ marginTop: 12 }}>
             <PrimaryButton onClick={() => go(bestNext.to)}>
-              {hasCreditBlocker
-                ? "Actualizar historial crediticio"
-                : isGoalAboveCapacity
-                ? "Ver propiedades en mi rango"
-                : bestNext.cta}
+              {bestNext.cta}
             </PrimaryButton>
           </div>
         </Card>
       </div>
+
+      {!hasCreditBlocker && !hasSubmittedCase ? (
+        <div style={visibleInViewStyle}>
+          <AlternativesCard
+            alternatives={homeRecommendation?.alternatives || []}
+            onGo={go}
+          />
+        </div>
+      ) : null}
+
+      {hasOperationalProgress ? (
+        <div style={visibleInViewStyle}>
+          <Card style={{ marginTop: 18 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: "rgba(148,163,184,0.95)",
+                fontWeight: 950,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <KeyRound size={13} strokeWidth={2.3} />
+              Progreso recuperado
+            </div>
+
+            <div
+              style={{
+                marginTop: 10,
+                fontSize: 18,
+                fontWeight: 980,
+                lineHeight: 1.2,
+              }}
+            >
+              Tu app recordó tu camino
+            </div>
+
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 13,
+                lineHeight: 1.4,
+                color: "rgba(226,232,240,0.88)",
+              }}
+            >
+              Si borras y vuelves a instalar la app, estos avances deberían
+              volver al iniciar sesión.
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                display: "grid",
+                gridTemplateColumns: "1fr",
+                gap: 10,
+              }}
+            >
+              {effectiveSelectedProperty ? (
+                <BenefitCard
+                  icon={<HomeIcon size={15} />}
+                  title="Propiedad seleccionada"
+                  body={
+                    effectiveSelectedProperty?.titulo ||
+                    effectiveSelectedProperty?.title ||
+                    effectiveSelectedProperty?.nombre ||
+                    effectiveSelectedProperty?.name ||
+                    "Propiedad guardada"
+                  }
+                />
+              ) : null}
+
+              {effectiveMortgageRoute ? (
+                <BenefitCard
+                  icon={<Landmark size={15} />}
+                  title="Ruta hipotecaria aceptada"
+                  body={
+                    effectiveMortgageRoute?.label ||
+                    effectiveMortgageRoute?.productLabel ||
+                    effectiveMortgageRoute?.tipoProducto ||
+                    effectiveMortgageRoute?.tipo ||
+                    effectiveMortgageRoute?.banco ||
+                    "Ruta referencial guardada"
+                  }
+                />
+              ) : null}
+
+              {docsCompletedCount > 0 ? (
+                <BenefitCard
+                  icon={<FileText size={15} />}
+                  title="Checklist documental"
+                  body={`${docsCompletedCount} documentos marcados como listos.`}
+                />
+              ) : null}
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <SecondaryButton onClick={() => go("/ruta")}>
+                Continuar mi ruta
+              </SecondaryButton>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       <div style={visibleInViewStyle}>
         <Card style={{ marginTop: 18 }}>
@@ -1942,7 +2311,11 @@ export default function Home() {
           >
             <div>
               <div style={{ fontSize: 13, color: "rgba(148,163,184,0.95)" }}>
-                {primaryHeadlineLabel}
+                {hasImmediateViableMortgage
+                  ? "Rango estimado de compra"
+                  : isFutureRoute
+                  ? "Rango futuro estimado"
+                  : "Orientación de compra"}
               </div>
 
               <div
@@ -1953,7 +2326,7 @@ export default function Home() {
                   lineHeight: 1.1,
                 }}
               >
-                {primaryHeadlineValue}
+                {moneySafe(displayPrimaryRange)}
               </div>
 
               <div
@@ -1964,235 +2337,41 @@ export default function Home() {
                   lineHeight: 1.35,
                 }}
               >
-                {primaryHeadlineHelp}
+                {hasImmediateViableMortgage
+                  ? "Este valor resume el rango referencial de vivienda al que hoy podrías apuntar con tu perfil actual."
+                  : isFutureRoute
+                  ? "Este valor resume una ruta futura posible si completas tu entrada durante obra."
+                  : "Puedes actualizar tu escenario para encontrar una ruta más clara."}
               </div>
             </div>
 
-            <Chip
-              tone={
-                hasCreditBlocker
-                  ? "neutral"
-                  : hasImmediateViableMortgage
-                  ? "good"
-                  : "neutral"
-              }
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                {hasCreditBlocker ? (
-                  <>
-                    <ShieldCheck size={13} strokeWidth={2.4} />
-                    Buró por revisar
-                  </>
-                ) : hasImmediateViableMortgage ? (
+            <Chip tone={hasSubmittedCase ? "good" : "neutral"}>
+              <span
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                {hasSubmittedCase ? (
                   <>
                     <CheckCircle2 size={13} strokeWidth={2.4} />
-                    Hoy viable
-                  </>
-                ) : isGoalAboveCapacity ? (
-                  <>
-                    <Target size={13} strokeWidth={2.4} />
-                    Aterrizar meta
+                    Enviado
                   </>
                 ) : (
                   <>
-                    <MapPin size={13} strokeWidth={2.4} />
-                    Ruta estimada
+                    <Target size={13} strokeWidth={2.4} />
+                    Estimado
                   </>
                 )}
               </span>
             </Chip>
           </div>
 
-          {blockerExplanationTitle && blockerExplanationBody ? (
-            <AccordionSection
-              title={blockerExplanationTitle}
-              subtitle="Esto te ayuda a entender qué variable pesa más hoy."
-              open={expandedSections.blocker}
-              onToggle={() => toggleSection("blocker")}
-            >
-              <div
-                style={{
-                  fontSize: 13,
-                  lineHeight: 1.4,
-                  color: "rgba(226,232,240,0.90)",
-                }}
-              >
-                {blockerExplanationBody}
-              </div>
-
-              {homePrimaryBlocker === "entrada" ? (
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    lineHeight: 1.35,
-                    color: "rgba(148,163,184,0.88)",
-                  }}
-                >
-                  La buena noticia: si aumentas tu entrada, tu capacidad puede
-                  subir mucho más rápido.
-                </div>
-              ) : null}
-
-              {homePrimaryBlocker === "buro" ? (
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    lineHeight: 1.35,
-                    color: "rgba(148,163,184,0.88)",
-                  }}
-                >
-                  La buena noticia: esta alerta no borra tu capacidad financiera.
-                  Solo indica que antes de aplicar conviene revisar el historial
-                  crediticio.
-                </div>
-              ) : null}
-            </AccordionSection>
-          ) : null}
-
-          {isGoalAboveCapacity && toNum(goalSummary?.targetPropertyValue) > 0 ? (
-            <InnerCard
-              style={{
-                marginTop: 12,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(148,163,184,0.16)",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                }}
-              >
-                <SoftMetric
-                  label="Tu objetivo de vivienda"
-                  value={safeMoney(goalSummary?.targetPropertyValue)}
-                />
-                <SoftMetric label="Lo más realista hoy" value={primaryHeadlineValue} />
-              </div>
-            </InnerCard>
-          ) : null}
-
-          {entryTrajectory ? (
-            <AccordionSection
-              title="Si mantienes este ritmo"
-              subtitle="Una proyección simple para visualizar cómo se podría mover tu entrada."
-              open={expandedSections.rhythm}
-              onToggle={() => toggleSection("rhythm")}
-            >
-              <div
-                style={{
-                  fontSize: 13,
-                  lineHeight: 1.4,
-                  color: "rgba(226,232,240,0.90)",
-                }}
-              >
-                Hoy tienes {safeMoney(entryTrajectory.entradaActual)} de entrada y
-                podrías destinar {safeMoney(entryTrajectory.capacidadMensual)} al
-                mes para seguir construyéndola.
-              </div>
-
-              {entryTrajectory.mejorRutaActual ? (
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    background: "rgba(2,6,23,0.18)",
-                    border: "1px solid rgba(148,163,184,0.12)",
-                    fontSize: 13,
-                    lineHeight: 1.35,
-                    color: "rgba(226,232,240,0.88)",
-                  }}
-                >
-                  Para tu rango más realista de hoy, la forma más rápida de
-                  fortalecer tu entrada sería con{" "}
-                  <strong>{entryTrajectory.mejorRutaActual.producto}</strong>.
-                  Manteniendo este ritmo, podrías completar una entrada
-                  referencial en{" "}
-                  <strong>
-                    {entryTrajectory.mejorRutaActual.mesesActual}{" "}
-                    {entryTrajectory.mejorRutaActual.mesesActual === 1
-                      ? "mes"
-                      : "meses"}
-                  </strong>
-                  .
-                </div>
-              ) : null}
-
-              {isGoalAboveCapacity && entryTrajectory.mejorRutaMeta ? (
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    background: "rgba(2,6,23,0.18)",
-                    border: "1px solid rgba(148,163,184,0.12)",
-                    fontSize: 13,
-                    lineHeight: 1.35,
-                    color: "rgba(226,232,240,0.88)",
-                  }}
-                >
-                  Para acercarte a tu meta de vivienda, la ruta más rápida
-                  estimada sería con{" "}
-                  <strong>{entryTrajectory.mejorRutaMeta.producto}</strong>, y
-                  tomaría alrededor de{" "}
-                  <strong>
-                    {entryTrajectory.mejorRutaMeta.mesesMeta}{" "}
-                    {entryTrajectory.mejorRutaMeta.mesesMeta === 1
-                      ? "mes"
-                      : "meses"}
-                  </strong>{" "}
-                  solo para fortalecer la entrada.
-                </div>
-              ) : null}
-
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 12,
-                  lineHeight: 1.35,
-                  color: "rgba(148,163,184,0.85)",
-                }}
-              >
-                Esto mejora tu capacidad de entrada. La aprobación final también
-                dependerá del programa y de tu perfil crediticio al momento de
-                aplicar.
-              </div>
-            </AccordionSection>
-          ) : null}
-
-          <InsightGrid items={mainInsightItems} />
+          <FinancialDisclaimer compact />
 
           <div style={{ marginTop: 12 }}>
-            <PrimaryButton
-              onClick={() =>
-                hasCreditBlocker ? go("/journey/full") : go("/marketplace")
-              }
-            >
-              {hasCreditBlocker
-                ? "Actualizar historial crediticio"
-                : isGoalAboveCapacity
-                ? "Ver propiedades en mi rango"
-                : "Ver propiedades compatibles"}
+            <PrimaryButton onClick={() => go(safeBottomCta.to)}>
+              {safeBottomCta.label}
             </PrimaryButton>
           </div>
         </Card>
-      </div>
-
-      <div
-        style={{
-          marginTop: 16,
-          fontSize: 11,
-          color: "rgba(148,163,184,0.78)",
-          lineHeight: 1.4,
-          textAlign: "center",
-        }}
-      >
-        Los resultados de HabitaLibre son referenciales y pueden variar según la
-        evaluación final de cada entidad financiera.
       </div>
     </Screen>
   );
