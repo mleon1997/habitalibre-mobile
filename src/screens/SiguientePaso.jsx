@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,7 +6,6 @@ import {
   FileText,
   Home,
   Target,
-  Send,
   Building2,
   Landmark,
 } from "lucide-react";
@@ -19,20 +18,13 @@ import {
   ProgressBar,
 } from "../ui/kit.jsx";
 import { moneyUSD } from "../lib/money";
+import { API_BASE } from "../lib/api";
 import { getCustomer, getCustomerToken } from "../lib/customerSession.js";
-import mockProperties from "../data/mockProperties.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 const LS_DOCS_CHECKLIST = "hl_docs_checklist_v1";
-
-const RAW_API_BASE =
-  import.meta.env.VITE_API_BASE || "https://habitalibre-backend.onrender.com";
-
-const API_BASE = RAW_API_BASE.endsWith("/api")
-  ? RAW_API_BASE
-  : `${RAW_API_BASE}/api`;
 
 function safeParseLS(key) {
   try {
@@ -146,17 +138,16 @@ function normalizeProperty(raw) {
 function findPropertyById(propertyId, snapshot, journey) {
   if (!propertyId) return null;
 
-  const pools = [
-    snapshot?.matchedProperties,
-    snapshot?.output?.matchedProperties,
-    snapshot?.plan?.routeSignals?.matchedProperties,
-    snapshot?.routeSignals?.matchedProperties,
-    journey?.match?.propiedades,
-    journey?.match?.items,
-    snapshot?.propiedades,
-    snapshot?.output?.propiedades,
-    mockProperties,
-  ];
+const pools = [
+  snapshot?.matchedProperties,
+  snapshot?.output?.matchedProperties,
+  snapshot?.plan?.routeSignals?.matchedProperties,
+  snapshot?.routeSignals?.matchedProperties,
+  journey?.match?.propiedades,
+  journey?.match?.items,
+  snapshot?.propiedades,
+  snapshot?.output?.propiedades,
+];
 
   for (const pool of pools) {
     if (!Array.isArray(pool)) continue;
@@ -176,31 +167,117 @@ function findPropertyById(propertyId, snapshot, journey) {
   return null;
 }
 
+const styles = {
+  content: {
+    width: "100%",
+    maxWidth: 560,
+    margin: "0 auto",
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingTop: "calc(env(safe-area-inset-top, 0px) + 18px)",
+    paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 136px)",
+    display: "grid",
+    gap: 18,
+    boxSizing: "border-box",
+  },
+
+  header: {
+    display: "grid",
+    gap: 18,
+  },
+
+  backButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    width: "fit-content",
+    minHeight: 42,
+    background: "rgba(255,255,255,0.055)",
+    border: "1px solid rgba(255,255,255,0.09)",
+    color: "rgba(226,232,240,0.98)",
+    borderRadius: 999,
+    padding: "9px 13px",
+    cursor: "pointer",
+    fontWeight: 850,
+    fontSize: 13.5,
+    boxShadow: "0 10px 26px rgba(0,0,0,0.14)",
+    backdropFilter: "blur(14px)",
+  },
+
+  eyebrow: {
+    fontSize: 13,
+    color: "rgba(148,163,184,0.95)",
+    fontWeight: 850,
+    marginBottom: 8,
+  },
+
+  title: {
+    fontSize: "clamp(34px, 9.3vw, 44px)",
+    lineHeight: 0.98,
+    fontWeight: 980,
+    letterSpacing: -1.25,
+    color: "rgba(226,232,240,0.98)",
+  },
+
+  subtitle: {
+    marginTop: 12,
+    fontSize: 16,
+    lineHeight: 1.5,
+    color: "rgba(148,163,184,0.96)",
+  },
+
+  softCard: {
+    padding: 18,
+    borderRadius: 28,
+    border: "1px solid rgba(148,163,184,0.14)",
+    background:
+      "linear-gradient(180deg, rgba(15,23,42,0.82), rgba(15,23,42,0.62))",
+    boxShadow: "0 18px 55px rgba(0,0,0,0.16)",
+  },
+
+  sectionTitle: {
+    fontSize: 22,
+    lineHeight: 1.12,
+    fontWeight: 950,
+    letterSpacing: -0.45,
+    color: "rgba(226,232,240,0.98)",
+  },
+
+  sectionSubtitle: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 1.48,
+    color: "rgba(148,163,184,0.95)",
+  },
+};
+
 function ChecklistStat({ label, value }) {
   return (
     <div
       style={{
         padding: 14,
-        borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.04)",
+        borderRadius: 20,
+        border: "1px solid rgba(148,163,184,0.11)",
+        background: "rgba(255,255,255,0.035)",
       }}
     >
       <div
         style={{
-          fontSize: 11,
+          fontSize: 11.5,
           color: "rgba(148,163,184,0.92)",
           fontWeight: 800,
         }}
       >
         {label}
       </div>
+
       <div
         style={{
           marginTop: 6,
           fontSize: 16,
           color: "rgba(226,232,240,0.98)",
           fontWeight: 950,
+          letterSpacing: -0.15,
         }}
       >
         {value}
@@ -211,31 +288,12 @@ function ChecklistStat({ label, value }) {
 
 function InfoCard({ title, subtitle, children }) {
   return (
-    <Card style={{ padding: 16 }}>
-      <div
-        style={{
-          fontSize: 16,
-          fontWeight: 950,
-          color: "rgba(226,232,240,0.98)",
-        }}
-      >
-        {title}
-      </div>
+    <Card style={styles.softCard}>
+      <div style={styles.sectionTitle}>{title}</div>
 
-      {subtitle ? (
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 13.5,
-            lineHeight: 1.45,
-            color: "rgba(148,163,184,0.95)",
-          }}
-        >
-          {subtitle}
-        </div>
-      ) : null}
+      {subtitle ? <div style={styles.sectionSubtitle}>{subtitle}</div> : null}
 
-      <div style={{ marginTop: 14 }}>{children}</div>
+      <div style={{ marginTop: 16 }}>{children}</div>
     </Card>
   );
 }
@@ -244,10 +302,10 @@ function StageCard({ icon, title, text }) {
   return (
     <div
       style={{
-        padding: 14,
-        borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.04)",
+        padding: 15,
+        borderRadius: 20,
+        border: "1px solid rgba(148,163,184,0.11)",
+        background: "rgba(255,255,255,0.035)",
       }}
     >
       <div
@@ -255,6 +313,7 @@ function StageCard({ icon, title, text }) {
           display: "inline-flex",
           alignItems: "center",
           gap: 8,
+          fontSize: 14.5,
           fontWeight: 900,
           color: "rgba(226,232,240,0.98)",
           marginBottom: 8,
@@ -267,12 +326,35 @@ function StageCard({ icon, title, text }) {
       <div
         style={{
           fontSize: 13.5,
-          lineHeight: 1.45,
+          lineHeight: 1.5,
           color: "rgba(148,163,184,0.95)",
         }}
       >
         {text}
       </div>
+    </div>
+  );
+}
+
+function FinancialDisclaimer({ compact = false }) {
+  return (
+    <div
+      style={{
+        marginTop: compact ? 12 : 16,
+        padding: compact ? "11px 12px" : "13px 14px",
+        borderRadius: 20,
+        border: "1px solid rgba(245,158,11,0.18)",
+        background:
+          "linear-gradient(135deg, rgba(245,158,11,0.09), rgba(245,158,11,0.045))",
+        color: "rgba(254,243,199,0.95)",
+        fontSize: compact ? 11.5 : 12,
+        lineHeight: 1.48,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Las cifras mostradas son estimaciones referenciales para orientación hipotecaria. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
     </div>
   );
 }
@@ -325,28 +407,28 @@ function getCaseReadinessStatus({
   docsReady,
 }) {
   if (!hasChosenProperty) return "no_listo";
-  if (selectedPropertyStatus === "selected_no_longer_viable") return "revisar_ruta";
-  if (selectedPropertyStatus === "selected_near_route") return "comparar_propiedades";
+  if (selectedPropertyStatus === "selected_no_longer_viable")
+    return "revisar_ruta";
+  if (selectedPropertyStatus === "selected_near_route")
+    return "comparar_propiedades";
   if (!docsReady) return "no_listo";
+
   return "listo_para_promotor_y_banco";
 }
 
-function getReadinessMeta({
-  caseReadinessStatus,
-  hasChosenProperty,
-}) {
+function getReadinessMeta({ caseReadinessStatus, hasChosenProperty }) {
   if (caseReadinessStatus === "no_listo") {
     return {
       heroTitle: hasChosenProperty
-        ? "Todavía falta preparación para activar tu caso"
-        : "Antes de activar tu caso, falta elegir una propiedad base",
+        ? "Todavía falta preparación para compartir tu caso"
+        : "Antes de compartir tu caso, falta elegir una propiedad base",
       heroBody: hasChosenProperty
-        ? "Tu caso va bien, pero todavía conviene completar mejor tu base documental antes de moverlo."
-        : "El sistema necesita una propiedad base para saber a qué proyecto debe dirigirse tu caso.",
+        ? "Tu ruta va bien, pero todavía conviene completar mejor tu base documental antes de pasar a revisión interna."
+        : "HabitaLibre necesita una propiedad base para ordenar mejor tu ruta y entender qué proyecto te interesa.",
       cardTitle: "Tu caso todavía no está listo",
       cardBody: hasChosenProperty
-        ? "Aún no vemos suficiente preparación para activar el caso con HabitaLibre. Primero conviene reforzar tu checklist."
-        : "Antes de activar tu caso, debes elegir una propiedad del proyecto que te interesa.",
+        ? "Aún no vemos suficiente preparación para pasar el caso a revisión interna de HabitaLibre. Primero conviene reforzar tu checklist."
+        : "Antes de pasar a revisión interna, debes elegir una propiedad del proyecto que te interesa.",
       cta: hasChosenProperty ? "Ver qué me falta" : "Elegir propiedad",
       path: hasChosenProperty ? "/checklist-documentos" : "/marketplace",
       chip: hasChosenProperty ? "Falta preparación" : "Falta propiedad base",
@@ -355,61 +437,61 @@ function getReadinessMeta({
         ? "Completar tu checklist"
         : "Elegir una propiedad base",
       nextActionBody: hasChosenProperty
-        ? "Eso le da al sistema una mejor base para revisar si tu caso ya puede entrar a la cola operativa."
-        : "Eso define el proyecto correcto y mejora la activación del caso.",
+        ? "Eso le da a HabitaLibre una mejor base para revisar si tu caso ya puede pasar a la siguiente etapa."
+        : "Eso define el proyecto correcto y ayuda a ordenar mejor tu ruta.",
     };
   }
 
   if (caseReadinessStatus === "revisar_ruta") {
     return {
-      heroTitle: "Tu caso no conviene activarlo todavía",
+      heroTitle: "Todavía conviene revisar tu ruta",
       heroBody:
-        "La propiedad elegida ya no se ve alineada con tu perfil actual. Primero conviene recalibrar tu ruta.",
+        "La propiedad elegida ya no se ve alineada de forma referencial con tu perfil actual. Primero conviene recalibrar tu ruta.",
       cardTitle: "Primero conviene revisar tu ruta",
       cardBody:
-        "Antes de activar tu caso con HabitaLibre, es mejor revisar nuevas opciones que sí calcen con tu situación actual.",
+        "Antes de compartir tu caso con HabitaLibre, es mejor revisar nuevas opciones que estén más alineadas con tu situación actual.",
       cta: "Ver nuevas opciones",
       path: "/marketplace",
       chip: "Ruta en revisión",
       tone: "neutral",
       nextActionTitle: "Comparar alternativas",
       nextActionBody:
-        "Eso evita mover tu caso a actores que hoy no son los correctos.",
+        "Esto ayuda a evitar que avances con una propiedad que ya no parece alineada con tu estimación actual.",
     };
   }
 
   if (caseReadinessStatus === "comparar_propiedades") {
     return {
-      heroTitle: "Tu caso está cerca, pero conviene comparar antes de activarlo",
+      heroTitle: "Tu caso está cerca, pero conviene comparar antes",
       heroBody:
-        "La propiedad elegida quedó cerca de tu ruta, pero vale la pena compararla con otras opciones antes de mover tu caso.",
+        "La propiedad elegida quedó cerca de tu ruta, pero vale la pena compararla con otras opciones antes de compartir tu caso.",
       cardTitle: "Primero conviene revisar el encaje",
       cardBody:
-        "Todavía no es ideal activar tu caso. Primero conviene validar si esta sigue siendo tu mejor propiedad base.",
+        "Todavía no es ideal pasar a revisión interna. Primero conviene validar si esta sigue siendo tu mejor propiedad base.",
       cta: "Comparar opciones",
       path: "/marketplace",
       chip: "Comparar primero",
       tone: "neutral",
       nextActionTitle: "Revisar si esta sigue siendo tu mejor opción",
       nextActionBody:
-        "Si otra propiedad encaja mejor, tu caso llegará más sólido a la cola operativa.",
+        "Si otra propiedad encaja mejor, tu caso llegará más ordenado a la revisión interna de HabitaLibre.",
     };
   }
 
   return {
-    heroTitle: "Tu caso ya está listo para revisión HabitaLibre",
+    heroTitle: "Tu caso ya puede pasar a revisión HabitaLibre",
     heroBody:
-      "Ya tienes una propiedad base alineada y una preparación suficiente. El siguiente paso es enviar tu caso a la cola operativa de HabitaLibre.",
-    cardTitle: "Tu caso está listo",
+      "Ya tienes una propiedad base y una preparación suficiente para que HabitaLibre revise internamente tu caso. Esto no representa aprobación, oferta ni promesa de financiamiento.",
+    cardTitle: "Tu caso puede pasar a revisión",
     cardBody:
-      "El sistema ya tiene una base suficiente para que HabitaLibre reciba tu caso y decida cómo moverlo.",
-    cta: "Activar mi caso",
+      "HabitaLibre recibirá tu caso para revisarlo internamente y definir cuál podría ser el siguiente paso más adecuado.",
+    cta: "Compartir mi caso con HabitaLibre",
     path: "/caso",
     chip: "Listo para revisión",
     tone: "good",
-    nextActionTitle: "Enviar caso a HabitaLibre",
+    nextActionTitle: "Compartir caso con HabitaLibre",
     nextActionBody:
-      "HabitaLibre recibirá tu caso, lo revisará internamente y luego decidirá si lo mueve al proyecto, al banco o a ambos.",
+      "HabitaLibre recibirá tu caso y lo revisará internamente. Cualquier condición final dependerá exclusivamente de entidades externas reguladas.",
   };
 }
 
@@ -417,34 +499,107 @@ export default function SiguientePaso() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-
+const [backendSelectedProperty, setBackendSelectedProperty] = useState(null);
   const snapshot = useMemo(() => loadOwnedData(LS_SNAPSHOT) || {}, []);
   const journey = useMemo(() => loadOwnedData(LS_JOURNEY) || {}, []);
+
   const selectedPropertyRef = useMemo(
-    () => loadOwnedData(LS_SELECTED_PROPERTY),
-    []
+  () => loadOwnedData(LS_SELECTED_PROPERTY),
+  []
+);
+
+const selectedPropertyIdCandidate = useMemo(() => {
+  return (
+    selectedPropertyRef?.id ||
+    selectedPropertyRef?._id ||
+    selectedPropertyRef?.propertyId ||
+    selectedPropertyRef?._normalizedId ||
+    journey?.propiedadId ||
+    journey?.propiedadSeleccionada?.id ||
+    journey?.propiedadSeleccionada?._id ||
+    journey?.selectedProperty?.id ||
+    journey?.selectedProperty?._id ||
+    null
   );
-  const docsChecklist = useMemo(
-    () => loadOwnedData(LS_DOCS_CHECKLIST) || {},
-    []
+}, [selectedPropertyRef, journey]);
+
+
+useEffect(() => {
+  let isMounted = true;
+
+  async function loadSelectedPropertyFromBackend() {
+    if (!selectedPropertyIdCandidate) return;
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/properties/${encodeURIComponent(selectedPropertyIdCandidate)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(
+          data?.message || "No se pudo cargar la propiedad seleccionada."
+        );
+      }
+
+      if (!isMounted) return;
+
+      setBackendSelectedProperty(data?.property || null);
+
+      console.log("[SiguientePaso] Propiedad real cargada:", {
+        id: selectedPropertyIdCandidate,
+        found: !!data?.property,
+      });
+    } catch (error) {
+      console.warn(
+        "[SiguientePaso] Error cargando propiedad real:",
+        error?.message || error
+      );
+
+      if (!isMounted) return;
+      setBackendSelectedProperty(null);
+    }
+  }
+
+  loadSelectedPropertyFromBackend();
+
+  return () => {
+    isMounted = false;
+  };
+}, [selectedPropertyIdCandidate]);
+
+const docsChecklist = useMemo(
+  () => loadOwnedData(LS_DOCS_CHECKLIST) || {},
+  []
+);
+
+const normalizedSelectedProperty = useMemo(() => {
+  const fromBackend = normalizeProperty(backendSelectedProperty);
+  if (fromBackend) return fromBackend;
+
+  const fromSelected = normalizeProperty(selectedPropertyRef);
+  if (fromSelected) return fromSelected;
+
+  const fromJourney =
+    normalizeProperty(journey?.propiedadSeleccionada) ||
+    normalizeProperty(journey?.selectedProperty) ||
+    normalizeProperty(journey?.property);
+
+  if (fromJourney) return fromJourney;
+
+  const resolvedById = findPropertyById(
+    selectedPropertyIdCandidate || journey?.propiedadId,
+    snapshot,
+    journey
   );
 
-  const normalizedSelectedProperty = useMemo(() => {
-    const fromSelected = normalizeProperty(selectedPropertyRef);
-    if (fromSelected) return fromSelected;
-
-    const fromJourney =
-      normalizeProperty(journey?.propiedadSeleccionada) ||
-      normalizeProperty(journey?.selectedProperty) ||
-      normalizeProperty(journey?.property);
-
-    if (fromJourney) return fromJourney;
-
-    const resolvedById = findPropertyById(
-      journey?.propiedadId,
-      snapshot,
-      journey
-    );
     const normalizedById = normalizeProperty(resolvedById);
     if (normalizedById) return normalizedById;
 
@@ -461,7 +616,14 @@ export default function SiguientePaso() {
     }
 
     return null;
-  }, [selectedPropertyRef, journey, snapshot]);
+
+    }, [
+  backendSelectedProperty,
+  selectedPropertyRef,
+  journey,
+  snapshot,
+  selectedPropertyIdCandidate,
+]);
 
   const hasChosenProperty = Boolean(normalizedSelectedProperty?.id);
 
@@ -594,7 +756,7 @@ export default function SiguientePaso() {
 
     if (!res.ok) {
       throw new Error(
-        data?.error || "No se pudo enviar tu caso a revisión HabitaLibre."
+        data?.error || "No se pudo compartir tu caso con HabitaLibre."
       );
     }
 
@@ -649,7 +811,7 @@ export default function SiguientePaso() {
       navigate("/caso");
     } catch (error) {
       setSubmitError(
-        error?.message || "No se pudo enviar tu caso a HabitaLibre."
+        error?.message || "No se pudo compartir tu caso con HabitaLibre."
       );
     } finally {
       setIsSubmitting(false);
@@ -657,82 +819,30 @@ export default function SiguientePaso() {
   }
 
   return (
-    <Screen
-      style={{
-        paddingTop: 78,
-        paddingBottom: 110,
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gap: 16,
-          paddingTop: 0,
-          paddingBottom: 110,
-        }}
-      >
-        <div style={{ display: "grid", gap: 12 }}>
-          <button
-            onClick={() => navigate("/ruta")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              color: "white",
-              borderRadius: 999,
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 850,
-              width: "fit-content",
-              marginTop: 8,
-            }}
-          >
-            <ArrowLeft size={15} />
+    <Screen>
+      <div style={styles.content}>
+        <div style={styles.header}>
+          <button onClick={() => navigate("/ruta")} style={styles.backButton}>
+            <ArrowLeft size={16} />
             Volver a Ruta
           </button>
 
           <div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "rgba(148,163,184,0.95)",
-                fontWeight: 850,
-                marginBottom: 8,
-              }}
-            >
-              Siguiente paso
-            </div>
+            <div style={styles.eyebrow}>Siguiente paso</div>
 
-            <div
-              style={{
-                fontSize: 30,
-                lineHeight: 1.02,
-                fontWeight: 980,
-                letterSpacing: -0.9,
-                color: "rgba(226,232,240,0.98)",
-                maxWidth: 560,
-              }}
-            >
+            <div style={styles.title}>
               {alreadyRequested
                 ? "Tu caso fue recibido por HabitaLibre"
                 : readinessMeta.heroTitle}
             </div>
 
-            <div
-              style={{
-                marginTop: 10,
-                fontSize: 15,
-                lineHeight: 1.45,
-                color: "rgba(148,163,184,0.95)",
-                maxWidth: 560,
-              }}
-            >
+            <div style={styles.subtitle}>
               {alreadyRequested
-                ? "Ya recibimos tu caso en la cola operativa de HabitaLibre. Ahora revisaremos internamente cómo moverlo con el proyecto y con una entidad financiera compatible."
+                ? "Ya recibimos tu caso en la cola operativa de HabitaLibre. Ahora lo revisaremos internamente para definir cuál podría ser el siguiente paso más adecuado."
                 : readinessMeta.heroBody}
             </div>
+
+            <FinancialDisclaimer />
           </div>
         </div>
 
@@ -749,7 +859,7 @@ export default function SiguientePaso() {
               display: "flex",
               gap: 8,
               flexWrap: "wrap",
-              marginBottom: 14,
+              marginBottom: 16,
             }}
           >
             <Chip tone={alreadyRequested ? "good" : readinessMeta.tone}>
@@ -765,14 +875,19 @@ export default function SiguientePaso() {
 
           <PrimaryButton onClick={handlePrimaryAction} disabled={isSubmitting}>
             <span
-              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
             >
               {alreadyRequested
                 ? "Ver estado de mi caso"
                 : isSubmitting
-                ? "Enviando caso..."
+                ? "Compartiendo caso..."
                 : readinessMeta.cta}
-              <ArrowRight size={16} />
+              <ArrowRight size={18} />
             </span>
           </PrimaryButton>
 
@@ -808,21 +923,21 @@ export default function SiguientePaso() {
 
             <StageCard
               icon={<Building2 size={15} />}
-              title="Proyecto"
+              title="Proyecto inmobiliario"
               text={
                 alreadyRequested
-                  ? "HabitaLibre decidirá si tu caso ya debe moverse al proyecto elegido y en qué momento."
-                  : "Cuando envíes tu caso a HabitaLibre, entra primero a revisión interna antes de salir al proyecto."
+                  ? "HabitaLibre revisará si tu caso está suficientemente ordenado para avanzar hacia el proyecto elegido."
+                  : "Cuando compartas tu caso con HabitaLibre, primero entra a revisión interna antes de cualquier siguiente paso externo."
               }
             />
 
             <StageCard
               icon={<Landmark size={15} />}
-              title="Entidad financiera"
+              title="Frente financiero"
               text={
                 alreadyRequested
-                  ? "HabitaLibre también revisará si conviene mover tu caso al frente financiero y con qué entidad."
-                  : "Cuando envíes tu caso a HabitaLibre, primero se valida internamente la mejor ruta financiera."
+                  ? "HabitaLibre también revisará si conviene orientar tu caso hacia una conversación futura con una entidad financiera."
+                  : "HabitaLibre no aprueba ni otorga créditos. Solo ordena la información para que entiendas mejor tu preparación."
               }
             />
           </div>
@@ -855,18 +970,23 @@ export default function SiguientePaso() {
                   : "Elegida"
               }
             />
+
             <ChecklistStat label="Checklist" value={`${docsDone}/${docsTotal}`} />
+
             <ChecklistStat
-              label="Meta estimada"
+              label="Rango estimado"
               value={maxCompra ? moneyUSD(maxCompra) : "—"}
             />
+
             <ChecklistStat
-              label="Cuota estimada"
+              label="Cuota ref."
               value={cuota ? moneyUSD(cuota) : "—"}
             />
           </div>
 
-          <div style={{ marginTop: 14 }}>
+          <FinancialDisclaimer compact />
+
+          <div style={{ marginTop: 16 }}>
             <div
               style={{
                 fontSize: 12,
@@ -883,14 +1003,14 @@ export default function SiguientePaso() {
 
         <InfoCard
           title="Propiedad base"
-          subtitle="La propiedad que hoy está guiando tu ruta."
+          subtitle="La propiedad que hoy está guiando tu ruta referencial."
         >
           <div
             style={{
-              padding: 14,
-              borderRadius: 16,
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.04)",
+              padding: 15,
+              borderRadius: 20,
+              border: "1px solid rgba(148,163,184,0.11)",
+              background: "rgba(255,255,255,0.035)",
             }}
           >
             <div
@@ -902,7 +1022,7 @@ export default function SiguientePaso() {
                 color: "rgba(226,232,240,0.98)",
                 fontWeight: 900,
                 fontSize: 16,
-                lineHeight: 1.2,
+                lineHeight: 1.25,
               }}
             >
               <Home size={15} />
@@ -954,25 +1074,25 @@ export default function SiguientePaso() {
 
         <InfoCard
           title="Cómo agrega valor HabitaLibre aquí"
-          subtitle="La idea es que no dependas de un solo actor para avanzar."
+          subtitle="La idea es que tengas una ruta más ordenada antes de conversar con actores externos."
         >
           <div style={{ display: "grid", gap: 10 }}>
             <StageCard
               icon={<FileText size={15} />}
               title="Recibe y revisa tu caso"
-              text="No se trata solo de haber hecho el journey, sino de que HabitaLibre revise internamente si ya conviene mover tu caso."
+              text="No se trata solo de haber hecho el journey, sino de que HabitaLibre revise internamente si tu información está suficientemente ordenada."
             />
 
             <StageCard
               icon={<Building2 size={15} />}
-              title="Decide el momento correcto para el proyecto"
-              text="HabitaLibre decide cuándo dirigir tu caso al promotor del proyecto elegido."
+              title="Ordena el momento correcto para el proyecto"
+              text="HabitaLibre puede ayudarte a entender cuándo tiene sentido avanzar hacia el proyecto elegido."
             />
 
             <StageCard
               icon={<Landmark size={15} />}
-              title="También define el frente financiero"
-              text="Así no dependes del promotor para llegar al banco y mantienes ambos frentes bajo el control de HabitaLibre."
+              title="Orienta el frente financiero"
+              text="HabitaLibre no otorga ni aprueba créditos. Su rol es ayudarte a entender tu preparación y ordenar mejor los siguientes pasos."
             />
           </div>
         </InfoCard>
@@ -980,7 +1100,7 @@ export default function SiguientePaso() {
         {alreadyRequested ? (
           <InfoCard
             title="Tu caso ya fue recibido"
-            subtitle="Ya puedes pasar a la vista de seguimiento para ver el estado de la revisión operativa."
+            subtitle="Ya puedes pasar a la vista de seguimiento para ver el estado de la revisión operativa interna."
           >
             <PrimaryButton onClick={() => navigate("/caso")}>
               Ver mi caso

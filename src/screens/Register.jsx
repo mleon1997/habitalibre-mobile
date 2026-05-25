@@ -181,6 +181,26 @@ function InlineLink({ children, onClick, tone = "accent" }) {
   );
 }
 
+function FinancialDisclaimer() {
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "10px 12px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.4,
+      }}
+    >
+      <strong>Orientación referencial.</strong> HabitaLibre no otorga ni aprueba
+      créditos. Crear una cuenta solo guarda tu progreso.
+    </div>
+  );
+}
+
 export default function Register() {
   const nav = useNavigate();
   const location = useLocation();
@@ -269,22 +289,27 @@ export default function Register() {
   }
 
   return (
-    <Screen>
+    <Screen constrain={false}>
       <div
         style={{
+          width: "100%",
           maxWidth: 430,
           margin: "0 auto",
-          paddingTop: 48,
-          paddingBottom: 8,
+          padding:
+            "calc(env(safe-area-inset-top, 0px) + 28px) 22px calc(env(safe-area-inset-bottom, 0px) + 28px)",
+          boxSizing: "border-box",
         }}
       >
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 16 }}>
           <img
             src="/LOGOHL.png"
             alt="HabitaLibre"
             style={{
-              height: 34,
-              marginBottom: 14,
+              width: 56,
+              height: 56,
+              objectFit: "cover",
+              borderRadius: 18,
+              marginBottom: 16,
               display: "block",
               filter: "drop-shadow(0 8px 18px rgba(45,212,191,0.20))",
             }}
@@ -305,13 +330,12 @@ export default function Register() {
           <h1
             style={{
               margin: 0,
-              fontSize: 30,
-              lineHeight: 1.06,
+              fontSize: 34,
+              lineHeight: 1.02,
               fontWeight: 950,
               color: COLORS.text,
-              letterSpacing: -1.0,
-              maxWidth: 350,
-              textWrap: "balance",
+              letterSpacing: -1,
+              maxWidth: 360,
             }}
           >
             Crea tu cuenta
@@ -321,21 +345,24 @@ export default function Register() {
             style={{
               marginTop: 12,
               fontSize: 16,
-              lineHeight: 1.42,
+              lineHeight: 1.45,
               color: COLORS.subtext,
               maxWidth: 360,
             }}
           >
-            Guarda tu progreso, tus resultados y tu camino a casa.
+            Guarda tu progreso, tu orientación referencial y tu camino hacia
+            vivienda propia.
           </div>
+
+          <FinancialDisclaimer />
         </div>
 
         <Card
           soft
           style={{
-            marginTop: 14,
+            marginTop: 18,
             padding: 18,
-            borderRadius: 28,
+            borderRadius: 26,
             border: "1px solid rgba(255,255,255,0.08)",
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",

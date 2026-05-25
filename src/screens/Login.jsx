@@ -1,3 +1,4 @@
+// src/screens/Login.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -7,10 +8,8 @@ import {
   SecondaryButton,
 } from "../ui/kit.jsx";
 import { customerLogin } from "../lib/customerAuthApi.js";
-
-const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
-const LS_JOURNEY = "hl_mobile_journey_v1";
-const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
+import { hydrateLatestSnapshotToLocalStorage } from "../lib/snapshots.js";
+import { hydrateFullUserStateToLocalStorage } from "../lib/userAppState.js";
 
 function niceMsg(err) {
   const raw =
@@ -99,6 +98,26 @@ function TrustLine() {
   );
 }
 
+function FinancialDisclaimer() {
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "10px 12px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.4,
+      }}
+    >
+      <strong>Orientación referencial.</strong> HabitaLibre no otorga ni aprueba
+      créditos. Iniciar sesión solo recupera tu progreso.
+    </div>
+  );
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -126,6 +145,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState("Iniciar sesión");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -139,7 +159,9 @@ export default function Login() {
   async function handleLogin() {
     setError("");
 
-    if (!email.trim()) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
       setError("Ingresa tu email para continuar.");
       return;
     }
@@ -151,17 +173,68 @@ export default function Login() {
 
     try {
       setLoading(true);
+      setLoadingLabel("Ingresando...");
 
-      await customerLogin({
-        email: email.trim().toLowerCase(),
+      const loginResponse = await customerLogin({
+        email: normalizedEmail,
         password,
       });
+
+      const ownerEmail =
+        loginResponse?.customer?.email ||
+        loginResponse?.user?.email ||
+        loginResponse?.data?.customer?.email ||
+        loginResponse?.data?.user?.email ||
+        normalizedEmail;
+
+      setLoadingLabel("Recuperando tu orientación...");
+
+      try {
+        const hydration = await hydrateLatestSnapshotToLocalStorage(ownerEmail);
+
+        if (hydration?.hydrated) {
+          console.log("[HL] Snapshot rehidratado desde backend");
+        } else {
+          console.log(
+            "[HL] No había snapshot para rehidratar:",
+            hydration?.reason || "sin razón"
+          );
+        }
+      } catch (hydrateErr) {
+        console.warn(
+          "[HL] No se pudo rehidratar snapshot:",
+          hydrateErr?.message || hydrateErr
+        );
+      }
+
+      setLoadingLabel("Recuperando tu progreso...");
+
+      try {
+        const appStateHydration = await hydrateFullUserStateToLocalStorage(
+          ownerEmail
+        );
+
+        if (appStateHydration?.hydrated) {
+          console.log("[HL] Estado completo rehidratado desde backend");
+        } else {
+          console.log(
+            "[HL] No había estado completo para rehidratar:",
+            appStateHydration?.reason || "sin razón"
+          );
+        }
+      } catch (appStateErr) {
+        console.warn(
+          "[HL] No se pudo rehidratar estado completo:",
+          appStateErr?.message || appStateErr
+        );
+      }
 
       navigate(next, { replace: true });
     } catch (e) {
       setError(niceMsg(e));
     } finally {
       setLoading(false);
+      setLoadingLabel("Iniciar sesión");
     }
   }
 
@@ -174,22 +247,27 @@ export default function Login() {
   }
 
   return (
-    <Screen>
-     <div
-  style={{
-    maxWidth: 430,
-    margin: "0 auto",
-    paddingTop: 48,
-    paddingBottom: 8,
-  }}
->
-        <div style={{ marginBottom: 12 }}>
+    <Screen constrain={false}>
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 430,
+          margin: "0 auto",
+          padding:
+            "calc(env(safe-area-inset-top, 0px) + 28px) 22px calc(env(safe-area-inset-bottom, 0px) + 28px)",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ marginBottom: 16 }}>
           <img
             src="/LOGOHL.png"
             alt="HabitaLibre"
             style={{
-              height: 34,
-              marginBottom: 14,
+              width: 56,
+              height: 56,
+              objectFit: "cover",
+              borderRadius: 18,
+              marginBottom: 16,
               display: "block",
               filter: "drop-shadow(0 8px 18px rgba(45,212,191,0.20))",
             }}
@@ -210,36 +288,39 @@ export default function Login() {
           <h1
             style={{
               margin: 0,
-              fontSize: 30,
-              lineHeight: 1.06,
+              fontSize: 34,
+              lineHeight: 1.02,
               fontWeight: 950,
               color: COLORS.text,
-              letterSpacing: -1.0,
-              maxWidth: 350,
-              textWrap: "balance",
+              letterSpacing: -1,
+              maxWidth: 360,
             }}
           >
-            Inicia sesión para ver tu progreso
+            Inicia sesión
           </h1>
 
           <div
             style={{
               marginTop: 12,
               fontSize: 16,
-              lineHeight: 1.42,
+              lineHeight: 1.45,
               color: COLORS.subtext,
-              maxWidth: 350,
+              maxWidth: 360,
             }}
           >
-Accede a tu progreso guardado y tus resultados.
+            Recupera tu progreso, tu orientación referencial y tu camino hacia
+            vivienda propia.
           </div>
+
+          <FinancialDisclaimer />
         </div>
-<Card
-  soft
-  style={{
-   marginTop: 18,
-    padding: 18,
-            borderRadius: 28,
+
+        <Card
+          soft
+          style={{
+            marginTop: 18,
+            padding: 18,
+            borderRadius: 26,
             border: "1px solid rgba(255,255,255,0.08)",
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
@@ -343,8 +424,9 @@ Accede a tu progreso guardado y tus resultados.
               boxShadow: "0 18px 40px rgba(45,212,191,0.35)",
             }}
           >
-            {loading ? "Ingresando..." : "Iniciar sesión"}
+            {loading ? loadingLabel : "Iniciar sesión"}
           </PrimaryButton>
+
           <TrustLine />
 
           <div style={{ marginTop: 14 }}>

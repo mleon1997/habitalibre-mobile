@@ -242,16 +242,16 @@ function buildStepsFromEvaluations({
   const mesesConstruccionRestantes = toNum(evaluacionEntrada?.mesesConstruccionRestantes) ?? 0;
   const mesesNecesarios = toNum(evaluacionEntrada?.mesesNecesarios);
 
-  const hipotecaHoyViable = !!evaluacionHipotecaHoy?.viable;
-  const hipotecaFuturaViable = !!evaluacionHipotecaFutura?.viable;
+  const rutaHoyAlineada = !!evaluacionHipotecaHoy?.viable;
+  const rutaFuturaAlineada = !!evaluacionHipotecaFutura?.viable;
 
-  const hipotecaProducto =
+  const rutaProducto =
     evaluacionHipotecaFutura?.productoSugerido ||
     evaluacionHipotecaHoy?.productoSugerido ||
-    "Hipoteca por definir";
+    "Ruta referencial por definir";
 
   let step1 = "Revisa cuánto necesitas para separar y completar tu entrada.";
-  let step2 = "Todavía no hay una ruta hipotecaria sólida.";
+  let step2 = "Todavía no hay una ruta referencial suficientemente clara.";
   let step3 = summaryText || routeLabel || "Ruta por definir.";
 
   if (!entradaViable) {
@@ -274,22 +274,22 @@ function buildStepsFromEvaluations({
     }
   }
 
-  if (hipotecaFuturaViable) {
-    step2 = `Tu mejor ruta proyectada sería con ${hipotecaProducto}.`;
-  } else if (hipotecaHoyViable) {
-    step2 = `Tu mejor ruta hoy sería con ${hipotecaProducto}.`;
+  if (rutaFuturaAlineada) {
+    step2 = `La ruta referencial proyectada sería ${rutaProducto}.`;
+  } else if (rutaHoyAlineada) {
+    step2 = `La ruta referencial actual sería ${rutaProducto}.`;
   }
 
   if (estadoCompra === "top_match") {
-    step3 = "Esta propiedad sí podría encajar con tu perfil actual.";
+    step3 = "Esta propiedad podría alinearse con tu perfil actual de forma referencial.";
   } else if (estadoCompra === "entrada_viable_hipoteca_futura_viable") {
-    step3 = "Puedes completar la entrada y luego aplicar a hipoteca.";
+    step3 = "Podrías completar la entrada y luego comparar una ruta hipotecaria referencial.";
   } else if (estadoCompra === "entrada_viable_hipoteca_futura_debil") {
-    step3 = "La entrada se ve alcanzable, pero la hipoteca requiere fortalecerse.";
+    step3 = "La entrada se ve alcanzable, pero la ruta referencial requiere fortalecerse.";
   } else if (estadoCompra === "entrada_no_viable") {
-    step3 = "La entrada todavía no calza con tu capacidad actual.";
+    step3 = "La entrada todavía no se alinea con tu capacidad actual.";
   } else if (estadoCompra === "fuera_de_reglas") {
-    step3 = "Esta propiedad no encaja con las reglas del programa para tu perfil.";
+    step3 = "Esta propiedad no parece alinearse con las condiciones generales de esta categoría.";
   }
 
   return [
@@ -301,9 +301,9 @@ function buildStepsFromEvaluations({
     },
     {
       id: 2,
-      title: "Hipoteca",
+      title: "Ruta referencial",
       subtitle: step2,
-      tone: hipotecaFuturaViable || hipotecaHoyViable ? "ok" : "neutral",
+      tone: rutaFuturaAlineada || rutaHoyAlineada ? "ok" : "neutral",
     },
     {
       id: 3,
@@ -315,7 +315,7 @@ function buildStepsFromEvaluations({
 }
 
 /* =========================
-   NUEVO SCORE VIVIENDA
+   SCORE VIVIENDA
 ========================= */
 
 function calcularScoreVivienda({
@@ -346,8 +346,7 @@ function calcularScoreVivienda({
 
   const entrada = Number(entradaDisponible || 0);
   const entradaReq = Number(entradaMinimaRequerida || 0);
-  const ratioEntrada =
-    entradaReq > 0 ? entrada / entradaReq : 0;
+  const ratioEntrada = entradaReq > 0 ? entrada / entradaReq : 0;
 
   if (ratioEntrada >= 1) score += 20;
   else if (ratioEntrada >= 0.75) score += 16;
@@ -420,7 +419,7 @@ function getRouteSignals(snapshot = {}, inputs = {}) {
 }
 
 /* =========================
-   NUEVA CAPA: TRAYECTORIA DE ENTRADA
+   TRAYECTORIA DE ENTRADA
 ========================= */
 
 function buildEntryTrajectory({
@@ -651,7 +650,7 @@ export function buildPlan({ journey, snapshot }) {
     actions.push({
       id: "complete_profile",
       title: "Completa tu perfil",
-      subtitle: "Te toma menos de 2 minutos y desbloquea tu resultado real.",
+      subtitle: "Te toma menos de 2 minutos y desbloquea tu orientación referencial.",
       cta: "Continuar",
       to: "/journey",
       kind: "primary",
@@ -661,8 +660,8 @@ export function buildPlan({ journey, snapshot }) {
   if (!missingCore && !routeSignals.hasCurrentViableRoute && routeSignals.hasFutureViableRoute) {
     actions.push({
       id: "future_route",
-      title: "Ya tienes una ruta futura viable",
-      subtitle: "Completa la entrada durante la construcción y luego aplica a hipoteca.",
+      title: "Ya tienes una ruta futura referencial",
+      subtitle: "Completa la entrada durante la construcción y luego compara una ruta hipotecaria referencial.",
       cta: "Ver mi match",
       to: "/marketplace",
       kind: "primary",
@@ -672,8 +671,8 @@ export function buildPlan({ journey, snapshot }) {
   if (!missingCore && sinOferta) {
     actions.push({
       id: "improve",
-      title: "Mejora tu elegibilidad",
-      subtitle: "Ajusta entrada, precio o plazo para desbloquear una ruta.",
+      title: "Mejora tu preparación",
+      subtitle: "Ajusta entrada, precio o plazo para abrir una ruta referencial más clara.",
       cta: "Optimizar escenario",
       to: "/journey?afinando=1",
       kind: "primary",
@@ -683,8 +682,8 @@ export function buildPlan({ journey, snapshot }) {
   if (!missingCore && !sinOferta && routeSignals.hasCurrentViableRoute) {
     actions.push({
       id: "next_step",
-      title: "Siguiente paso recomendado",
-      subtitle: "Checklist + asesoría para convertir esto en crédito real.",
+      title: "Siguiente paso sugerido",
+      subtitle: "Checklist y guía para ordenar mejor tu preparación.",
       cta: "Ver mi plan",
       to: "/journey",
       kind: "primary",
@@ -696,9 +695,9 @@ export function buildPlan({ journey, snapshot }) {
   if (ltv != null) {
     insights.push({
       id: "ltv",
-      label: "Financiamiento vs. valor",
+      label: "Monto estimado vs. valor",
       value: `${ltv}%`,
-      hint: ltv <= 80 ? "Buena entrada" : ltv <= 90 ? "Entrada justa" : "Entrada baja (alto LTV)",
+      hint: ltv <= 80 ? "Buena entrada" : ltv <= 90 ? "Entrada ajustada" : "Entrada baja",
     });
   }
 
@@ -707,32 +706,32 @@ export function buildPlan({ journey, snapshot }) {
       id: "dti",
       label: "Carga mensual estimada",
       value: `${dti}%`,
-      hint: dti <= 35 ? "Saludable" : dti <= 45 ? "Ajustada" : "Alta (riesgo)",
+      hint: dti <= 35 ? "Cómoda" : dti <= 45 ? "Ajustada" : "Alta",
     });
   }
 
   if (routeSignals.hasCurrentViableRoute) {
     insights.push({
       id: "route",
-      label: "Ruta sugerida",
-      value: bancoSugerido || "Compra inmediata viable",
-      hint: productoSugerido || "Ruta actual",
+      label: "Ruta referencial",
+      value: bancoSugerido || "Alineación actual",
+      hint: productoSugerido || "Ruta actual referencial",
     });
   } else if (routeSignals.hasFutureViableRoute) {
     insights.push({
       id: "route_future",
-      label: "Ruta sugerida",
-      value: "Ruta futura viable",
+      label: "Ruta referencial",
+      value: "Ruta futura referencial",
       hint:
         routeSignals.futureViableProperty?.evaluacionHipotecaFutura?.productoSugerido ||
-        "Completa la entrada y luego aplica a hipoteca",
+        "Completa la entrada y luego compara una ruta referencial",
     });
   } else if (routeSignals.hasNearRoute) {
     insights.push({
       id: "route_near",
-      label: "Ruta sugerida",
+      label: "Ruta referencial",
       value: "Ruta cercana",
-      hint: "Todavía no es compra inmediata, pero ya hay un camino posible.",
+      hint: "Todavía no es una ruta actual clara, pero ya hay un camino posible.",
     });
   }
 
@@ -827,12 +826,12 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
   const cuotaEntradaCalculada =
     toNum(evaluacionEntrada?.cuotaEntradaMensual);
 
-  const hipotecaLabelCalculada =
+  const rutaLabelCalculada =
     evaluacionHipotecaFutura?.productoSugerido ||
     evaluacionHipotecaHoy?.productoSugerido ||
     null;
 
-  const cuotaHipotecaCalculada =
+  const cuotaRutaCalculada =
     toNum(evaluacionHipotecaFutura?.cuotaReferencia) ??
     toNum(evaluacionHipotecaHoy?.cuotaReferencia) ??
     null;
@@ -857,7 +856,7 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
       evaluacionHipotecaHoy?.termMonths
     ) ?? null;
 
-  const montoHipotecaCalculado =
+  const montoRutaCalculado =
     toNum(evaluacionHipotecaFutura?.montoHipotecaProyectado) ??
     toNum(evaluacionHipotecaFutura?.montoPrestamo) ??
     toNum(evaluacionHipotecaHoy?.montoPrestamo) ??
@@ -882,30 +881,30 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
     const finalRouteLabel =
       routeLabelCalculado ||
       (estadoCompra === "top_match"
-        ? "Ruta posible con este proyecto"
+        ? "Ruta referencial con este proyecto"
         : estadoCompra === "entrada_viable_hipoteca_futura_viable"
-        ? "Ruta posible con este proyecto"
+        ? "Ruta referencial futura con este proyecto"
         : estadoCompra === "entrada_viable_hipoteca_futura_debil"
-        ? "Ruta posible con ajustes"
+        ? "Ruta referencial con ajustes"
         : estadoCompra === "entrada_no_viable"
-        ? "Entrada no viable"
+        ? "Entrada por fortalecer"
         : estadoCompra === "ruta_cercana"
         ? "Ruta cercana"
         : estadoCompra === "fuera_de_reglas"
-        ? "Fuera de reglas"
+        ? "Por revisar"
         : "Ruta por definir");
 
     const summaryText =
       estadoCompra === "top_match"
-        ? "Tu perfil sí podría sostener esta compra hoy."
+        ? "Tu perfil parece alinearse con esta propiedad dentro de tu rango estimado actual."
         : estadoCompra === "entrada_viable_hipoteca_futura_viable"
-        ? "Puedes completar la entrada y luego aplicar a hipoteca."
+        ? "Podrías completar la entrada y luego comparar una ruta hipotecaria referencial."
         : estadoCompra === "entrada_viable_hipoteca_futura_debil"
-        ? "La entrada se ve alcanzable, pero la hipoteca requiere fortalecerse."
+        ? "La entrada se ve alcanzable, pero la ruta referencial requiere fortalecerse."
         : estadoCompra === "entrada_no_viable"
-        ? "La entrada todavía no calza con tu capacidad actual."
+        ? "La entrada todavía no se alinea con tu capacidad actual."
         : estadoCompra === "fuera_de_reglas"
-        ? "Esta propiedad no encaja con las reglas del programa para tu perfil."
+        ? "Esta propiedad no parece alinearse con las condiciones generales de esta categoría."
         : routeLabelCalculado || "Ruta por definir.";
 
     return {
@@ -914,9 +913,12 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
       entradaTotal: entradaTotalCalculada,
       teFaltaHoy: teFaltaHoyCalculado,
       cuotaEntrada: cuotaEntradaCalculada,
-      hipotecaEstimada: hipotecaLabelCalculada,
-      cuotaHipotecaEstimada: cuotaHipotecaCalculada,
-      montoHipotecaEstimado: montoHipotecaCalculado,
+
+      // Conservamos nombres internos para no romper componentes existentes.
+      hipotecaEstimada: rutaLabelCalculada,
+      cuotaHipotecaEstimada: cuotaRutaCalculada,
+      montoHipotecaEstimado: montoRutaCalculado,
+
       tasaAnual: tasaAnualCalculada,
       plazoMeses: plazoMesesCalculado,
       mortgageId:
@@ -967,8 +969,8 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
         },
         {
           id: 2,
-          title: "Hipoteca",
-          subtitle: "Todavía no hay una ruta hipotecaria sólida.",
+          title: "Ruta referencial",
+          subtitle: "Todavía no hay una ruta referencial suficientemente clara.",
           tone: "warning",
         },
       ],
@@ -982,7 +984,7 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
 
   const entradaMinima = Math.max(0, precioPropiedad * (1 - ltvMax));
   const teFaltaHoy = Math.max(0, entradaMinima - (inputs.entrada || 0));
-  const hipotecaEstimadaMonto = Math.max(0, precioPropiedad - entradaMinima);
+  const montoReferencialEstimado = Math.max(0, precioPropiedad - entradaMinima);
 
   const tasaAnual =
     toNum(mortgage?.annualRate) ??
@@ -994,8 +996,8 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
     toNum(s?.plazoMeses) ??
     300;
 
-  const cuotaHipotecaEstimada =
-    hipotecaEstimadaMonto > 0 ? pmt(tasaAnual / 12, plazoMeses, hipotecaEstimadaMonto) : null;
+  const cuotaReferencialEstimada =
+    montoReferencialEstimado > 0 ? pmt(tasaAnual / 12, plazoMeses, montoReferencialEstimado) : null;
 
   const cuotaEntrada =
     teFaltaHoy > 0 && (inputs.capacidadEntradaMensual || 0) > 0
@@ -1006,13 +1008,13 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
 
   const routeLabel =
     teFaltaHoy <= 0
-      ? "Ruta posible con este proyecto"
+      ? "Ruta referencial con este proyecto"
       : "Ruta cercana con este proyecto";
 
   const mortgageLabel =
     mortgage?.label ||
     mortgage?.displayName ||
-    "Hipoteca por definir";
+    "Ruta referencial por definir";
 
   const steps = teFaltaHoy <= 0
     ? [
@@ -1024,14 +1026,14 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
         },
         {
           id: 2,
-          title: "Hipoteca",
-          subtitle: `Tu mejor ruta proyectada sería con ${mortgageLabel}.`,
+          title: "Ruta referencial",
+          subtitle: `La ruta referencial proyectada sería ${mortgageLabel}.`,
           tone: "ok",
         },
         {
           id: 3,
           title: "Resultado",
-          subtitle: "Esta propiedad sí podría encajar con tu perfil actual.",
+          subtitle: "Esta propiedad podría alinearse con tu perfil actual de forma referencial.",
           tone: "ok",
         },
       ]
@@ -1044,15 +1046,15 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
         },
         {
           id: 2,
-          title: "Hipoteca",
-          subtitle: `Tu mejor ruta proyectada sería con ${mortgageLabel}.`,
+          title: "Ruta referencial",
+          subtitle: `La ruta referencial proyectada sería ${mortgageLabel}.`,
           tone: "neutral",
         },
         {
           id: 3,
           title: "Resultado",
           subtitle: inputs.capacidadEntradaMensual > 0
-            ? "Podrías completar la entrada y luego aplicar a hipoteca."
+            ? "Podrías completar la entrada y luego comparar una ruta hipotecaria referencial."
             : "Necesitas fortalecer la entrada para avanzar con esta propiedad.",
           tone: "neutral",
         },
@@ -1064,9 +1066,12 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
     entradaTotal: entradaMinima,
     teFaltaHoy,
     cuotaEntrada,
+
+    // Conservamos nombres internos para no romper componentes existentes.
     hipotecaEstimada: mortgageLabel,
-    cuotaHipotecaEstimada,
-    montoHipotecaEstimado: hipotecaEstimadaMonto,
+    cuotaHipotecaEstimada: cuotaReferencialEstimada,
+    montoHipotecaEstimado: montoReferencialEstimado,
+
     tasaAnual,
     plazoMeses,
     mortgageId: mortgage?.mortgageId || null,

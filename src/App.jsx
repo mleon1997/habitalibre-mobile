@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Onboarding from "./screens/Onboarding.jsx";
 import { hasSeenOnboarding } from "./lib/appOnboarding.js";
@@ -9,14 +9,11 @@ import Journey from "./screens/Journey.jsx";
 import Marketplace from "./screens/Marketplace.jsx";
 import Perfil from "./screens/Perfil.jsx";
 import Ruta from "./screens/Ruta.jsx";
-import QueMeFalta from "./screens/QueMeFalta.jsx";
-import MejorarPerfil from "./screens/MejorarPerfil.jsx";
 import Asesor from "./screens/Asesor.jsx";
 import PropertyDetail from "./screens/PropertyDetail.jsx";
 import Login from "./screens/Login.jsx";
 import Register from "./screens/Register.jsx";
 import EditarPerfil from "./screens/EditarPerfil.jsx";
-import PropiedadIdeal from "./screens/PropiedadIdeal.jsx";
 import Legal from "./screens/Legal.jsx";
 import DeleteAccount from "./screens/DeleteAccount.jsx";
 import ChecklistDocumentos from "./screens/ChecklistDocumentos";
@@ -40,6 +37,41 @@ function RequireCustomer({ children }) {
   return children;
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "auto",
+      });
+
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+
+      const possibleScrollContainers = document.querySelectorAll(
+        "[data-scroll-container], main, .app-scroll, .screen, #root"
+      );
+
+      possibleScrollContainers.forEach((el) => {
+        if (el && typeof el.scrollTo === "function") {
+          el.scrollTo({
+            top: 0,
+            left: 0,
+            behavior: "auto",
+          });
+        } else if (el) {
+          el.scrollTop = 0;
+        }
+      });
+    });
+  }, [pathname]);
+
+  return null;
+}
+
 export default function App() {
   const location = useLocation();
   const token = getCustomerToken();
@@ -54,8 +86,10 @@ export default function App() {
 
   return (
     <AppShell hideNav={hideNav}>
+      <ScrollToTop />
+
       <Routes>
-        {/* PÚBLICAS */}
+        {/* Públicas principales */}
         <Route
           path="/"
           element={
@@ -66,19 +100,34 @@ export default function App() {
             )
           }
         />
+
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/journey" element={<Journey />} />
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/property/:id" element={<PropertyDetail />} />
-        <Route path="/que-me-falta" element={<QueMeFalta />} />
-        <Route path="/mejorar" element={<MejorarPerfil />} />
         <Route path="/asesor" element={<Asesor />} />
         <Route path="/legal" element={<Legal />} />
         <Route path="/checklist-documentos" element={<ChecklistDocumentos />} />
         <Route path="/siguiente-paso" element={<SiguientePaso />} />
         <Route path="/caso" element={<Caso />} />
+        <Route path="/ruta" element={<Ruta />} />
+        <Route
+          path="/docs"
+          element={<Navigate to="/checklist-documentos" replace />}
+        />
 
-        {/* AUTH */}
+        {/* Rutas antiguas redirigidas a pantallas ya corregidas */}
+        <Route path="/que-me-falta" element={<Navigate to="/ruta" replace />} />
+        <Route
+          path="/mejorar"
+          element={<Navigate to="/journey?afinando=1" replace />}
+        />
+        <Route
+          path="/propiedad-ideal"
+          element={<Navigate to="/marketplace" replace />}
+        />
+
+        {/* Auth */}
         <Route
           path="/login"
           element={token ? <Navigate to="/" replace /> : <Login />}
@@ -90,7 +139,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* PROTEGIDAS */}
+        {/* Protegidas */}
         <Route
           path="/perfil"
           element={
@@ -99,6 +148,7 @@ export default function App() {
             </RequireCustomer>
           }
         />
+
         <Route
           path="/perfil/editar"
           element={
@@ -107,6 +157,7 @@ export default function App() {
             </RequireCustomer>
           }
         />
+
         <Route
           path="/eliminar-cuenta"
           element={
@@ -115,20 +166,7 @@ export default function App() {
             </RequireCustomer>
           }
         />
-        <Route
-          path="/propiedad-ideal"
-          element={
-            <RequireCustomer>
-              <PropiedadIdeal />
-            </RequireCustomer>
-          }
-        />
 
-        {/* RUTA / DOCS */}
-        <Route path="/ruta" element={<Ruta />} />
-        <Route path="/docs" element={<Ruta />} />
-
-        {/* VERSIONES PROTEGIDAS */}
         <Route
           path="/journey/full"
           element={
@@ -137,16 +175,17 @@ export default function App() {
             </RequireCustomer>
           }
         />
+
         <Route
           path="/mejorar/full"
           element={
             <RequireCustomer>
-              <MejorarPerfil />
+              <Navigate to="/journey/full?afinando=1" replace />
             </RequireCustomer>
           }
         />
 
-        {/* FALLBACK */}
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

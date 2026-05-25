@@ -1443,59 +1443,18 @@ export default function Home() {
     canonicalBestMortgage?.factorLimitante ||
     null;
 
-const plannedEntry = financialCapacity?.plannedEntry || null;
+  const plannedEntry = financialCapacity?.plannedEntry || null;
 
-const entryInstallmentsAlternative = getFirstAlternative(
-  homeRecommendation,
-  "entry_installments"
-);
+  const plannedEntryMax =
+    toNum(plannedEntry?.estimatedMaxPropertyValue) ??
+    toNum(getFirstAlternative(homeRecommendation, "entry_installments")?.alternativePrice) ??
+    null;
 
-const debtReductionAlternative = getFirstAlternative(
-  homeRecommendation,
-  "debt_reduction_route"
-);
-
-const plannedEntryMax =
-  toNum(plannedEntry?.estimatedMaxPropertyValue) ??
-  toNum(entryInstallmentsAlternative?.alternativePrice) ??
-  null;
-
-const plannedEntryMonths =
-  toNum(plannedEntry?.months) ??
-  toNum(entryInstallmentsAlternative?.months) ??
-  null;
-
-const plannedFutureEntry =
-  toNum(plannedEntry?.futureEntry) ??
-  toNum(entryInstallmentsAlternative?.futureEntry) ??
-  null;
-
-const debtReductionTargetPrice =
-  toNum(debtReductionAlternative?.alternativePrice) ?? null;
-
-const debtReductionNeeded =
-  toNum(debtReductionAlternative?.debtReductionNeeded) ?? null;
-
-const targetDebtAfterReduction =
-  toNum(debtReductionAlternative?.targetDebtAfterReduction) ?? null;
-
-const hasEntryProjection =
-  plannedEntryMax != null &&
-  plannedEntryMax > 0 &&
-  plannedEntryMax > (estimatedMaxPropertyValue || 0);
-
-const hasDebtReductionRoute =
-  debtReductionTargetPrice != null &&
-  debtReductionTargetPrice > 0 &&
-  debtReductionNeeded != null &&
-  debtReductionNeeded > 0;
-
-const isFutureRoute =
-  isFutureRouteState({
+  const isFutureRoute = isFutureRouteState({
     hasImmediateViableMortgage,
     plannedEntryMax,
     homeRecommendation,
-  }) || hasDebtReductionRoute;
+  });
 
   const homeRecommendationType = getHomeRecommendationType(
     homeRecommendation,

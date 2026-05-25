@@ -8,11 +8,16 @@ import {
   Target,
 } from "lucide-react";
 import { moneyUSD } from "../lib/money";
+import { API_BASE } from "../lib/api";
 import PropertyCard from "../components/PropertyCard.jsx";
-import mockProperties from "../data/mockProperties.js";
 import { resolveHousingRecommendation } from "../lib/recommendationResolver.js";
 import { getCustomer } from "../lib/customerSession.js";
 import HipotecaVisualDetail from "../components/HipotecaVisualDetail.jsx";
+import {
+  saveSelectedPropertyToBackend,
+  saveJourneyStateToBackend,
+} from "../lib/userAppState.js";
+
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
@@ -173,6 +178,41 @@ function cityMatchesProperty(property, zona) {
   return fields.some((f) => f.includes(target) || target.includes(f));
 }
 
+function getCreditReviewMeta(snapshot) {
+  const creditAssessment =
+    snapshot?.creditAssessment ||
+    snapshot?.output?.creditAssessment ||
+    null;
+
+  const level = normalizeText(creditAssessment?.level);
+  const reasons = Array.isArray(creditAssessment?.reasons)
+    ? creditAssessment.reasons
+    : [];
+
+  const reasonText = normalizeText(reasons.join(" "));
+
+  const blocks =
+    creditAssessment?.blocksBankSubmission === true ||
+    level.includes("blocked") ||
+    level.includes("bloque") ||
+    level.includes("bad") ||
+    level.includes("malo") ||
+    level.includes("castig") ||
+    reasonText.includes("mora") ||
+    reasonText.includes("vencid") ||
+    reasonText.includes("castig") ||
+    reasonText.includes("negativ");
+
+  return {
+    blocks,
+    level,
+    reasons,
+    recommendedAction:
+      creditAssessment?.recommendedAction ||
+      "Antes de avanzar, conviene revisar o aclarar tu historial financiero declarado.",
+  };
+}
+
 function probTone(label = "") {
   const x = String(label).toLowerCase();
   if (x.includes("alta")) return "green";
@@ -237,7 +277,7 @@ function getBankReasons(bank, snapshot, scenario, bestMortgage) {
   const reasons = [];
 
   if (bank?.probLabel) {
-    reasons.push(`Probabilidad ${String(bank.probLabel).toLowerCase()}`);
+    reasons.push(`Compatibilidad ${String(bank.probLabel).toLowerCase()}`);
   }
 
   const cuota =
@@ -247,7 +287,7 @@ function getBankReasons(bank, snapshot, scenario, bestMortgage) {
     pick(snapshot, ["cuotaEstimada", "cuotaMensual", "monthlyPayment"]);
 
   if (cuota != null && Number(cuota) > 0) {
-    reasons.push(`Cuota estimada ${moneyUSD(cuota)}`);
+    reasons.push(`Cuota referencial ${moneyUSD(cuota)}`);
   }
 
   if (bank?.tipoProducto) {
@@ -267,7 +307,7 @@ function getBankReasons(bank, snapshot, scenario, bestMortgage) {
     ]);
 
   if (precioMax != null && Number(precioMax) > 0) {
-    reasons.push("Compatible con tu perfil actual");
+    reasons.push("Compatible de forma referencial con tu perfil actual");
   }
 
   return reasons.slice(0, 3);
@@ -581,12 +621,67 @@ function normalizeBankTop3Option(bank) {
   };
 }
 
-function getMortgageOptionKey(option) {
-  return (
-    option?.scenarioId ||
+function normalizeMortgageIdFromOption(option) {
+  if (!option) return null;
+
+  const explicit =
     option?.mortgageId ||
-    `${option?.banco || ""}-${option?.productLabel || option?.tipoProducto || ""}`
-  );
+    option?.productId ||
+    option?.product?.id ||
+    null;
+
+  if (explicit) return String(explicit).trim().toUpperCase();
+
+  const haystack = [
+    option?.scenarioId,
+    option?.segment,
+    option?.label,
+    option?.productLabel,
+    option?.tipoProducto,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+
+  const knownIds = [
+    "BIESS_CREDICASA",
+    "BIESS_VIS_VIP",
+    "BIESS_MEDIA",
+    "BIESS_ALTA",
+    "BIESS_LUJO",
+    "VIS_II",
+    "PRIVATE",
+    "VIP",
+    "VIS",
+    "BIESS",
+  ];
+
+  return knownIds.find((id) => haystack.includes(id)) || null;
+}
+
+function getMortgageOptionKey(option) {
+  const mortgageId = normalizeMortgageIdFromOption(option);
+
+  if (mortgageId) return `mortgage:${mortgageId}`;
+
+  const scenarioId = option?.scenarioId
+    ? String(option.scenarioId).trim().toUpperCase()
+    : null;
+
+  if (scenarioId) return `scenario:${scenarioId}`;
+
+  return `${option?.banco || ""}-${option?.productLabel || option?.tipoProducto || ""}`;
+}
+
+function isSameMortgageOption(a, b) {
+  if (!a || !b) return false;
+
+  const mortgageA = normalizeMortgageIdFromOption(a);
+  const mortgageB = normalizeMortgageIdFromOption(b);
+
+  if (mortgageA && mortgageB) return mortgageA === mortgageB;
+
+  return getMortgageOptionKey(a) === getMortgageOptionKey(b);
 }
 
 /* ---------------- mortgage marketplace helpers ---------------- */
@@ -751,19 +846,50 @@ function buildMarketplaceAlternativeMortgages(
 
   const primaryKey = getMortgageOptionKey(primaryMortgage);
 
-  const all = [
-    ...(Array.isArray(mortgageMarketplace?.alsoAppliesForCurrentGoal)
+  const primaryCoversGoal =
+    primaryMortgage?.appliesToCurrentGoal === true ||
+    mortgageContainsTarget(primaryMortgage, targetValue);
+
+  const currentGoalAlternatives = (
+    Array.isArray(mortgageMarketplace?.alsoAppliesForCurrentGoal)
       ? mortgageMarketplace.alsoAppliesForCurrentGoal
-      : []),
-    ...(Array.isArray(mortgageMarketplace?.couldWorkIfAdjusted)
-      ? mortgageMarketplace.couldWorkIfAdjusted
-      : []),
-  ]
+      : []
+  )
     .map(normalizeMarketplaceMortgageOption)
     .filter(Boolean)
-    .filter((m) => getMortgageOptionKey(m) !== primaryKey);
+    .filter((m) => getMortgageOptionKey(m) !== primaryKey)
+    .filter((m) => {
+      if (m?.viable === false) return false;
+      if (m?.targetViable === false) return false;
+      return mortgageContainsTarget(m, targetValue);
+    });
 
-  return sortMarketplaceMortgages(all, targetValue).slice(0, 3);
+  if (currentGoalAlternatives.length) {
+    return sortMarketplaceMortgages(currentGoalAlternatives, targetValue).slice(
+      0,
+      3
+    );
+  }
+
+  // Si ya existe una ruta que cubre la meta actual, NO mostramos rutas
+  // que solo funcionarían bajando el rango, como VIP/VIS para una meta de $140k.
+  if (primaryCoversGoal) return [];
+
+  const adjustedAlternatives = (
+    Array.isArray(mortgageMarketplace?.couldWorkIfAdjusted)
+      ? mortgageMarketplace.couldWorkIfAdjusted
+      : []
+  )
+    .map(normalizeMarketplaceMortgageOption)
+    .filter(Boolean)
+    .filter((m) => getMortgageOptionKey(m) !== primaryKey)
+    .filter((m) => {
+      if (m?.viable === false) return false;
+      if (m?.targetViable === false) return false;
+      return mortgageContainsTarget(m, targetValue);
+    });
+
+  return sortMarketplaceMortgages(adjustedAlternatives, targetValue).slice(0, 3);
 }
 
 function deriveMatchedProductsFromEngine(property) {
@@ -905,6 +1031,13 @@ function Pill({ children, onClick, tone = "neutral" }) {
     <span
       onClick={onClick}
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        alignSelf: "flex-start",
+        width: "fit-content",
+        lineHeight: 1.1,
+        whiteSpace: "nowrap",
         fontSize: 12,
         padding: "8px 12px",
         borderRadius: 999,
@@ -990,14 +1123,38 @@ function CompactChip({ active, onClick, children }) {
   );
 }
 
+
+function FinancialDisclaimer({ compact = false, style = {} }) {
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.24)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.95)",
+        fontSize: 11,
+        lineHeight: 1.4,
+        ...style,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga, aprueba, financia ni cobra créditos. Las condiciones finales dependen exclusivamente de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. La información mostrada es orientativa y se basa en datos declarados por el usuario. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
+    </div>
+  );
+}
+
 function MatchHeader({ subtitle, tab }) {
   const isBanksTab = tab === "banks";
 
   const eyebrow = isBanksTab ? "Hipotecas" : "Propiedades";
 
   const title = isBanksTab
-    ? "Opciones hipotecarias según tu perfil"
-    : "Propiedades según tu perfil";
+    ? "Rutas hipotecarias referenciales"
+    : "Propiedades dentro de tu rango estimado";
 
   const pillLabel = isBanksTab ? "Hipotecas" : "Propiedades";
 
@@ -1068,55 +1225,80 @@ function SummaryCard({
   cuotaEstimada,
   onOpenMortgageDetail,
   mortgageSummaryStatus = "default",
+  hasCreditBlocker = false,
 }) {
   const isMortgageCurrent = mortgageSummaryStatus === "current";
   const isMortgageAdjusted = mortgageSummaryStatus === "adjusted";
 
-  const summaryTitle = isMortgageCurrent
-    ? "Tu mejor ruta hoy"
-    : isMortgageAdjusted
-    ? "Ruta hipotecaria cercana"
-    : recommendationType === "immediate"
-    ? "Tu mejor ruta hoy"
-    : recommendationType === "future_route"
-    ? "Ruta estimada"
-    : recommendationType === "inventory_fallback"
-    ? "Alternativa cercana"
-    : "Tu estado actual";
+  const summaryTitle = hasCreditBlocker
+  ? "Ruta condicionada a revisión"
+  : isMortgageCurrent
+  ? "Ruta referencial principal"
+  : isMortgageAdjusted
+  ? "Ruta hipotecaria referencial cercana"
+  : recommendationType === "immediate"
+  ? "Ruta referencial principal"
+  : recommendationType === "future_route"
+  ? "Ruta referencial estimada"
+  : recommendationType === "inventory_fallback"
+  ? "Alternativa referencial cercana"
+  : "Tu estado actual";
 
-  const summaryBody = isMortgageCurrent
-    ? "Esta ruta encaja con tu perfil y con el valor de vivienda que estás buscando."
-    : isMortgageAdjusted
-    ? "Todavía no cubre toda tu meta exacta, pero es la opción más cercana para trabajarla."
-    : recommendationType === "immediate"
-    ? "Ya vemos una ruta alineada con tu perfil actual."
-    : recommendationType === "future_route"
-    ? "Hoy no es compra inmediata, pero sí vemos una ruta seria para acercarte."
-    : recommendationType === "inventory_fallback"
-    ? "Hoy no vemos una ruta ideal, pero sí alternativas concretas cercanas."
-    : "Aún no hay una ruta clara, pero puedes explorar referencias útiles.";
+const summaryBody = hasCreditBlocker
+  ? "Tu capacidad puede verse bien, pero antes de avanzar conviene revisar tu historial financiero declarado."
+  : isMortgageCurrent
+  ? "Esta ruta parece compatible de forma referencial con tu perfil y con el valor de vivienda que estás explorando."
+  : isMortgageAdjusted
+  ? "Todavía no cubre toda tu meta exacta, pero es la referencia más cercana para trabajarla."
+  : recommendationType === "immediate"
+  ? "Vemos una ruta referencial alineada con tus datos actuales."
+  : recommendationType === "future_route"
+  ? "Hoy no es compra inmediata, pero sí vemos una ruta referencial para acercarte."
+  : recommendationType === "inventory_fallback"
+  ? "Hoy no vemos una ruta referencial ideal, pero sí alternativas concretas cercanas."
+  : "Aún no hay una ruta clara, pero puedes explorar referencias útiles.";
 
-  const pillText = isMortgageCurrent
-    ? "Viable hoy"
-    : isMortgageAdjusted
-    ? "Ruta cercana"
-    : recommendationType === "immediate"
-    ? "Viable hoy"
-    : recommendationType === "future_route"
-    ? "Ruta posible"
-    : recommendationType === "inventory_fallback"
-    ? "Cercana"
-    : "Explorando";
+const pillText = hasCreditBlocker
+  ? "Por revisar"
+  : isMortgageCurrent
+  ? "Referencial hoy"
+  : isMortgageAdjusted
+  ? "Ruta cercana"
+  : recommendationType === "immediate"
+  ? "Referencial hoy"
+  : recommendationType === "future_route"
+  ? "Ruta estimada"
+  : recommendationType === "inventory_fallback"
+  ? "Cercana"
+  : "Explorando";
 
-  const pillTone = isMortgageAdjusted
-    ? "neutral"
-    : recommendationType === "inventory_fallback"
-    ? "amber"
-    : recommendationType === "future_route" ||
-      recommendationType === "immediate" ||
-      isMortgageCurrent
-    ? "green"
-    : "neutral";
+const isFutureSummary =
+  !hasCreditBlocker &&
+  recommendationType === "future_route";
+
+const valueLabel = hasCreditBlocker
+  ? "Rango referencial"
+  : isFutureSummary
+  ? "Rango futuro"
+  : "Rango referencial";
+
+const paymentLabel = hasCreditBlocker
+  ? "Cuota referencial"
+  : isFutureSummary
+  ? "Cuota proyectada"
+  : "Cuota referencial";
+
+const pillTone = hasCreditBlocker
+  ? "amber"
+  : isMortgageAdjusted
+  ? "neutral"
+  : recommendationType === "inventory_fallback"
+  ? "amber"
+  : recommendationType === "future_route" ||
+    recommendationType === "immediate" ||
+    isMortgageCurrent
+  ? "green"
+  : "neutral";
 
   return (
     <div
@@ -1192,7 +1374,7 @@ function SummaryCard({
           }}
         >
           <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
-            Valor vivienda
+                     {valueLabel}
           </div>
           <div style={{ marginTop: 4, fontWeight: 900, fontSize: 14 }}>
             {typeof precioMaxVivienda === "number" && precioMaxVivienda > 0
@@ -1210,7 +1392,7 @@ function SummaryCard({
           }}
         >
           <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
-            Cuota
+                        {paymentLabel}
           </div>
           <div style={{ marginTop: 4, fontWeight: 900, fontSize: 14 }}>
             {typeof cuotaEstimada === "number" && cuotaEstimada > 0
@@ -1220,9 +1402,11 @@ function SummaryCard({
         </div>
       </div>
 
+      <FinancialDisclaimer compact />
+
       <div style={{ marginTop: 14 }}>
         <SecondaryButton onClick={onOpenMortgageDetail}>
-          Ver detalle hipotecario
+          Ver detalle referencial
         </SecondaryButton>
       </div>
     </div>
@@ -1356,13 +1540,13 @@ function LockedMarketplace({ onGoSimular }) {
           }}
         >
           <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>
-            Camino bloqueado
+            Orientación pendiente
           </div>
           <Pill tone="green">2 minutos</Pill>
         </div>
 
         <div style={{ marginTop: 10, fontWeight: 900, fontSize: 16 }}>
-          Completa tu información para ver tu camino real
+          Completa tu información para ver tu rango referencial
         </div>
 
         <div
@@ -1373,12 +1557,12 @@ function LockedMarketplace({ onGoSimular }) {
             fontSize: 13,
           }}
         >
-          HabitaLibre solo muestra propiedades e hipotecas que realmente pueden
-          encajar con tu perfil.
+          HabitaLibre muestra referencias de propiedades y rutas hipotecarias que podrían
+          encajar con tu perfil declarado.
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <PrimaryButton onClick={onGoSimular}>Ver mi resultado</PrimaryButton>
+          <PrimaryButton onClick={onGoSimular}>Ver mi orientación</PrimaryButton>
         </div>
       </div>
     </div>
@@ -1428,9 +1612,9 @@ function FilterCard({
 
   const filterSubtitle =
     recommendationType === "immediate"
-      ? "Primero te mostramos propiedades alineadas con tu compra viable hoy."
+      ? "Primero te mostramos propiedades alineadas con tu rango estimado actual."
       : recommendationType === "future_route"
-      ? "Primero te mostramos propiedades que encajan mejor con tu ruta futura."
+      ? "Primero te mostramos propiedades que podrían encajar con tu ruta futura referencial."
       : recommendationType === "inventory_fallback"
       ? "Primero te mostramos alternativas cercanas a tu escenario actual."
       : "Explora por zona y compara opciones.";
@@ -1520,7 +1704,7 @@ function FilterCard({
           >
             {recommendationType === "inventory_fallback"
               ? "Solo alternativas cercanas"
-              : "Solo mi mejor ruta"}
+              : "Solo ruta principal"}
           </CompactChip>
 
           <CompactChip
@@ -1548,31 +1732,96 @@ const [tab, setTab] = useState("props");
 const [zona, setZona] = useState("Quito");
 const [propertyMode, setPropertyMode] = useState("strict");
 const [showMortgageDetail, setShowMortgageDetail] = useState(false);
+const [backendProperties, setBackendProperties] = useState([]);
 
 function handleOpenMortgageDetail() {
   setShowMortgageDetail(true);
 }
 
-  function handleConfirmMortgageRoute(route = recommendedBank) {
-    const selectedRoute = buildMortgageRoutePayload(route);
+useEffect(() => {
+  let isMounted = true;
 
-    if (!selectedRoute) return;
+  async function loadBackendProperties() {
+    try {
+      const res = await fetch(`${API_BASE}/properties`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
 
-    saveOwnedData(LS_SELECTED_MORTGAGE_ROUTE, selectedRoute);
+      const data = await res.json().catch(() => null);
 
-    const nextJourney = {
-      ...(journey || {}),
-      matchExplorado: true,
-      mortgageRouteConfirmed: true,
-      mortgageRoute: selectedRoute,
-      mortgageRouteConfirmedAt: new Date().toISOString(),
-    };
+      if (!res.ok || data?.ok === false) {
+        throw new Error(
+          data?.message || "No se pudieron cargar propiedades reales."
+        );
+      }
 
-    saveOwnedData(LS_JOURNEY, nextJourney);
-    setJourney(nextJourney);
+      const properties = Array.isArray(data?.properties)
+        ? data.properties
+        : [];
 
-    navigate("/ruta");
+      if (!isMounted) return;
+
+      setBackendProperties(properties);
+
+      console.log("[Marketplace] Propiedades reales cargadas:", {
+        count: properties.length,
+      });
+    } catch (error) {
+      console.warn(
+        "[Marketplace] Error cargando propiedades reales:",
+        error?.message || error
+      );
+
+      if (!isMounted) return;
+      setBackendProperties([]);
+    }
   }
+
+  loadBackendProperties();
+
+  return () => {
+    isMounted = false;
+  };
+}, []);
+
+async function handleConfirmMortgageRoute(route = recommendedBank) {
+  const selectedRoute = buildMortgageRoutePayload(route);
+
+  if (!selectedRoute) return;
+
+  saveOwnedData(LS_SELECTED_MORTGAGE_ROUTE, selectedRoute);
+
+  const nextJourney = {
+    ...(journey || {}),
+    matchExplorado: true,
+
+    // ✅ Esto significa: el usuario aceptó/guardó una ruta hipotecaria
+    mortgageRouteConfirmed: true,
+    mortgageRoute: selectedRoute,
+    selectedMortgageRoute: selectedRoute,
+    mortgageRouteConfirmedAt: new Date().toISOString(),
+
+    updatedAt: new Date().toISOString(),
+  };
+
+  saveOwnedData(LS_JOURNEY, nextJourney);
+  setJourney(nextJourney);
+
+  try {
+    await saveJourneyStateToBackend(nextJourney);
+    console.log("[HL] Ruta hipotecaria aceptada guardada en backend");
+  } catch (err) {
+    console.warn(
+      "[HL] No se pudo guardar ruta hipotecaria en backend:",
+      err?.message || err
+    );
+  }
+
+  navigate("/ruta");
+}
 
   useEffect(() => {
     const snap = loadOwnedData(LS_SNAPSHOT);
@@ -1589,6 +1838,13 @@ function handleOpenMortgageDetail() {
   const uiRecommendation = useMemo(() => {
     return resolveHousingRecommendation(snapshot || {});
   }, [snapshot]);
+
+const creditReviewMeta = useMemo(() => {
+  return getCreditReviewMeta(snapshot || {});
+}, [snapshot]);
+
+const hasCreditBlocker = creditReviewMeta.blocks === true;
+
 
   const bestMortgage = pick(snapshot, ["bestMortgage"]) || null;
   const bancosTop3 = pick(snapshot, ["bancosTop3"]) || [];
@@ -1713,8 +1969,34 @@ function handleOpenMortgageDetail() {
     futureViableProperty?.evaluacionHipotecaFutura?.cuotaReferencia ??
     null;
 
+  const financialCapacity = pick(snapshot, ["financialCapacity"]) || null;
+  const plannedEntry = financialCapacity?.plannedEntry || null;
+
+  const plannedEntryMonths = toNum(plannedEntry?.months);
+  const plannedEntryFuture = toNum(plannedEntry?.futureEntry);
+
+  // Rango futuro estimado del usuario, no una propiedad específica.
+  const futureEstimatedRangeValue =
+    toNum(plannedEntry?.estimatedMaxPropertyValue) ??
+    toNum(uiRecommendation?.safeNumbers?.futureEstimatedRangeValue) ??
+    toNum(uiRecommendation?.safeNumbers?.futureRangeValue) ??
+    toNum(uiRecommendation?.safeNumbers?.futureProjectedValue) ??
+    null;
+
+  // Propiedad ejemplo dentro de la ruta futura.
+  const futureExamplePropertyPrice =
+    toNum(futureViableProperty?.precio) ??
+    toNum(futureViableProperty?.price) ??
+    null;
+
+  // Monto proyectado a financiar debe calzar con el rango futuro, no con una propiedad ejemplo.
   const futureMonto =
-    futureViableProperty?.evaluacionHipotecaFutura?.montoHipotecaProyectado ??
+    toNum(uiRecommendation?.safeNumbers?.futureLoanAmount) ??
+    toNum(uiRecommendation?.safeNumbers?.futureProjectedLoanAmount) ??
+    (futureEstimatedRangeValue != null && plannedEntryFuture != null
+      ? Math.max(0, futureEstimatedRangeValue - plannedEntryFuture)
+      : null) ??
+    toNum(futureViableProperty?.evaluacionHipotecaFutura?.montoHipotecaProyectado) ??
     null;
 
   const futurePlazoMeses =
@@ -1724,14 +2006,15 @@ function handleOpenMortgageDetail() {
     null;
 
   const futureMesesConstruccion =
-    uiRecommendation?.safeNumbers?.futureMonths ??
-    futureViableProperty?.evaluacionEntrada?.mesesConstruccionRestantes ??
+    plannedEntryMonths ??
+    toNum(uiRecommendation?.safeNumbers?.futureMonths) ??
+    toNum(futureViableProperty?.evaluacionHipotecaFutura?.months) ??
+    toNum(futureViableProperty?.evaluacionEntrada?.mesesConstruccionRestantes) ??
     null;
 
   const futurePropertyPrice =
-    uiRecommendation?.safeNumbers?.futureProjectedValue ??
-    futureViableProperty?.precio ??
-    futureViableProperty?.price ??
+    futureEstimatedRangeValue ??
+    futureExamplePropertyPrice ??
     null;
 
   const mortgageMarketplace = pick(snapshot, ["mortgageMarketplace"]) || {};
@@ -1755,10 +2038,22 @@ function handleOpenMortgageDetail() {
     ? normalizedRankedMortgages
     : legacyBanks;
 
-  const recommendedBank =
-    primaryMarketplaceMortgage ||
-    profileRecommendedMortgage ||
-    banks[0] ||
+const bestBankForCurrentGoal =
+  banks.find((b) => {
+    if (!b) return false;
+    if (b?.viable === false) return false;
+    if (b?.targetViable === false) return false;
+    if (targetValueNumber > 0 && !mortgageContainsTarget(b, targetValueNumber)) {
+      return false;
+    }
+    return true;
+  }) || null;
+
+const recommendedBank =
+  primaryMarketplaceMortgage ||
+  profileRecommendedMortgage ||
+  bestBankForCurrentGoal ||
+  banks[0] ||
     (pick(snapshot, ["bancoSugerido"])
       ? normalizeBankTop3Option({
           banco: pick(snapshot, ["bancoSugerido"]),
@@ -1780,16 +2075,20 @@ function handleOpenMortgageDetail() {
         })
       : null);
 
-  function shouldShowAsMortgageAlternative(option) {
-    if (!option) return false;
-    if (option?.viable === false) return false;
-    return true;
+function shouldShowAsMortgageAlternative(option) {
+  if (!option) return false;
+  if (option?.viable === false) return false;
+  if (option?.targetViable === false) return false;
+  if (option?.appliesToCurrentGoal === false) return false;
+
+  if (targetValueNumber > 0 && !mortgageContainsTarget(option, targetValueNumber)) {
+    return false;
   }
 
-  const recommendedBankKey = getMortgageOptionKey(recommendedBank);
-
+  return true;
+}
   const legacyAlternativeBanks = banks
-    .filter((b) => getMortgageOptionKey(b) !== recommendedBankKey)
+    .filter((b) => !isSameMortgageOption(b, recommendedBank))
     .filter(shouldShowAsMortgageAlternative)
     .slice(0, 3);
 
@@ -1949,15 +2248,15 @@ function handleOpenMortgageDetail() {
 
 const primaryMortgageTitle = useMarketplaceMortgageAsPrimary
   ? useMarketplaceCurrentGoal
-    ? "Tu mejor hipoteca para esta meta"
-    : "Ruta hipotecaria más cercana"
+    ? "Ruta hipotecaria referencial para esta meta"
+    : "Ruta hipotecaria referencial cercana"
     : useImmediateAsPrimary
-    ? "Tu mejor hipoteca hoy"
+    ? "Ruta hipotecaria referencial hoy"
     : useFutureAsPrimary
-    ? "Ruta hipotecaria futura viable"
+    ? "Ruta hipotecaria futura referencial"
     : useInventoryAsPrimary
     ? "Alternativa cercana hoy"
-    : "Sin ruta hipotecaria clara";
+    : "Sin ruta referencial clara";
 
   const primaryMortgageName = useMarketplaceMortgageAsPrimary
     ? recommendedBank?.banco ||
@@ -1981,40 +2280,40 @@ const primaryMortgageTitle = useMarketplaceMortgageAsPrimary
 
 const primaryMortgageSubtitle = useMarketplaceMortgageAsPrimary
   ? useMarketplaceCurrentGoal
-    ? "Esta ruta encaja con tu perfil y con el valor de vivienda que estás buscando."
-    : "Todavía no cubre toda tu meta exacta, pero es la opción más cercana para trabajarla."
+    ? "Esta ruta parece compatible de forma referencial con tu perfil y con el valor de vivienda que estás explorando."
+    : "Todavía no cubre toda tu meta exacta, pero es la referencia más cercana para trabajarla."
   : useImmediateAsPrimary
   ? recommendedBank
-    ? "Basado en tu perfil, esta es la mejor ruta para empezar tu solicitud."
+    ? "Con base en tus datos declarados, esta ruta sirve como referencia para una futura conversación con una entidad financiera."
     : profileRecommendedMortgage
-    ? "Según tu perfil actual, esta es la ruta hipotecaria que mejor encaja contigo hoy."
-    : "Aquí verás tu mejor recomendación hipotecaria."
+    ? "Según tu perfil actual, esta es la ruta hipotecaria referencial que parece más compatible hoy."
+    : "Aquí verás una orientación hipotecaria referencial."
   : useFutureAsPrimary
   ? futureMesesConstruccion && futureMesesConstruccion > 0
-    ? `Podrías completar la estrategia en ${futureMesesConstruccion} meses y luego aplicar a hipoteca.`
-    : "Hoy no es compra inmediata, pero sí vemos una ruta futura viable."
+    ? `Podrías construir una ruta futura durante ${futureMesesConstruccion} meses y luego comparar opciones hipotecarias referenciales con una entidad financiera.`
+    : "Hoy no es compra inmediata, pero sí vemos una ruta futura referencial."
   : useInventoryAsPrimary
   ? goalValue != null
-    ? `Hoy no vemos una hipoteca ideal para tu meta de ${moneyUSD(
+    ? `Hoy no vemos una ruta hipotecaria referencial ideal para tu meta de ${moneyUSD(
         goalValue
       )}, pero sí una propiedad concreta cercana.`
-    : "Hoy no vemos una hipoteca ideal, pero sí una propiedad concreta cercana."
+    : "Hoy no vemos una ruta hipotecaria referencial ideal, pero sí una propiedad concreta cercana."
   : "Con los datos actuales todavía no vemos una ruta clara de compra.";
 
   const primaryMortgagePill = useMarketplaceMortgageAsPrimary
     ? recommendedBank?.probLabel
-      ? `Prob ${recommendedBank.probLabel}`
+      ? `Compat. ${recommendedBank.probLabel}`
       : useMarketplaceCurrentGoal
-      ? "Aplica a tu meta"
+      ? "Compatible con tu meta"
       : "Si ajustas rango"
     : useImmediateAsPrimary
     ? recommendedBank?.probLabel
-      ? `Prob ${recommendedBank.probLabel}`
+      ? `Compat. ${recommendedBank.probLabel}`
       : recommendedBank?.probScore != null
       ? `Score ${recommendedBank.probScore}`
-      : "Top match"
+      : "Referencia principal"
     : useFutureAsPrimary
-    ? "Ruta futura viable"
+    ? "Proyección"
     : useInventoryAsPrimary
     ? "Alternativa cercana"
     : "Sin ruta";
@@ -2031,67 +2330,104 @@ const primaryMortgageSubtitle = useMarketplaceMortgageAsPrimary
     ? "amber"
     : "neutral";
 
-  const primaryReasons = useMarketplaceMortgageAsPrimary
-    ? [
-        recommendedBank?.userMessage ||
-          (useMarketplaceCurrentGoal
-            ? "Aplica para tu meta actual según las reglas del programa."
-            : "Podría funcionar si ajustas el rango, entrada o cuota."),
-        recommendedBank?.productLabel
-          ? `Producto ${recommendedBank.productLabel}`
-          : null,
-     recommendedBank?.precioMaxVivienda || recommendedBank?.priceMax
-  ? `Valor de vivienda estimado hasta ${moneyUSD(
-      recommendedBank.precioMaxVivienda || recommendedBank.priceMax
-    )}`
-  : null,
-        recommendedBank?.factorLimitante
-          ? `Factor a mejorar: ${String(
-              recommendedBank.factorLimitante
+const primaryReasons = useMarketplaceMortgageAsPrimary
+  ? [
+      recommendedBank?.userMessage ||
+        (useMarketplaceCurrentGoal
+          ? "Podría ser compatible con tu meta actual según criterios generales del programa."
+          : "Podría ser una referencia útil si ajustas rango, entrada o cuota."),
+      recommendedBank?.productLabel
+        ? `Categoría ${recommendedBank.productLabel}`
+        : null,
+      recommendedBank?.precioMaxVivienda || recommendedBank?.priceMax
+        ? `Valor de vivienda estimado hasta ${moneyUSD(
+            recommendedBank.precioMaxVivienda || recommendedBank.priceMax
+          )}`
+        : null,
+      recommendedBank?.factorLimitante
+        ? `Variable a revisar: ${String(
+            recommendedBank.factorLimitante
+          ).toLowerCase()}`
+        : null,
+      recommendedBank?.condition || null,
+    ].filter(Boolean)
+  : useImmediateAsPrimary
+  ? recommendedBank
+    ? getBankReasons(recommendedBank, snapshot, recommendedScenario, bestMortgage)
+    : [
+        profileRecommendedMortgage?.probabilidad
+          ? `Compatibilidad ${String(
+              profileRecommendedMortgage.probabilidad
             ).toLowerCase()}`
           : null,
-        recommendedBank?.condition || null,
-      ].filter(Boolean)
-    : useImmediateAsPrimary
-    ? recommendedBank
-      ? getBankReasons(recommendedBank, snapshot, recommendedScenario, bestMortgage)
-      : [
-          profileRecommendedMortgage?.probabilidad
-            ? `Probabilidad ${String(profileRecommendedMortgage.probabilidad).toLowerCase()}`
-            : null,
-          profileRecommendedMortgage?.cuota
-            ? `Cuota estimada ${moneyUSD(profileRecommendedMortgage.cuota)}`
-            : null,
-          profileRecommendedMortgage?.precioMaxVivienda
-            ? `Podría sostener viviendas de hasta ${moneyUSD(profileRecommendedMortgage.precioMaxVivienda)}`
-            : null,
-        ].filter(Boolean)
-    : useFutureAsPrimary
-    ? [
-        futurePropertyPrice != null
-          ? `Meta o referencia ${moneyUSD(futurePropertyPrice)}`
+        profileRecommendedMortgage?.cuota
+          ? `Cuota referencial ${moneyUSD(profileRecommendedMortgage.cuota)}`
           : null,
-        futureCuota != null && futureCuota > 0
-          ? `Cuota proyectada ${moneyUSD(futureCuota)}`
-          : null,
-        futureMesesConstruccion != null && futureMesesConstruccion > 0
-          ? `Tiempo estimado ${futureMesesConstruccion} meses`
-          : null,
-      ].filter(Boolean)
-    : useInventoryAsPrimary
-    ? [
-        inventoryFallbackProperty?._normalizedPrice != null
-          ? `Propiedad cercana ${moneyUSD(
-              inventoryFallbackProperty._normalizedPrice
+        profileRecommendedMortgage?.precioMaxVivienda
+          ? `Rango referencial de vivienda hasta ${moneyUSD(
+              profileRecommendedMortgage.precioMaxVivienda
             )}`
           : null,
-        goalValue != null ? `Meta original ${moneyUSD(goalValue)}` : null,
-        "Fallback concreto del marketplace para tu escenario actual",
       ].filter(Boolean)
-    : [
-        "Hoy no vemos una hipoteca viable ni una ruta futura suficientemente sólida.",
-        "Puedes ajustar ingreso, entrada o valor objetivo para recalcular tu match.",
-      ];
+  : useFutureAsPrimary
+  ? [
+      futureEstimatedRangeValue != null
+        ? `Rango futuro estimado ${moneyUSD(futureEstimatedRangeValue)}`
+        : null,
+      futureExamplePropertyPrice != null
+        ? `Propiedad ejemplo dentro de la ruta ${moneyUSD(
+            futureExamplePropertyPrice
+          )}`
+        : null,
+      futureCuota != null && futureCuota > 0
+        ? `Cuota referencial proyectada ${moneyUSD(futureCuota)}`
+        : null,
+      futureMonto != null && futureMonto > 0
+        ? `Monto proyectado a financiar ${moneyUSD(futureMonto)}`
+        : null,
+      futureMesesConstruccion != null && futureMesesConstruccion > 0
+        ? `Tiempo estimado ${futureMesesConstruccion} meses`
+        : null,
+    ].filter(Boolean)
+  : useInventoryAsPrimary
+  ? [
+      inventoryFallbackProperty?._normalizedPrice != null
+        ? `Propiedad cercana ${moneyUSD(
+            inventoryFallbackProperty._normalizedPrice
+          )}`
+        : null,
+      goalValue != null ? `Meta original ${moneyUSD(goalValue)}` : null,
+      "Fallback concreto del marketplace para tu escenario actual",
+    ].filter(Boolean)
+  : [
+      "Hoy no vemos una ruta hipotecaria referencial ni una ruta futura suficientemente clara.",
+      "Puedes ajustar ingreso, entrada o valor objetivo para actualizar tu estimación.",
+    ];
+
+ const primaryMortgageTitleSafe = hasCreditBlocker
+  ? "Ruta referencial condicionada"
+  : primaryMortgageTitle;
+
+const primaryMortgageSubtitleSafe = hasCreditBlocker
+  ? "Tu capacidad financiera puede verse bien, pero esta ruta queda condicionada a revisar o aclarar tu historial financiero declarado."
+  : primaryMortgageSubtitle;
+
+const primaryMortgagePillSafe = hasCreditBlocker
+  ? "Sujeta a historial"
+  : primaryMortgagePill;
+
+const primaryMortgagePillToneSafe = hasCreditBlocker
+  ? "amber"
+  : primaryMortgagePillTone;
+
+const primaryReasonsForDisplay = hasCreditBlocker
+  ? [
+      creditReviewMeta?.recommendedAction ||
+        "Antes de avanzar, conviene revisar o aclarar tu historial financiero declarado.",
+      ...(creditReviewMeta?.reasons || []).slice(0, 2),
+      "La ruta mostrada es solo una referencia financiera y no debe interpretarse como una opción lista para aplicar.",
+    ].filter(Boolean)
+  : primaryReasons;
 
   const strictProductIds =
     Array.isArray(propertyRecommendationPolicy?.strictProductIds) &&
@@ -2245,19 +2581,23 @@ const primaryMortgageSubtitle = useMarketplaceMortgageAsPrimary
       return list;
     }
 
-    return mockProperties
-      .filter((p) => cityMatchesProperty(p, zona))
-      .map((p) => ({
-        ...p,
-        matchedProducts: getPropertyMatchProducts(
-          p,
-          eligibilityProducts,
-          allowedProductIds
-        ),
-      }))
-      .filter((p) => p.matchedProducts.length > 0)
-      .sort((a, b) => pSafePrice(a) - pSafePrice(b));
-  }, [
+const fallbackProperties = Array.isArray(backendProperties)
+  ? backendProperties
+  : [];
+
+return fallbackProperties
+  .filter((p) => cityMatchesProperty(p, zona))
+  .map((p) => ({
+    ...p,
+    matchedProducts: getPropertyMatchProducts(
+      p,
+      eligibilityProducts,
+      allowedProductIds
+    ),
+  }))
+  .filter((p) => p.matchedProducts.length > 0)
+  .sort((a, b) => pSafePrice(a) - pSafePrice(b));
+    }, [
     snapshot,
     zona,
     eligibilityProducts,
@@ -2266,6 +2606,7 @@ const primaryMortgageSubtitle = useMarketplaceMortgageAsPrimary
     recommendationType,
     goalValue,
     inventoryFallbackProperty,
+    backendProperties,
   ]);
 
   const orderedProps = useMemo(() => {
@@ -2296,15 +2637,15 @@ const primaryMortgageSubtitle = useMarketplaceMortgageAsPrimary
 
 const subtitle = unlocked
   ? tab === "banks"
-    ? "Compara las rutas hipotecarias que mejor encajan con tu perfil."
+    ? "Compara rutas hipotecarias referenciales según tu perfil declarado."
     : recommendationType === "immediate"
-    ? "Propiedades y rutas según tu precalificación actual"
+    ? "Propiedades y rutas según tu estimación actual"
     : recommendationType === "future_route"
-    ? "Propiedades y rutas según tu camino futuro viable"
+    ? "Propiedades y rutas según tu camino futuro referencial"
     : recommendationType === "inventory_fallback"
     ? "Alternativas cercanas según tu escenario actual"
-    : "Aún no hay una ruta clara, pero aquí verás referencias útiles"
-  : "Completa el formulario para ver solo lo que realmente puede encajar contigo";
+    : "Aún no hay una ruta referencial clara, pero aquí verás referencias útiles"
+  : "Completa el formulario para ver referencias alineadas con tu perfil declarado";
 
 const mortgageDetailRoute =
   recommendedBank ||
@@ -2321,107 +2662,159 @@ const mortgageDetailHomeValue =
   null;
 
 
-  function handleChooseProperty(property) {
-    const propertyId =
-      property?.id ||
-      property?._id ||
-      property?._normalizedId ||
-      property?.propertyId ||
-      null;
+  async function handleChooseProperty(property) {
+  const propertyId =
+    property?.id ||
+    property?._id ||
+    property?._normalizedId ||
+    property?.propertyId ||
+    null;
 
-    const propertyTitle =
-      property?.titulo ||
-      property?.nombre ||
-      property?.title ||
-      property?.name ||
-      property?.proyecto ||
-      property?._normalizedProjectName ||
-      "Propiedad elegida";
+  const propertyTitle =
+    property?.titulo ||
+    property?.nombre ||
+    property?.title ||
+    property?.name ||
+    property?.proyecto ||
+    property?._normalizedProjectName ||
+    "Propiedad elegida";
 
-    const propertyCity =
-      property?.ciudad ||
-      property?.city ||
-      property?.zona ||
-      property?.sector ||
-      property?.ciudadZona ||
-      property?._normalizedCity ||
-      journey?.form?.ciudadCompra ||
-      journey?.ciudadCompra ||
-      "Ubicación pendiente";
+  const propertyCity =
+    property?.ciudad ||
+    property?.city ||
+    property?.zona ||
+    property?.sector ||
+    property?.ciudadZona ||
+    property?._normalizedCity ||
+    journey?.form?.ciudadCompra ||
+    journey?.ciudadCompra ||
+    "Ubicación pendiente";
 
-    const propertyPriceRaw =
-      property?.precio ??
-      property?.price ??
-      property?.valor ??
-      property?.listPrice ??
-      property?._normalizedPrice ??
-      null;
+  const propertyPriceRaw =
+    property?.precio ??
+    property?.price ??
+    property?.valor ??
+    property?.listPrice ??
+    property?._normalizedPrice ??
+    null;
 
-    const propertyPrice = Number.isFinite(Number(propertyPriceRaw))
-      ? Number(propertyPriceRaw)
-      : null;
+  const propertyPrice = Number.isFinite(Number(propertyPriceRaw))
+    ? Number(propertyPriceRaw)
+    : null;
 
-    const propertyImage =
-      property?.imagen ||
-      property?.image ||
-      property?.imageUrl ||
-      property?.foto ||
-      property?.cover ||
-      null;
+  const propertyImage =
+    property?.imagen ||
+    property?.image ||
+    property?.imageUrl ||
+    property?.foto ||
+    property?.cover ||
+    null;
 
-    const normalizedProperty = {
-      id: propertyId,
-      _id: propertyId,
-      propertyId: propertyId,
-      titulo: propertyTitle,
-      nombre: propertyTitle,
-      proyecto: propertyTitle,
-      ciudad: propertyCity,
-      zona: propertyCity,
-      sector: property?.sector || propertyCity,
-      ciudadZona: property?.ciudadZona || propertyCity,
-      precio: propertyPrice,
-      price: propertyPrice,
-      imagen: propertyImage,
-      image: propertyImage,
-      cuotaEstimada:
-        property?.cuotaEstimada ||
-        property?.cuota ||
-        property?.evaluacionHipotecaFutura?.cuotaReferencia ||
-        property?.evaluacionHipotecaHoy?.cuotaReferencia ||
-        property?.evaluacionHipoteca?.cuotaReferencia ||
-        snapshot?.cuotaEstimada ||
-        snapshot?.cuotaMensual ||
-        snapshot?.bestMortgage?.cuota ||
-        null,
-      status:
-        journey?.selectedPropertyStatus ||
-        selectedProperty?.status ||
-        null,
-      source: "marketplace",
-      selectedAt: new Date().toISOString(),
-      raw: property,
-    };
+  const selectedPropertyStatus =
+    property?.estadoCompra ||
+    property?.status ||
+    property?.selectedPropertyStatus ||
+    journey?.selectedPropertyStatus ||
+    selectedProperty?.status ||
+    null;
 
-    saveOwnedData(LS_SELECTED_PROPERTY, normalizedProperty);
+  const normalizedProperty = {
+    id: propertyId,
+    _id: propertyId,
+    propertyId,
 
-    const nextJourney = {
-      ...(journey || {}),
-      matchExplorado: true,
-      propiedadElegida: true,
-      propiedadId: propertyId,
-      propiedadSeleccionada: normalizedProperty,
-      selectedPropertyStatus:
-        journey?.selectedPropertyStatus || normalizedProperty?.status || null,
-    };
+    titulo: propertyTitle,
+    nombre: propertyTitle,
+    proyecto: propertyTitle,
+    title: propertyTitle,
+    name: propertyTitle,
 
-    saveOwnedData(LS_JOURNEY, nextJourney);
+    ciudad: propertyCity,
+    zona: propertyCity,
+    sector: property?.sector || propertyCity,
+    ciudadZona: property?.ciudadZona || propertyCity,
 
-    setSelectedProperty(normalizedProperty);
-    setJourney(nextJourney);
+    precio: propertyPrice,
+    price: propertyPrice,
 
-    navigate("/propiedad-ideal");
+    imagen: propertyImage,
+    image: propertyImage,
+
+    status: selectedPropertyStatus,
+    selectedPropertyStatus,
+
+    estadoCompra: property?.estadoCompra || null,
+    matchBadge: property?.matchBadge || null,
+    matchBadgeCalculado: property?.matchBadgeCalculado || null,
+    matchReason: property?.matchReason || null,
+    matchReasonCalculado: property?.matchReasonCalculado || null,
+
+    evaluacionEntrada: property?.evaluacionEntrada || null,
+    evaluacionHipotecaHoy:
+      property?.evaluacionHipotecaHoy ||
+      property?.evaluacionHipoteca ||
+      null,
+    evaluacionHipotecaFutura: property?.evaluacionHipotecaFutura || null,
+    evaluacionReglasPropiedad: property?.evaluacionReglasPropiedad || null,
+
+    cuotaEstimada:
+      property?.cuotaEstimada ||
+      property?.cuota ||
+      property?.evaluacionHipotecaFutura?.cuotaReferencia ||
+      property?.evaluacionHipotecaHoy?.cuotaReferencia ||
+      property?.evaluacionHipoteca?.cuotaReferencia ||
+      snapshot?.cuotaEstimada ||
+      snapshot?.cuotaMensual ||
+      snapshot?.bestMortgage?.cuota ||
+      null,
+
+    entradaMinima:
+      property?.entradaMinima ??
+      property?.entradaRequerida ??
+      property?.evaluacionEntrada?.entradaRequerida ??
+      null,
+
+    source: "marketplace",
+    selectedAt: new Date().toISOString(),
+
+    raw: property,
+  };
+
+  saveOwnedData(LS_SELECTED_PROPERTY, normalizedProperty);
+
+  const nextJourney = {
+    ...(journey || {}),
+    matchExplorado: true,
+    propiedadElegida: true,
+    propiedadId: propertyId,
+    propiedadSeleccionada: normalizedProperty,
+    selectedProperty: normalizedProperty,
+    selectedPropertyStatus,
+    updatedAt: new Date().toISOString(),
+  };
+
+  saveOwnedData(LS_JOURNEY, nextJourney);
+
+  setSelectedProperty(normalizedProperty);
+  setJourney(nextJourney);
+
+  try {
+    await saveSelectedPropertyToBackend(normalizedProperty);
+    await saveJourneyStateToBackend(nextJourney);
+
+    console.log("[HL] Propiedad elegida desde Marketplace guardada en backend", {
+      propertyId,
+      selectedPropertyStatus,
+    });
+  } catch (err) {
+    console.warn(
+      "[HL] No se pudo guardar propiedad de Marketplace en backend:",
+      err?.message || err
+    );
   }
+
+  navigate("/propiedad-ideal");
+}
 
   return (
     <ScreenWrap>
@@ -2431,13 +2824,14 @@ const mortgageDetailHomeValue =
         <LockedMarketplace onGoSimular={() => navigate("/journey/full")} />
       ) : (
         <>
-    <SummaryCard
+<SummaryCard
   recommendationType={recommendationType}
   productoElegido={productoElegido}
   precioMaxVivienda={precioMaxVivienda}
   cuotaEstimada={cuotaEstimada}
   onOpenMortgageDetail={handleOpenMortgageDetail}
   mortgageSummaryStatus={mortgageSummaryStatus}
+  hasCreditBlocker={hasCreditBlocker}
 />
 
           <SegmentedControl value={tab} onChange={setTab} />
@@ -2453,39 +2847,50 @@ const mortgageDetailHomeValue =
               />
 
               {recommendationType === "future_route" ? (
-                <div
-                  style={{
-                    marginTop: 14,
-                    padding: 16,
-                    borderRadius: 22,
-                    background: UI.greenBg,
-                    border: `1px solid ${UI.greenBorder}`,
-                    boxShadow: UI.shadowSoft,
-                  }}
-                >
-                  <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>
-                    Ruta futura viable
-                  </div>
-                  <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
-                    {goalValue != null
-                      ? `Tu meta de ${moneyUSD(goalValue)} sí podría ser viable`
-                      : "Sí existe una ruta futura viable para ti"}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 13,
-                      opacity: 0.9,
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {futureMesesConstruccion != null &&
-                    futureMesesConstruccion > 0
-                      ? `Hoy todavía no es compra inmediata, pero sí existe una estrategia seria para acercarte en ${futureMesesConstruccion} meses.`
-                      : "Hoy todavía no es compra inmediata, pero sí existe una ruta futura seria para acercarte a una compra."}
-                  </div>
-                </div>
-              ) : null}
+  <div
+    style={{
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 22,
+      background: hasCreditBlocker
+        ? "rgba(244,63,94,0.08)"
+        : UI.greenBg,
+      border: `1px solid ${
+        hasCreditBlocker ? "rgba(244,63,94,0.24)" : UI.greenBorder
+      }`,
+      boxShadow: UI.shadowSoft,
+    }}
+  >
+    <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>
+      {hasCreditBlocker
+        ? "Ruta condicionada a historial"
+        : "Ruta futura viable"}
+    </div>
+
+    <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
+      {hasCreditBlocker
+        ? "Tu capacidad puede existir, pero falta revisar tu historial."
+        : goalValue != null
+        ? `Tu meta de ${moneyUSD(goalValue)} sí podría ser viable`
+        : "Sí existe una ruta futura viable para ti"}
+    </div>
+
+    <div
+      style={{
+        marginTop: 8,
+        fontSize: 13,
+        opacity: 0.9,
+        lineHeight: 1.35,
+      }}
+    >
+      {hasCreditBlocker
+        ? "Antes de avanzar con propiedades o entidades financieras, conviene aclarar la alerta declarada en tu historial."
+        : futureMesesConstruccion != null && futureMesesConstruccion > 0
+        ? `Hoy todavía no es compra inmediata, pero sí existe una ruta futura referencial para acercarte en ${futureMesesConstruccion} meses.`
+        : "Hoy todavía no es compra inmediata, pero sí existe una ruta futura referencial para acercarte a una compra."}
+    </div>
+  </div>
+) : null}
 
               {recommendationType === "inventory_fallback" ? (
                 <div
@@ -2502,7 +2907,7 @@ const mortgageDetailHomeValue =
                     Alternativa cercana
                   </div>
                   <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
-                    Hoy no vemos una hipoteca ideal, pero sí una propiedad cercana
+                    Hoy no vemos una ruta hipotecaria referencial ideal, pero sí una propiedad cercana
                   </div>
                   <div
                     style={{
@@ -2513,8 +2918,8 @@ const mortgageDetailHomeValue =
                     }}
                   >
                     {goalValue != null
-                      ? `Tu meta original sigue siendo ${moneyUSD(goalValue)}, pero hoy vemos mejores opciones concretas cercanas.`
-                      : "Hoy no vemos una ruta sólida, pero sí una propiedad del marketplace relativamente cercana a tu escenario actual."}
+                      ? `Tu meta original sigue siendo ${moneyUSD(goalValue)}, pero hoy vemos opciones concretas cercanas.`
+                      : "Hoy no vemos una ruta referencial sólida, pero sí una propiedad del marketplace relativamente cercana a tu escenario actual."}
                   </div>
                 </div>
               ) : null}
@@ -2625,7 +3030,7 @@ const mortgageDetailHomeValue =
                                     key={`${propertyId}-${prodId}-${chipIdx}`}
                                     tone="green"
                                   >
-                                    Compatible con{" "}
+                                    Referencia {" "}
                                     {getPropertyProgramLabel(prodId)}
                                   </Pill>
                                 ))
@@ -2690,7 +3095,7 @@ const mortgageDetailHomeValue =
                     title={
                       recommendationType === "inventory_fallback"
                         ? "No encontramos alternativas cercanas en esta zona"
-                        : "No encontramos propiedades compatibles en esta zona"
+                        : "No encontramos propiedades alineadas en esta zona"
                     }
                     subtitle={
                       recommendationType === "inventory_fallback"
@@ -2725,30 +3130,32 @@ const mortgageDetailHomeValue =
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 900 }}>
-                      {primaryMortgageTitle}
-                    </div>
+                <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 900 }}>
+  {primaryMortgageTitleSafe}
+</div>
 
                     <div style={{ marginTop: 6, fontWeight: 900, fontSize: 18 }}>
                       {primaryMortgageName}
                     </div>
 
-                    <div
-                      style={{
-                        marginTop: 6,
-                        fontSize: 13,
-                        opacity: 0.78,
-                        lineHeight: 1.35,
-                      }}
-                    >
-                      {primaryMortgageSubtitle}
-                    </div>
+<div
+  style={{
+    marginTop: 6,
+    fontSize: 13,
+    opacity: 0.78,
+    lineHeight: 1.35,
+  }}
+>
+  {primaryMortgageSubtitleSafe}
+</div>
                   </div>
 
-                  <Pill tone={primaryMortgagePillTone}>
-                    {primaryMortgagePill}
-                  </Pill>
+               <Pill tone={primaryMortgagePillToneSafe}>
+  {primaryMortgagePillSafe}
+</Pill>
                 </div>
+
+                <FinancialDisclaimer compact />
 
                 {useImmediateAsPrimary || useFutureAsPrimary ? (
                   <>
@@ -2803,7 +3210,7 @@ const mortgageDetailHomeValue =
                             }}
                           >
                        <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
-  Préstamo estimado
+   {useFutureAsPrimary ? "Monto proyectado a financiar" : "Monto estimado a financiar"}
 </div>
                             <div style={{ marginTop: 4, fontWeight: 900, fontSize: 15 }}>
                               {mainMonto != null ? moneyUSD(mainMonto) : "—"}
@@ -2827,11 +3234,9 @@ const mortgageDetailHomeValue =
                           ) : recommendedBank?.tipoProducto ? (
                             <Pill>{String(recommendedBank.tipoProducto)}</Pill>
                           ) : null}
-                          {useFutureAsPrimary && futureProbLabel ? (
-                            <Pill tone={probTone(futureProbLabel)}>
-                              Prob {futureProbLabel}
-                            </Pill>
-                          ) : null}
+  {useFutureAsPrimary ? (
+  <Pill tone="green">Ruta potencial</Pill>
+) : null}
                         </div>
 
                         <div
@@ -2844,11 +3249,11 @@ const mortgageDetailHomeValue =
                           }}
                         >
                           <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>
-                            ¿Por qué te la recomendamos?
+                            ¿Por qué aparece como referencia?
                           </div>
 
                           <div style={{ display: "grid", gap: 8 }}>
-                            {primaryReasons.map((reason, idx) => (
+                           {primaryReasonsForDisplay.map((reason, idx) => (
                               <div
                                 key={idx}
                                 style={{
@@ -2863,41 +3268,45 @@ const mortgageDetailHomeValue =
                           </div>
                         </div>
 
-                        <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-                          {useFutureAsPrimary && !useMarketplaceMortgageAsPrimary ? (
-                            <PrimaryButton onClick={() => setTab("props")}>
-                              Ver mi ruta futura en propiedades
-                            </PrimaryButton>
-                          ) : (
-                            <>
-                              <PrimaryButton
-                                onClick={() => handleConfirmMortgageRoute(recommendedBank)}
-                              >
-                                {useMarketplaceAdjustedRange
-                                  ? "Elegir esta ruta para trabajarla"
-                                  : "Confirmar esta ruta"}
-                              </PrimaryButton>
+                       <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+  {hasCreditBlocker ? (
+    <PrimaryButton onClick={() => navigate("/journey/full")}>
+      Actualizar historial financiero
+    </PrimaryButton>
+  ) : useFutureAsPrimary && !useMarketplaceMortgageAsPrimary ? (
+    <PrimaryButton onClick={() => setTab("props")}>
+      Ver mi ruta futura en propiedades
+    </PrimaryButton>
+  ) : (
+    <>
+      <PrimaryButton
+        onClick={() => handleConfirmMortgageRoute(recommendedBank)}
+      >
+        {useMarketplaceAdjustedRange
+          ? "Guardar esta ruta para trabajarla"
+          : "Guardar esta ruta referencial"}
+      </PrimaryButton>
 
-                              <SecondaryButton
-                                onClick={() =>
-                                  navigate("/asesor", {
-                                    state: {
-                                      selectedBank: recommendedBank,
-                                      source: "match_hipotecas",
-                                    },
-                                  })
-                                }
-                              >
-                                Hablar con asesor
-                              </SecondaryButton>
-                            </>
-                          )}
-                        </div>
+      <SecondaryButton
+        onClick={() =>
+          navigate("/asesor", {
+            state: {
+              selectedBank: recommendedBank,
+              source: "match_hipotecas",
+            },
+          })
+        }
+      >
+        Hablar con asesor
+      </SecondaryButton>
+    </>
+  )}
+</div>
                       </>
                     ) : (
                       <EmptyState
-                        title="Aún no tenemos una hipoteca recomendada"
-                        subtitle="Vuelve a calcular para recalcular tu match."
+                        title="Aún no tenemos una ruta referencial destacada"
+                        subtitle="Vuelve a estimar para actualizar tu orientación."
                         cta="Volver a calcular"
                         onClick={() => navigate("/journey/full")}
                       />
@@ -2942,9 +3351,9 @@ const mortgageDetailHomeValue =
                   </>
                 ) : (
                   <EmptyState
-                    title="Hoy todavía no hay una ruta clara"
-                    subtitle="No vemos una hipoteca viable hoy, ni una ruta futura suficientemente sólida, ni una alternativa cercana fuerte en este momento."
-                    cta="Volver a simular"
+                    title="Hoy todavía no hay una ruta referencial clara"
+                    subtitle="No vemos una ruta hipotecaria referencial clara hoy, ni una ruta futura suficientemente sólida, ni una alternativa cercana fuerte en este momento."
+                    cta="Volver a estimar"
                     onClick={() => navigate("/journey/full")}
                   />
                 )}
@@ -2968,17 +3377,21 @@ const mortgageDetailHomeValue =
                 >
                   <div>
                     <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 900 }}>
-                      Otras opciones
+                      Otras referencias
                     </div>
                     <div style={{ marginTop: 6, fontWeight: 900, fontSize: 16 }}>
-                      También podrían funcionarte
+                      También podrías comparar
                     </div>
                   </div>
                   <Pill>Top 3</Pill>
                 </div>
 
                 <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-                  {alternativeBanks.length ? (
+                 {hasCreditBlocker ? (
+  <div style={{ fontSize: 13, opacity: 0.75, lineHeight: 1.35 }}>
+    Primero actualiza o aclara tu historial financiero declarado antes de comparar rutas adicionales.
+  </div>
+) : alternativeBanks.length ? (
                     alternativeBanks.map((b, idx) => {
                       const scenario = getScenarioForBank(b, snapshot);
                       const tasaAlt = b?.tasaAnual ?? scenario?.tasaAnual ?? null;
@@ -3019,7 +3432,7 @@ const mortgageDetailHomeValue =
                             </div>
                             <Pill tone={probTone(b?.probLabel)}>
                               {b?.probLabel
-                                ? `Prob ${b.probLabel}`
+                                ? `Compat. ${b.probLabel}`
                                 : b?.probScore != null
                                 ? `Score ${b.probScore}`
                                 : "Estimación"}
@@ -3034,15 +3447,15 @@ const mortgageDetailHomeValue =
                               lineHeight: 1.35,
                             }}
                           >
-                            {b?.tipoProducto ? `Producto: ${b.tipoProducto}` : "Producto: —"}
+                            {b?.tipoProducto ? `Categoría: ${b.tipoProducto}` : "Categoría: —"}
                             {" • "}
                             {tasaAlt != null
-                              ? `Tasa: ${formatRate(tasaAlt)}`
-                              : "Tasa: —"}
+                              ? `Tasa ref.: ${formatRate(tasaAlt)}`
+                              : "Tasa ref.: —"}
                             {" • "}
                             {cuotaAlt != null && cuotaAlt > 0
-                              ? `Cuota: ${moneyUSD(cuotaAlt)}`
-                              : "Cuota: —"}
+                              ? `Cuota ref.: ${moneyUSD(cuotaAlt)}`
+                              : "Cuota ref.: —"}
                           </div>
 
                           <div style={{ marginTop: 10 }}>
@@ -3050,7 +3463,7 @@ const mortgageDetailHomeValue =
                               onClick={() => handleConfirmMortgageRoute(b)}
                               style={{ padding: 10 }}
                             >
-                              Elegir esta ruta
+                              Guardar esta ruta
                             </SecondaryButton>
                           </div>
                         </div>
@@ -3067,6 +3480,9 @@ const mortgageDetailHomeValue =
           ) : null}
         </>
       )}
+
+      <FinancialDisclaimer />
+
       <HipotecaVisualDetail
         open={showMortgageDetail}
         onClose={() => setShowMortgageDetail(false)}

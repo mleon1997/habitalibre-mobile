@@ -78,7 +78,7 @@ function toPct(n) {
   return clamp(Math.round(pct), 0, 100);
 }
 
-function probMeta(probPct) {
+function compatMeta(probPct) {
   if (probPct == null) return { label: "—", tone: "neutral" };
   if (probPct >= 70) return { label: "Alta", tone: "good" };
   if (probPct >= 45) return { label: "Media", tone: "warn" };
@@ -133,7 +133,7 @@ function getSelectedPropertyStatusMeta(status, hasChosenProperty) {
   if (status === "selected_viable_now") {
     return {
       short: "Sigue alineada",
-      hint: "Tu propiedad elegida sigue siendo una buena ruta con tu perfil actual.",
+      hint: "Tu propiedad elegida sigue alineada de forma referencial con tu perfil actual.",
       tone: "good",
     };
   }
@@ -141,7 +141,7 @@ function getSelectedPropertyStatusMeta(status, hasChosenProperty) {
   if (status === "selected_future_viable") {
     return {
       short: "Ruta futura",
-      hint: "Tu propiedad elegida todavía puede funcionar como ruta futura.",
+      hint: "Tu propiedad elegida todavía puede funcionar como una ruta futura referencial.",
       tone: "neutral",
     };
   }
@@ -149,7 +149,7 @@ function getSelectedPropertyStatusMeta(status, hasChosenProperty) {
   if (status === "selected_near_route") {
     return {
       short: "Revisar encaje",
-      hint: "Tu perfil cambió y conviene revisar si esta sigue siendo de tus mejores opciones.",
+      hint: "Tu perfil cambió y conviene revisar si esta sigue siendo una alternativa alineada.",
       tone: "neutral",
     };
   }
@@ -157,14 +157,14 @@ function getSelectedPropertyStatusMeta(status, hasChosenProperty) {
   if (status === "selected_no_longer_viable") {
     return {
       short: "Ya no calza hoy",
-      hint: "Tu información cambió y esta propiedad ya no se ve alineada con tu ruta más recomendable.",
+      hint: "Tu información cambió y esta propiedad ya no se ve alineada con tu ruta referencial actual.",
       tone: "neutral",
     };
   }
 
   return {
     short: "Elegida",
-    hint: "Tu ruta ya puede avanzar con esa propiedad como base.",
+    hint: "Tu ruta puede avanzar con esa propiedad como referencia base.",
     tone: "good",
   };
 }
@@ -181,7 +181,7 @@ function getMortgageRouteLabel(route) {
     route?.tipoProducto ||
     route?.label ||
     route?.mortgageId ||
-    "Producto recomendado";
+    "Categoría referencial";
 
   return `${provider} · ${product}`;
 }
@@ -217,13 +217,13 @@ function getCaseStepMeta({
       validateStatus: "done",
       sendStatus: "done",
       statusStatus: "next",
-      validateChip: "Validado",
+      validateChip: "Revisado",
       sendChip: "Recibido por HL",
       statusChip: "En seguimiento",
-      validateHint: "Tu caso ya fue validado por el sistema.",
-      sendHint: "Tu caso ya fue recibido por HabitaLibre y luego movido al siguiente frente.",
-      statusHint: "Aquí puedes seguir el estado real de tu caso.",
-      validateCta: "Ver validación",
+      validateHint: "Tu caso ya fue revisado por el sistema de forma referencial.",
+      sendHint: "Tu caso ya fue recibido por HabitaLibre y luego movido al siguiente frente de revisión.",
+      statusHint: "Aquí puedes seguir el estado de tu caso dentro de HabitaLibre.",
+      validateCta: "Ver revisión",
       sendCta: "Ver envío",
       statusCta: "Ver estado",
     };
@@ -237,13 +237,13 @@ function getCaseStepMeta({
       validateStatus: "done",
       sendStatus: "done",
       statusStatus: "next",
-      validateChip: "Validado",
+      validateChip: "Revisado",
       sendChip: "Recibido por HL",
       statusChip: "En revisión",
-      validateHint: "Tu caso ya fue validado y sí tiene base suficiente.",
+      validateHint: "Tu caso ya fue revisado y tiene una base suficiente para revisión interna.",
       sendHint: "Tu caso ya fue enviado a la cola operativa de HabitaLibre.",
       statusHint: "Aquí puedes ver que HabitaLibre lo está revisando antes de moverlo.",
-      validateCta: "Ver validación",
+      validateCta: "Ver revisión",
       sendCta: "Ver envío",
       statusCta: "Ver estado",
     };
@@ -257,16 +257,16 @@ function getCaseStepMeta({
       validateStatus: "next",
       sendStatus: "pending",
       statusStatus: "pending",
-      validateChip: "Validación disponible",
+      validateChip: "Revisión disponible",
       sendChip: "Pendiente",
       statusChip: "Pendiente",
       validateHint:
-        "Tu propiedad, tu ruta hipotecaria y tu preparación ya se ven suficientes para revisar si el caso puede enviarse a HabitaLibre.",
+        "Tu propiedad, tu ruta hipotecaria referencial y tu preparación ya se ven suficientes para revisar si el caso puede pasar a HabitaLibre.",
       sendHint:
-        "Cuando la validación esté lista, podrás enviar tu caso a la cola operativa de HabitaLibre.",
+        "Cuando la revisión esté lista, podrás compartir tu caso con la cola operativa de HabitaLibre.",
       statusHint:
-        "Aquí verás el estado real una vez que tu caso ya haya sido recibido por HabitaLibre.",
-      validateCta: "Ver validación",
+        "Aquí verás el estado una vez que tu caso haya sido recibido por HabitaLibre.",
+      validateCta: "Ver revisión",
       sendCta: "Ir al envío",
       statusCta: "Ver estado",
     };
@@ -280,16 +280,16 @@ function getCaseStepMeta({
       validateStatus: "locked",
       sendStatus: "locked",
       statusStatus: "pending",
-      validateChip: "Falta hipoteca",
+      validateChip: "Falta ruta",
       sendChip: "Bloqueado",
       statusChip: "Pendiente",
       validateHint:
-        "Antes de validar tu caso, confirma la ruta hipotecaria con la que quieres avanzar.",
+        "Antes de revisar tu caso, guarda la ruta hipotecaria referencial con la que quieres avanzar.",
       sendHint:
-        "No conviene enviar el caso mientras la ruta hipotecaria no esté confirmada.",
+        "No conviene compartir el caso mientras la ruta hipotecaria referencial no esté guardada.",
       statusHint:
-        "Aquí verás el estado real cuando tu caso ya haya sido recibido por HabitaLibre.",
-      validateCta: "Ver validación",
+        "Aquí verás el estado cuando tu caso ya haya sido recibido por HabitaLibre.",
+      validateCta: "Ver revisión",
       sendCta: "Ir al envío",
       statusCta: "Ver estado",
     };
@@ -310,11 +310,11 @@ function getCaseStepMeta({
       sendChip: "Bloqueado",
       statusChip: "Pendiente",
       validateHint:
-        "Antes de enviar tu caso, conviene revisar si esta sigue siendo la propiedad correcta.",
+        "Antes de compartir tu caso, conviene revisar si esta sigue siendo la propiedad correcta.",
       sendHint:
-        "No conviene enviar el caso mientras la ruta no esté clara.",
+        "No conviene compartir el caso mientras la ruta no esté clara.",
       statusHint:
-        "Aquí verás el estado real cuando tu caso ya haya sido recibido por HabitaLibre.",
+        "Aquí verás el estado cuando tu caso ya haya sido recibido por HabitaLibre.",
       validateCta: "Revisar mi caso",
       sendCta: "Ir al envío",
       statusCta: "Ver estado",
@@ -332,11 +332,11 @@ function getCaseStepMeta({
     sendChip: "Bloqueado",
     statusChip: "Bloqueado",
     validateHint:
-      "Primero debes completar tu evaluación para abrir una ruta real.",
+      "Primero debes completar tu evaluación para abrir una ruta referencial.",
     sendHint:
       "El envío solo se habilita cuando ya existe una base suficiente del caso.",
     statusHint:
-      "Aquí verás el estado real cuando tu caso ya haya sido recibido por HabitaLibre.",
+      "Aquí verás el estado cuando tu caso ya haya sido recibido por HabitaLibre.",
     validateCta: "Ver evaluación",
     sendCta: "Ir al envío",
     statusCta: "Ver estado",
@@ -353,6 +353,28 @@ function hasUnlockedEvaluation(snapshot) {
       snapshot?.output?.score != null ||
       snapshot?.financialCapacity?.estimatedMaxPropertyValue != null ||
       snapshot?.output?.financialCapacity?.estimatedMaxPropertyValue != null
+  );
+}
+
+function FinancialDisclaimer({ compact = false }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.42,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Las cifras mostradas son estimaciones referenciales para orientación hipotecaria. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
+    </div>
   );
 }
 
@@ -605,7 +627,7 @@ export default function Ruta() {
       "VIS"
     : "—";
 
-  const probPct = hasEvaluation
+  const compatPct = hasEvaluation
     ? toPct(
         snapshot?.probAprobacion ??
           snapshot?.kpis?.probAprobacion ??
@@ -615,7 +637,7 @@ export default function Ruta() {
       )
     : null;
 
-  const prob = probMeta(probPct);
+  const compat = compatMeta(compatPct);
 
   const matchedPropsFromJourney =
     journey?.match?.propiedades?.length ??
@@ -689,42 +711,54 @@ export default function Ruta() {
     bankSubmittedAt,
   });
 
-  const flags = {
-    precalificacion: hasEvaluation,
-    matchExplorado:
-      hasEvaluation &&
-      Boolean(
-        journey?.matchExplorado ||
-          journey?.match?.visto ||
-          (propsCount && propsCount > 0)
-      ),
-    propiedadElegida: hasEvaluation && hasChosenProperty,
-    rutaHipotecariaConfirmada:
-      hasEvaluation && hasChosenProperty && hasConfirmedMortgageRoute,
-    docsSubidos:
-      hasEvaluation && hasChosenProperty && hasConfirmedMortgageRoute && docsReady,
-    casoValidado:
-      hasEvaluation &&
-      (caseReadinessStatus === "listo_para_revision_habitalibre" ||
-        Boolean(activationRequestedAt) ||
-        Boolean(projectSubmittedAt) ||
-        Boolean(bankSubmittedAt)),
-    casoEnviado: hasEvaluation && Boolean(activationRequestedAt),
-    estadoRevision:
-      hasEvaluation &&
-      (Boolean(activationRequestedAt) ||
-        Boolean(projectSubmittedAt) ||
-        Boolean(bankSubmittedAt)),
-  };
+const flags = {
+  orientacionInicial: hasEvaluation,
+
+  // OJO:
+  // Tener propiedades sugeridas NO significa que el usuario ya exploró Match.
+  // Solo marcamos Match como completado si el usuario realmente lo visitó,
+  // eligió una propiedad o avanzó a guardar una ruta.
+  matchExplorado:
+    hasEvaluation &&
+    Boolean(
+      journey?.matchExplorado ||
+        journey?.match?.visto ||
+        hasChosenProperty ||
+        hasConfirmedMortgageRoute
+    ),
+
+  propiedadElegida: hasEvaluation && hasChosenProperty,
+
+  rutaHipotecariaGuardada:
+    hasEvaluation && hasChosenProperty && hasConfirmedMortgageRoute,
+
+  docsPreparados:
+    hasEvaluation && hasChosenProperty && hasConfirmedMortgageRoute && docsReady,
+
+  casoRevisado:
+    hasEvaluation &&
+    (caseReadinessStatus === "listo_para_revision_habitalibre" ||
+      Boolean(activationRequestedAt) ||
+      Boolean(projectSubmittedAt) ||
+      Boolean(bankSubmittedAt)),
+
+  casoCompartido: hasEvaluation && Boolean(activationRequestedAt),
+
+  estadoRevision:
+    hasEvaluation &&
+    (Boolean(activationRequestedAt) ||
+      Boolean(projectSubmittedAt) ||
+      Boolean(bankSubmittedAt)),
+};
 
   const stepsOrder = [
-    "precalificacion",
+    "orientacionInicial",
     "matchExplorado",
     "propiedadElegida",
-    "rutaHipotecariaConfirmada",
-    "docsSubidos",
-    "casoValidado",
-    "casoEnviado",
+    "rutaHipotecariaGuardada",
+    "docsPreparados",
+    "casoRevisado",
+    "casoCompartido",
     "estadoRevision",
   ];
 
@@ -739,30 +773,30 @@ export default function Ruta() {
   const nextStepKey = stepsOrder.find((k) => !flags[k]) || "estadoRevision";
 
   const nextStepLabel =
-    nextStepKey === "precalificacion"
+    nextStepKey === "orientacionInicial"
       ? "Empezar evaluación"
       : nextStepKey === "matchExplorado"
       ? "Explorar tu Match"
       : nextStepKey === "propiedadElegida"
       ? "Elegir una propiedad"
-      : nextStepKey === "rutaHipotecariaConfirmada"
-      ? "Confirmar ruta hipotecaria"
-      : nextStepKey === "docsSubidos"
+      : nextStepKey === "rutaHipotecariaGuardada"
+      ? "Guardar ruta referencial"
+      : nextStepKey === "docsPreparados"
       ? "Preparar documentos"
-      : nextStepKey === "casoValidado"
-      ? "Validar tu caso"
-      : nextStepKey === "casoEnviado"
-      ? "Enviar caso a HabitaLibre"
+      : nextStepKey === "casoRevisado"
+      ? "Revisar preparación"
+      : nextStepKey === "casoCompartido"
+      ? "Compartir caso con HabitaLibre"
       : "Estado de revisión";
 
   const goNext = () => {
-    if (nextStepKey === "precalificacion") nav("/journey/full");
+    if (nextStepKey === "orientacionInicial") nav("/journey/full");
     else if (nextStepKey === "matchExplorado") nav("/marketplace");
     else if (nextStepKey === "propiedadElegida") nav("/marketplace");
-    else if (nextStepKey === "rutaHipotecariaConfirmada") nav("/marketplace");
-    else if (nextStepKey === "docsSubidos") nav("/checklist-documentos");
-    else if (nextStepKey === "casoValidado") nav("/siguiente-paso");
-    else if (nextStepKey === "casoEnviado") nav("/siguiente-paso");
+    else if (nextStepKey === "rutaHipotecariaGuardada") nav("/marketplace");
+    else if (nextStepKey === "docsPreparados") nav("/checklist-documentos");
+    else if (nextStepKey === "casoRevisado") nav("/siguiente-paso");
+    else if (nextStepKey === "casoCompartido") nav("/siguiente-paso");
     else nav("/caso");
   };
 
@@ -807,7 +841,7 @@ export default function Ruta() {
                 lineHeight: 1.08,
               }}
             >
-              Tu camino a tu casa
+              Tu camino hacia vivienda propia
             </div>
 
             <div
@@ -819,7 +853,7 @@ export default function Ruta() {
                 maxWidth: 360,
               }}
             >
-              Pasos claros. Progreso real.
+              Pasos claros, estimaciones referenciales y una ruta más ordenada.
             </div>
           </div>
 
@@ -832,13 +866,15 @@ export default function Ruta() {
               flexShrink: 0,
             }}
           >
-            <Chip tone={prob.tone}>
-              Probabilidad {prob.label}
-              {probPct != null ? ` · ${probPct}%` : ""}
+            <Chip tone={compat.tone}>
+              Compatibilidad {compat.label}
+              {compatPct != null ? ` · ${compatPct}%` : ""}
             </Chip>
             <Chip tone="neutral">{progressPct}% completado</Chip>
           </div>
         </div>
+
+        <FinancialDisclaimer compact />
 
         <div style={{ marginTop: 14 }}>
           <div
@@ -887,7 +923,7 @@ export default function Ruta() {
                 pasos para continuar.
               </>
             ) : (
-              <>¡Listo! Ya completaste todos los pasos.</>
+              <>¡Listo! Ya completaste todos los pasos de preparación.</>
             )}
           </div>
 
@@ -914,11 +950,11 @@ export default function Ruta() {
       >
         <StepTimelineCard
           stepNum={1}
-          title="Precalificación"
+          title="Orientación inicial"
           subtitle={
             hasEvaluation
-              ? "Tu perfil hipotecario ya está listo."
-              : "Completa tu evaluación para abrir tu ruta real."
+              ? "Tu perfil ya tiene una estimación referencial lista."
+              : "Completa tu evaluación para abrir tu ruta referencial."
           }
           status={hasEvaluation ? "done" : "next"}
           featured={!hasEvaluation}
@@ -927,23 +963,23 @@ export default function Ruta() {
             <>
               <RightMetric>{hasEvaluation ? "Score" : "Pendiente"}</RightMetric>
               <RightMetric>
-                {hasEvaluation && cuota ? `Cuota ${moneyUSD(cuota)}` : "Cuota —"}
+                {hasEvaluation && cuota ? `Cuota ref. ${moneyUSD(cuota)}` : "Cuota ref. —"}
               </RightMetric>
             </>
           }
-          ctaLabel={hasEvaluation ? "Ver mi resultado" : "Empezar evaluación"}
+          ctaLabel={hasEvaluation ? "Ver mi orientación" : "Empezar evaluación"}
           onClick={() => nav(hasEvaluation ? "/" : "/journey/full")}
           hint={
             hasEvaluation
-              ? "Este es el paso más importante. Lo demás es elegir la mejor opción."
-              : "Aquí se activa tu capacidad estimada, tu cuota referencial y tu siguiente mejor paso."
+              ? "Este paso resume tu rango estimado, cuota referencial y siguiente paso sugerido."
+              : "Aquí se activa tu rango estimado, tu cuota referencial y tu siguiente mejor paso."
           }
         />
 
         <StepTimelineCard
           stepNum={2}
           title="Explorar tu Match"
-          subtitle="Compara propiedades e hipotecas que encajan con tu perfil."
+          subtitle="Compara propiedades y rutas hipotecarias referenciales que podrían alinearse con tu perfil."
           status={
             !hasEvaluation
               ? "locked"
@@ -968,17 +1004,17 @@ export default function Ruta() {
             hasEvaluation
               ? cuota && maxCompra
                 ? <>
-                    Tu rango:{" "}
+                    Tu rango estimado:{" "}
                     <b style={{ color: "rgba(226,232,240,0.95)" }}>
                       {moneyUSD(maxCompra)}
                     </b>{" "}
-                    · cuotas desde{" "}
+                    · cuota referencial desde{" "}
                     <b style={{ color: "rgba(226,232,240,0.95)" }}>
                       {moneyUSD(cuota)}
                     </b>
                     .
                   </>
-                : "Aquí ves casas, hipotecas y cuotas en un solo lugar."
+                : "Aquí ves propiedades, rutas referenciales y cuotas estimadas en un solo lugar."
               : "Primero necesitas completar tu evaluación para ver opciones alineadas con tu perfil."
           }
         />
@@ -1030,16 +1066,16 @@ export default function Ruta() {
 
         <StepTimelineCard
           stepNum={4}
-          title="Confirmar ruta hipotecaria"
+          title="Guardar ruta hipotecaria referencial"
           subtitle={
-            flags.rutaHipotecariaConfirmada
-              ? "Ya confirmaste la ruta hipotecaria con la que quieres avanzar."
-              : "Elige y confirma la hipoteca que mejor encaja con tu perfil y tu propiedad base."
+            flags.rutaHipotecariaGuardada
+              ? "Ya guardaste la ruta hipotecaria referencial con la que quieres avanzar."
+              : "Compara y guarda la ruta hipotecaria referencial que mejor se alinea con tu perfil y tu propiedad base."
           }
           status={
             !hasEvaluation
               ? "locked"
-              : flags.rutaHipotecariaConfirmada
+              : flags.rutaHipotecariaGuardada
               ? "done"
               : flags.propiedadElegida
               ? "next"
@@ -1048,38 +1084,38 @@ export default function Ruta() {
           featured={
             hasEvaluation &&
             flags.propiedadElegida &&
-            !flags.rutaHipotecariaConfirmada
+            !flags.rutaHipotecariaGuardada
           }
           icon={<ShieldCheck size={13} />}
           rightChips={
             <>
-              <RightMetric tone={flags.rutaHipotecariaConfirmada ? "good" : "neutral"}>
-                {flags.rutaHipotecariaConfirmada ? "Confirmada" : "Pendiente"}
+              <RightMetric tone={flags.rutaHipotecariaGuardada ? "good" : "neutral"}>
+                {flags.rutaHipotecariaGuardada ? "Guardada" : "Pendiente"}
               </RightMetric>
               <RightMetric>
                 {selectedMortgageRoute?.productLabel ||
                   selectedMortgageRoute?.tipoProducto ||
                   visTag ||
-                  "Hipoteca"}
+                  "Ruta ref."}
               </RightMetric>
             </>
           }
           ctaLabel={
-            flags.rutaHipotecariaConfirmada
-              ? "Ver ruta hipotecaria"
-              : "Comparar hipotecas"
+            flags.rutaHipotecariaGuardada
+              ? "Ver ruta referencial"
+              : "Comparar rutas"
           }
           onClick={() => nav("/marketplace")}
           disabled={!hasEvaluation || !flags.propiedadElegida}
           hint={
-            flags.rutaHipotecariaConfirmada
-              ? `${mortgageRouteLabel || "Ruta hipotecaria confirmada"}${
+            flags.rutaHipotecariaGuardada
+              ? `${mortgageRouteLabel || "Ruta hipotecaria referencial guardada"}${
                   selectedMortgageRoute?.cuota
-                    ? ` · cuota estimada ${moneyUSD(selectedMortgageRoute.cuota)}`
+                    ? ` · cuota ref. ${moneyUSD(selectedMortgageRoute.cuota)}`
                     : ""
                 }${
                   selectedMortgageRoute?.annualRate || selectedMortgageRoute?.tasaAnual
-                    ? ` · tasa ${(Number(
+                    ? ` · tasa ref. ${(Number(
                         selectedMortgageRoute.annualRate ||
                           selectedMortgageRoute.tasaAnual
                       ) <= 1
@@ -1094,32 +1130,32 @@ export default function Ruta() {
                       ).toFixed(2)}%`
                     : ""
                 }`
-              : "Antes de preparar documentos, confirma si quieres avanzar con la ruta recomendada o comparar otras opciones."
+              : "Antes de preparar documentos, guarda una ruta referencial o compara otras alternativas."
           }
         />
 
         <StepTimelineCard
           stepNum={5}
           title="Preparar documentos"
-          subtitle="Te mostramos qué deberías tener listo para avanzar con esta ruta hipotecaria."
+          subtitle="Te mostramos qué podrías tener listo para avanzar con esta ruta referencial."
           status={
             !hasEvaluation
               ? "locked"
-              : flags.docsSubidos
+              : flags.docsPreparados
               ? "done"
-              : flags.rutaHipotecariaConfirmada
+              : flags.rutaHipotecariaGuardada
               ? "pending"
               : "locked"
           }
           icon={<FileText size={13} />}
           rightChips={
-            <RightMetric tone={flags.docsSubidos ? "good" : "neutral"}>
-              {flags.docsSubidos ? "Listo" : "Pendiente"}
+            <RightMetric tone={flags.docsPreparados ? "good" : "neutral"}>
+              {flags.docsPreparados ? "Listo" : "Pendiente"}
             </RightMetric>
           }
           ctaLabel="Ver checklist"
           onClick={() => nav("/checklist-documentos")}
-          disabled={!hasEvaluation || !flags.rutaHipotecariaConfirmada}
+          disabled={!hasEvaluation || !flags.rutaHipotecariaGuardada}
           hint={
             docsDone > 0
               ? `Tienes ${docsDone} de ${docsTotal} ítems marcados en tu checklist.`
@@ -1129,8 +1165,8 @@ export default function Ruta() {
 
         <StepTimelineCard
           stepNum={6}
-          title="Validar tu caso"
-          subtitle="El sistema revisa si tu propiedad elegida, tu ruta hipotecaria y tu preparación actual ya son suficientes para enviar tu caso a revisión HabitaLibre."
+          title="Revisar preparación del caso"
+          subtitle="El sistema revisa si tu propiedad elegida, tu ruta referencial y tu preparación actual ya son suficientes para compartir tu caso con HabitaLibre."
           status={caseSteps.validateStatus}
           featured={caseSteps.validateStatus === "next"}
           icon={<ShieldCheck size={13} />}
@@ -1141,18 +1177,18 @@ export default function Ruta() {
           }
           ctaLabel={caseSteps.validateCta}
           onClick={() => nav(hasEvaluation ? "/siguiente-paso" : "/journey/full")}
-          disabled={!hasEvaluation || !flags.docsSubidos}
+          disabled={!hasEvaluation || !flags.docsPreparados}
           hint={
             hasEvaluation
               ? caseSteps.validateHint
-              : "Primero necesitas una evaluación real para abrir este paso."
+              : "Primero necesitas una evaluación referencial para abrir este paso."
           }
         />
 
         <StepTimelineCard
           stepNum={7}
-          title="Enviar caso a HabitaLibre"
-          subtitle="Cuando tu caso esté listo, podrás enviarlo a HabitaLibre para que lo revise."
+          title="Compartir caso con HabitaLibre"
+          subtitle="Cuando tu caso esté listo, podrás compartirlo con HabitaLibre para revisión interna."
           status={caseSteps.sendStatus}
           featured={caseSteps.sendStatus === "next"}
           icon={<Send size={13} />}
@@ -1174,7 +1210,7 @@ export default function Ruta() {
         <StepTimelineCard
           stepNum={8}
           title="Estado de revisión"
-          subtitle="Aquí verás cuando HabitaLibre reciba tu caso y cómo va avanzando la revisión."
+          subtitle="Aquí verás cuando HabitaLibre reciba tu caso y cómo va avanzando la revisión interna."
           status={caseSteps.statusStatus}
           icon={<BadgeCheck size={13} />}
           rightChips={

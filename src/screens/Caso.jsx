@@ -83,11 +83,7 @@ function normalizeProperty(raw) {
   if (!raw || typeof raw !== "object") return null;
 
   const id =
-    raw?.id ||
-    raw?._id ||
-    raw?.propertyId ||
-    raw?._normalizedId ||
-    null;
+    raw?.id || raw?._id || raw?.propertyId || raw?._normalizedId || null;
 
   const title =
     raw?.titulo ||
@@ -128,62 +124,129 @@ function normalizeProperty(raw) {
   };
 }
 
+const styles = {
+  content: {
+    width: "100%",
+    maxWidth: 560,
+    margin: "0 auto",
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingTop: "calc(env(safe-area-inset-top, 0px) + 18px)",
+    paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 148px)",
+    display: "grid",
+    gap: 18,
+    boxSizing: "border-box",
+  },
+
+  header: {
+    display: "grid",
+    gap: 18,
+  },
+
+  backButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    width: "fit-content",
+    minHeight: 42,
+    background: "rgba(255,255,255,0.055)",
+    border: "1px solid rgba(255,255,255,0.09)",
+    color: "rgba(226,232,240,0.98)",
+    borderRadius: 999,
+    padding: "9px 13px",
+    cursor: "pointer",
+    fontWeight: 850,
+    fontSize: 13.5,
+    boxShadow: "0 10px 26px rgba(0,0,0,0.14)",
+    backdropFilter: "blur(14px)",
+  },
+
+  eyebrow: {
+    fontSize: 13,
+    color: "rgba(148,163,184,0.95)",
+    fontWeight: 850,
+    marginBottom: 8,
+  },
+
+  title: {
+    fontSize: "clamp(34px, 9.3vw, 44px)",
+    lineHeight: 0.98,
+    fontWeight: 980,
+    letterSpacing: -1.25,
+    color: "rgba(226,232,240,0.98)",
+  },
+
+  subtitle: {
+    marginTop: 12,
+    fontSize: 16,
+    lineHeight: 1.5,
+    color: "rgba(148,163,184,0.96)",
+  },
+
+  softCard: {
+    padding: 18,
+    borderRadius: 28,
+    border: "1px solid rgba(148,163,184,0.14)",
+    background:
+      "linear-gradient(180deg, rgba(15,23,42,0.82), rgba(15,23,42,0.62))",
+    boxShadow: "0 18px 55px rgba(0,0,0,0.16)",
+  },
+
+  sectionTitle: {
+    fontSize: 22,
+    lineHeight: 1.12,
+    fontWeight: 950,
+    letterSpacing: -0.45,
+    color: "rgba(226,232,240,0.98)",
+  },
+
+  sectionSubtitle: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 1.48,
+    color: "rgba(148,163,184,0.95)",
+  },
+
+  innerSurface: {
+    padding: 15,
+    borderRadius: 20,
+    border: "1px solid rgba(148,163,184,0.11)",
+    background: "rgba(255,255,255,0.035)",
+  },
+};
+
 function InfoCard({ title, subtitle, children }) {
   return (
-    <Card style={{ padding: 16 }}>
-      <div
-        style={{
-          fontSize: 16,
-          fontWeight: 950,
-          color: "rgba(226,232,240,0.98)",
-        }}
-      >
-        {title}
-      </div>
+    <Card style={styles.softCard}>
+      <div style={styles.sectionTitle}>{title}</div>
 
-      {subtitle ? (
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 13.5,
-            lineHeight: 1.45,
-            color: "rgba(148,163,184,0.95)",
-          }}
-        >
-          {subtitle}
-        </div>
-      ) : null}
+      {subtitle ? <div style={styles.sectionSubtitle}>{subtitle}</div> : null}
 
-      <div style={{ marginTop: 14 }}>{children}</div>
+      <div style={{ marginTop: 16 }}>{children}</div>
     </Card>
   );
 }
 
 function MiniStat({ label, value }) {
   return (
-    <div
-      style={{
-        padding: 14,
-        borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.04)",
-      }}
-    >
+    <div style={styles.innerSurface}>
       <div
         style={{
-          fontSize: 11,
+          fontSize: 11.5,
           color: "rgba(148,163,184,0.92)",
           fontWeight: 800,
         }}
       >
         {label}
       </div>
+
       <div
         style={{
           marginTop: 6,
-          fontSize: 16,
+          fontSize: 18,
           color: "rgba(226,232,240,0.98)",
           fontWeight: 950,
+          letterSpacing: -0.25,
         }}
       >
         {value}
@@ -194,19 +257,13 @@ function MiniStat({ label, value }) {
 
 function ActionRow({ icon, title, body }) {
   return (
-    <div
-      style={{
-        padding: 14,
-        borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.04)",
-      }}
-    >
+    <div style={styles.innerSurface}>
       <div
         style={{
           display: "inline-flex",
           alignItems: "center",
           gap: 8,
+          fontSize: 14.5,
           fontWeight: 900,
           color: "rgba(226,232,240,0.98)",
           marginBottom: 8,
@@ -219,7 +276,7 @@ function ActionRow({ icon, title, body }) {
       <div
         style={{
           fontSize: 13.5,
-          lineHeight: 1.45,
+          lineHeight: 1.5,
           color: "rgba(148,163,184,0.95)",
         }}
       >
@@ -233,12 +290,14 @@ function TimelineItem({ title, body, done = false }) {
   return (
     <div
       style={{
-        padding: 14,
-        borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.08)",
+        padding: 15,
+        borderRadius: 20,
+        border: `1px solid ${
+          done ? "rgba(34,197,94,0.18)" : "rgba(148,163,184,0.11)"
+        }`,
         background: done
-          ? "rgba(34,197,94,0.08)"
-          : "rgba(255,255,255,0.04)",
+          ? "linear-gradient(135deg, rgba(34,197,94,0.105), rgba(20,184,166,0.045))"
+          : "rgba(255,255,255,0.035)",
       }}
     >
       <div
@@ -252,15 +311,39 @@ function TimelineItem({ title, body, done = false }) {
         {done ? "✓ " : ""}
         {title}
       </div>
+
       <div
         style={{
           fontSize: 13.5,
-          lineHeight: 1.45,
+          lineHeight: 1.5,
           color: "rgba(148,163,184,0.95)",
         }}
       >
         {body}
       </div>
+    </div>
+  );
+}
+
+function FinancialDisclaimer({ compact = false }) {
+  return (
+    <div
+      style={{
+        marginTop: compact ? 12 : 16,
+        padding: compact ? "11px 12px" : "13px 14px",
+        borderRadius: 20,
+        border: "1px solid rgba(245,158,11,0.18)",
+        background:
+          "linear-gradient(135deg, rgba(245,158,11,0.09), rgba(245,158,11,0.045))",
+        color: "rgba(254,243,199,0.95)",
+        fontSize: compact ? 11.5 : 12,
+        lineHeight: 1.48,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Las cifras mostradas son estimaciones referenciales para orientación hipotecaria. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
     </div>
   );
 }
@@ -284,67 +367,67 @@ function getSimpleCaseDefinition({
 
   if (wasSent) {
     return {
-      statusLabel: "Enviado por HabitaLibre",
+      statusLabel: "Compartido por HabitaLibre",
       statusTone: "good",
-      heroTitle: "Tu caso ya fue enviado",
+      heroTitle: "Tu caso ya fue compartido",
       heroBody:
-        "HabitaLibre ya compartió tu perfil con los actores correspondientes según tu caso.",
-      nextActorLabel: "Caso enviado",
+        "HabitaLibre ya compartió información de tu caso con los actores correspondientes, únicamente para orientación y contacto. Esto no representa aprobación, oferta ni promesa de financiamiento.",
+      nextActorLabel: "Caso compartido",
       nextActorText:
-        "Tu caso ya salió de HabitaLibre hacia el promotor, la entidad financiera o ambos.",
+        "Tu caso ya salió de la revisión interna de HabitaLibre hacia el frente que corresponde según tu situación.",
       userAction:
-        "Esperar el siguiente contacto o respuesta según tu caso.",
+        "Esperar el siguiente contacto o respuesta según el estado de tu caso.",
       habitalibreAction:
-        "Ya compartió tu perfil con los actores correspondientes.",
+        "Compartió información de tu caso para facilitar orientación y seguimiento.",
       nextExternalStep:
-        "El promotor y/o la entidad financiera podrán revisar tu perfil y contactarte si aplica.",
+        "El proyecto y/o una entidad financiera podrán revisar la información y contactarte si corresponde dentro de sus propios procesos.",
       ctaLabel: "Volver a mi ruta",
       ctaPath: "/ruta",
       projectStatusLabel:
         projectStatus === "enviado"
-          ? "Enviado al promotor"
-          : "Pendiente de envío",
+          ? "Compartido con proyecto"
+          : "Pendiente de revisión",
       bankStatusLabel:
         bankStatus === "enviado"
-          ? "Enviado a entidad financiera"
-          : "Pendiente de envío",
-      timelineProjectTitle: "Caso enviado al promotor",
+          ? "Compartido con entidad financiera"
+          : "Pendiente de revisión",
+      timelineProjectTitle: "Caso compartido con proyecto",
       timelineProjectBody:
         projectStatus === "enviado"
-          ? "HabitaLibre ya compartió tu perfil con el promotor."
-          : "Todavía no se ha enviado al promotor.",
-      timelineBankTitle: "Caso enviado a entidad financiera",
+          ? "HabitaLibre ya compartió información de tu caso con el proyecto elegido."
+          : "Todavía no se ha compartido con el proyecto.",
+      timelineBankTitle: "Caso compartido con entidad financiera",
       timelineBankBody:
         bankStatus === "enviado"
-          ? "HabitaLibre ya compartió tu perfil con una entidad financiera."
-          : "Todavía no se ha enviado a una entidad financiera.",
+          ? "HabitaLibre ya compartió información de tu caso con una entidad financiera para orientación/contacto. Las condiciones finales dependen exclusivamente de esa entidad."
+          : "Todavía no se ha compartido con una entidad financiera.",
     };
   }
 
   if (wasReceived) {
     return {
-      statusLabel: "Pendiente de envío",
+      statusLabel: "En revisión interna",
       statusTone: "good",
       heroTitle: "Tu caso fue recibido por HabitaLibre",
       heroBody:
-        "Ya recibimos tu caso. Ahora HabitaLibre revisará y lo enviará al promotor, al banco o a ambos.",
-      nextActorLabel: "Pendiente de envío",
+        "Ya recibimos tu caso. Ahora HabitaLibre lo revisará internamente para definir cuál podría ser el siguiente paso más adecuado.",
+      nextActorLabel: "Revisión interna",
       nextActorText:
-        "Tu caso ya fue recibido por HabitaLibre y está pendiente de envío.",
+        "Tu caso ya fue recibido por HabitaLibre y está en revisión operativa interna.",
       userAction:
-        "Esperar mientras HabitaLibre realiza el envío correspondiente.",
+        "Esperar mientras HabitaLibre revisa tu información y define el siguiente paso sugerido.",
       habitalibreAction:
-        "Enviar tu perfil al promotor, al banco o a ambos.",
+        "Revisar tu propiedad base, tu preparación documental y tu ruta referencial.",
       nextExternalStep:
-        "Una vez enviado, aquí podrás ver por qué frente ya fue compartido tu caso.",
+        "Una vez revisado, aquí podrás ver si corresponde avanzar hacia el proyecto, hacia una conversación futura con una entidad financiera o mantener el caso en preparación.",
       ctaLabel: "Volver a mi ruta",
       ctaPath: "/ruta",
       projectStatusLabel: "Por revisar por HabitaLibre",
       bankStatusLabel: "Por revisar por HabitaLibre",
-      timelineProjectTitle: "Envío al promotor pendiente",
+      timelineProjectTitle: "Frente proyecto pendiente",
       timelineProjectBody:
-        "HabitaLibre todavía no ha compartido tu caso con el promotor.",
-      timelineBankTitle: "Envío a entidad financiera pendiente",
+        "HabitaLibre todavía no ha compartido tu caso con el proyecto.",
+      timelineBankTitle: "Frente financiero pendiente",
       timelineBankBody:
         "HabitaLibre todavía no ha compartido tu caso con una entidad financiera.",
     };
@@ -356,26 +439,26 @@ function getSimpleCaseDefinition({
       statusTone: "neutral",
       heroTitle: "Antes de avanzar, falta elegir una propiedad base",
       heroBody:
-        "Tu caso todavía no está listo porque falta definir la propiedad que va a guiar el proceso.",
+        "Tu caso todavía no está listo porque falta definir la propiedad que va a guiar tu ruta referencial.",
       nextActorLabel: "Primero propiedad",
       nextActorText:
-        "Antes de mover tu caso, conviene elegir una propiedad base.",
+        "Antes de compartir tu caso con HabitaLibre, conviene elegir una propiedad base.",
       userAction:
         "Elegir la propiedad que más te interese para aterrizar tu ruta.",
       habitalibreAction:
-        "Usar esa propiedad para definir cómo mover tu caso.",
+        "Usar esa propiedad para ordenar mejor tu ruta y revisar qué siguiente paso podría tener sentido.",
       nextExternalStep:
-        "Después podrás enviar tu caso a HabitaLibre.",
+        "Después podrás compartir tu caso con HabitaLibre para revisión interna.",
       ctaLabel: "Elegir propiedad",
       ctaPath: "/marketplace",
       projectStatusLabel: "Pendiente",
       bankStatusLabel: "Pendiente",
-      timelineProjectTitle: "Envío al promotor pendiente",
+      timelineProjectTitle: "Frente proyecto pendiente",
       timelineProjectBody:
-        "Todavía no puede enviarse porque falta una propiedad base.",
-      timelineBankTitle: "Envío a entidad financiera pendiente",
+        "Todavía no puede revisarse este frente porque falta una propiedad base.",
+      timelineBankTitle: "Frente financiero pendiente",
       timelineBankBody:
-        "Todavía no puede enviarse porque falta una base suficiente del caso.",
+        "Todavía no puede revisarse este frente porque falta una base suficiente del caso.",
     };
   }
 
@@ -385,54 +468,49 @@ function getSimpleCaseDefinition({
       statusTone: "neutral",
       heroTitle: "Tu caso va bien, pero todavía falta preparación",
       heroBody:
-        "Ya tienes una propiedad base. Antes de enviar tu caso a HabitaLibre, conviene completar mejor tu checklist documental.",
+        "Ya tienes una propiedad base. Antes de compartir tu caso con HabitaLibre, conviene completar mejor tu checklist documental.",
       nextActorLabel: "Primero preparación",
       nextActorText:
-        "Antes de mover tu caso, conviene fortalecer tu base documental.",
+        "Antes de compartir tu caso, conviene fortalecer tu base documental.",
       userAction:
         "Completar tu checklist para llegar más ordenado al siguiente paso.",
       habitalibreAction:
-        "Validar si tu caso ya tiene base suficiente para ser enviado.",
+        "Revisar si tu caso ya tiene una base suficiente para pasar a revisión interna.",
       nextExternalStep:
-        "Cuando tu preparación sea suficiente, podrás activar tu caso.",
+        "Cuando tu preparación sea suficiente, podrás compartir tu caso con HabitaLibre.",
       ctaLabel: "Ver checklist",
       ctaPath: "/checklist-documentos",
       projectStatusLabel: "Pendiente",
       bankStatusLabel: "Pendiente",
-      timelineProjectTitle: "Envío al promotor pendiente",
+      timelineProjectTitle: "Frente proyecto pendiente",
       timelineProjectBody:
-        "Todavía no conviene enviarlo mientras falta preparación.",
-      timelineBankTitle: "Envío a entidad financiera pendiente",
+        "Todavía no conviene avanzar mientras falta preparación.",
+      timelineBankTitle: "Frente financiero pendiente",
       timelineBankBody:
-        "Todavía no conviene enviarlo mientras falta preparación.",
+        "Todavía no conviene avanzar mientras falta preparación.",
     };
   }
 
   return {
     statusLabel: "Caso en preparación",
     statusTone: "neutral",
-    heroTitle: "Tu caso todavía no está listo para enviarse",
+    heroTitle: "Tu caso todavía no está listo para compartirse",
     heroBody:
-      "Primero conviene revisar qué te falta antes de activar tu caso.",
+      "Primero conviene revisar qué te falta antes de pasar a revisión interna.",
     nextActorLabel: "Preparación",
-    nextActorText:
-      "Antes de mover el caso, conviene fortalecer su base.",
-    userAction:
-      "Revisar tu propiedad, checklist y ruta actual.",
+    nextActorText: "Antes de compartir el caso, conviene fortalecer su base.",
+    userAction: "Revisar tu propiedad, checklist y ruta actual.",
     habitalibreAction:
-      "Usar esa información para decidir si el caso ya puede enviarse.",
-    nextExternalStep:
-      "Después podrás enviarlo a HabitaLibre.",
+      "Usar esa información para revisar si el caso ya puede pasar a la siguiente etapa.",
+    nextExternalStep: "Después podrás compartirlo con HabitaLibre.",
     ctaLabel: "Volver al siguiente paso",
     ctaPath: "/siguiente-paso",
     projectStatusLabel: "Pendiente",
     bankStatusLabel: "Pendiente",
-    timelineProjectTitle: "Envío al promotor pendiente",
-    timelineProjectBody:
-      "Todavía no se ha habilitado este frente.",
-    timelineBankTitle: "Envío a entidad financiera pendiente",
-    timelineBankBody:
-      "Todavía no se ha habilitado este frente.",
+    timelineProjectTitle: "Frente proyecto pendiente",
+    timelineProjectBody: "Todavía no se ha habilitado este frente.",
+    timelineBankTitle: "Frente financiero pendiente",
+    timelineBankBody: "Todavía no se ha habilitado este frente.",
   };
 }
 
@@ -494,7 +572,7 @@ export default function Caso() {
               caso?.statusGeneral === "pendiente_revision_habitalibre"
                 ? "Caso recibido por HabitaLibre"
                 : caso?.statusGeneral === "enviado"
-                ? "Enviado por HabitaLibre"
+                ? "Compartido por HabitaLibre"
                 : journey?.activationRequestLabel || null,
             statusGeneral: caso?.statusGeneral || null,
             projectStatus: caso?.projectStatus || null,
@@ -503,12 +581,12 @@ export default function Caso() {
             bankSubmittedAt: caso?.bankSubmittedAt || null,
             projectSubmissionStatus:
               caso?.projectStatus === "enviado"
-                ? "Enviado al promotor"
-                : "Pendiente de envío",
+                ? "Compartido con proyecto"
+                : "Pendiente de revisión",
             bankSubmissionStatus:
               caso?.bankStatus === "enviado"
-                ? "Enviado a entidad financiera"
-                : "Pendiente de envío",
+                ? "Compartido con entidad financiera"
+                : "Pendiente de revisión",
           };
 
           saveOwnedData(LS_JOURNEY, nextJourney);
@@ -578,12 +656,6 @@ export default function Caso() {
   const bankStatus =
     remoteCase?.bankStatus || journey?.bankStatus || "por_revisar";
 
-  const projectSubmittedAt =
-    remoteCase?.projectSubmittedAt || journey?.projectSubmittedAt || null;
-
-  const bankSubmittedAt =
-    remoteCase?.bankSubmittedAt || journey?.bankSubmittedAt || null;
-
   const caseDef = getSimpleCaseDefinition({
     hasChosenProperty,
     docsReady,
@@ -594,76 +666,27 @@ export default function Caso() {
   });
 
   return (
-    <Screen
-      style={{
-        paddingTop: 78,
-        paddingBottom: 110,
-      }}
-    >
-      <div style={{ display: "grid", gap: 16, paddingTop: 4, paddingBottom: 110 }}>
-        <div style={{ display: "grid", gap: 12 }}>
-          <button
-            onClick={() => navigate("/ruta")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              color: "white",
-              borderRadius: 999,
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 850,
-              width: "fit-content",
-              marginTop: 8,
-            }}
-          >
-            <ArrowLeft size={15} />
+    <Screen>
+      <div style={styles.content}>
+        <div style={styles.header}>
+          <button onClick={() => navigate("/ruta")} style={styles.backButton}>
+            <ArrowLeft size={16} />
             Volver a Ruta
           </button>
 
           <div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "rgba(148,163,184,0.95)",
-                fontWeight: 850,
-                marginBottom: 8,
-              }}
-            >
-              Mi caso
-            </div>
+            <div style={styles.eyebrow}>Mi caso</div>
 
-            <div
-              style={{
-                fontSize: 30,
-                lineHeight: 1.02,
-                fontWeight: 980,
-                letterSpacing: -0.9,
-                color: "rgba(226,232,240,0.98)",
-                maxWidth: 560,
-              }}
-            >
-              {caseDef.heroTitle}
-            </div>
+            <div style={styles.title}>{caseDef.heroTitle}</div>
 
-            <div
-              style={{
-                marginTop: 10,
-                fontSize: 15,
-                lineHeight: 1.45,
-                color: "rgba(148,163,184,0.95)",
-                maxWidth: 560,
-              }}
-            >
-              {caseDef.heroBody}
-            </div>
+            <div style={styles.subtitle}>{caseDef.heroBody}</div>
+
+            <FinancialDisclaimer />
 
             {isLoadingRemote ? (
               <div
                 style={{
-                  marginTop: 10,
+                  marginTop: 12,
                   fontSize: 12.5,
                   color: "rgba(148,163,184,0.85)",
                   fontWeight: 700,
@@ -679,23 +702,39 @@ export default function Caso() {
           title="Estado actual"
           subtitle="Esto resume en qué punto está tu caso hoy."
         >
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 16,
+            }}
+          >
             <Chip tone={caseDef.statusTone}>{caseDef.statusLabel}</Chip>
+
             <Chip tone={hasChosenProperty ? "good" : "neutral"}>
               {hasChosenProperty ? "Propiedad base lista" : "Sin propiedad base"}
             </Chip>
+
             <Chip tone={docsReady ? "good" : "neutral"}>
               {docsDone}/{docsTotal} ítems listos
             </Chip>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+            }}
+          >
             <MiniStat
-              label="Meta estimada"
+              label="Rango estimado"
               value={maxCompra ? moneyUSD(maxCompra) : "—"}
             />
+
             <MiniStat
-              label="Cuota estimada"
+              label="Cuota ref."
               value={cuota ? moneyUSD(cuota) : "—"}
             />
           </div>
@@ -703,7 +742,11 @@ export default function Caso() {
           {activationRequestedAt ? (
             <div
               style={{
-                marginTop: 12,
+                marginTop: 14,
+                padding: "11px 12px",
+                borderRadius: 18,
+                background: "rgba(255,255,255,0.035)",
+                border: "1px solid rgba(148,163,184,0.1)",
                 fontSize: 12.5,
                 lineHeight: 1.4,
                 color: "rgba(148,163,184,0.92)",
@@ -714,11 +757,15 @@ export default function Caso() {
           ) : null}
         </InfoCard>
 
-        <InfoCard
-          title="Qué pasa ahora"
-          subtitle={caseDef.nextActorText}
-        >
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        <InfoCard title="Qué pasa ahora" subtitle={caseDef.nextActorText}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 16,
+            }}
+          >
             <Chip tone={caseDef.statusTone}>{caseDef.nextActorLabel}</Chip>
           </div>
 
@@ -728,11 +775,13 @@ export default function Caso() {
               title="Tu acción ahora"
               body={caseDef.userAction}
             />
+
             <ActionRow
               icon={<Sparkles size={15} />}
               title="Lo que hará HabitaLibre"
               body={caseDef.habitalibreAction}
             />
+
             <ActionRow
               icon={<Send size={15} />}
               title="Lo que sigue después"
@@ -740,7 +789,7 @@ export default function Caso() {
             />
           </div>
 
-          <div style={{ marginTop: 14 }}>
+          <div style={{ marginTop: 16 }}>
             <PrimaryButton onClick={() => navigate(caseDef.ctaPath)}>
               {caseDef.ctaLabel}
             </PrimaryButton>
@@ -749,7 +798,7 @@ export default function Caso() {
 
         <InfoCard
           title="Estado por frente"
-          subtitle="Así avanza tu caso con cada actor importante."
+          subtitle="Así avanza tu caso según cada frente de revisión."
         >
           <div style={{ display: "grid", gap: 10 }}>
             <ActionRow
@@ -757,9 +806,10 @@ export default function Caso() {
               title="Proyecto / promotor"
               body={caseDef.projectStatusLabel}
             />
+
             <ActionRow
               icon={<Landmark size={15} />}
-              title="Entidad financiera"
+              title="Frente financiero"
               body={caseDef.bankStatusLabel}
             />
           </div>
@@ -770,14 +820,7 @@ export default function Caso() {
           subtitle="Lo que hoy está sosteniendo tu caso."
         >
           <div style={{ display: "grid", gap: 12 }}>
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 16,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.04)",
-              }}
-            >
+            <div style={styles.innerSurface}>
               <div
                 style={{
                   display: "inline-flex",
@@ -797,6 +840,7 @@ export default function Caso() {
                   fontSize: 15,
                   fontWeight: 900,
                   color: "rgba(226,232,240,0.98)",
+                  lineHeight: 1.3,
                 }}
               >
                 {property ? property.title : "Aún no definida"}
@@ -811,19 +855,14 @@ export default function Caso() {
                 }}
               >
                 {property
-                  ? `${property.city}${property.price != null ? ` · ${moneyUSD(property.price)}` : ""}`
+                  ? `${property.city}${
+                      property.price != null ? ` · ${moneyUSD(property.price)}` : ""
+                    }`
                   : "Primero debes elegir una propiedad."}
               </div>
             </div>
 
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 16,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.04)",
-              }}
-            >
+            <div style={styles.innerSurface}>
               <div
                 style={{
                   display: "inline-flex",
@@ -831,7 +870,7 @@ export default function Caso() {
                   gap: 8,
                   fontWeight: 900,
                   color: "rgba(226,232,240,0.98)",
-                  marginBottom: 8,
+                  marginBottom: 10,
                 }}
               >
                 <FileText size={15} />
@@ -855,25 +894,24 @@ export default function Caso() {
           </div>
         </InfoCard>
 
-        <InfoCard
-          title="Timeline del caso"
-          subtitle="Esto es lo que ya quedó resuelto."
-        >
+        <InfoCard title="Timeline del caso" subtitle="Esto es lo que ya quedó resuelto.">
           <div style={{ display: "grid", gap: 10 }}>
             <TimelineItem
-              title="Precalificación completada"
-              body="Tu perfil financiero ya fue analizado."
+              title="Orientación inicial completada"
+              body="Tus datos declarados ya fueron usados para generar una estimación referencial."
               done
             />
+
             <TimelineItem
               title="Propiedad base"
               body={
                 hasChosenProperty
-                  ? "Ya tienes una propiedad base para guiar el proceso."
+                  ? "Ya tienes una propiedad base para guiar tu ruta."
                   : "Todavía falta definir una propiedad base."
               }
               done={hasChosenProperty}
             />
+
             <TimelineItem
               title="Preparación documental"
               body={
@@ -883,20 +921,23 @@ export default function Caso() {
               }
               done={docsReady}
             />
+
             <TimelineItem
               title="Caso recibido por HabitaLibre"
               body={
                 activationRequestedAt
-                  ? "Tu caso ya fue recibido por HabitaLibre."
-                  : "Todavía no has enviado tu caso a HabitaLibre."
+                  ? "Tu caso ya fue recibido por HabitaLibre para revisión interna."
+                  : "Todavía no has compartido tu caso con HabitaLibre."
               }
               done={Boolean(activationRequestedAt)}
             />
+
             <TimelineItem
               title={caseDef.timelineProjectTitle}
               body={caseDef.timelineProjectBody}
               done={projectStatus === "enviado"}
             />
+
             <TimelineItem
               title={caseDef.timelineBankTitle}
               body={caseDef.timelineBankBody}

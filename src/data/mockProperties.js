@@ -19,11 +19,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 1000,
     matchReason: "precio",
-    matchBadge: "Entrada fácil",
+    matchBadge: "Entrada baja",
     imagen:
       "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Suite compacta ideal para primera vivienda, con ticket de entrada bajo y cuota liviana.",
+      "Suite compacta de primera vivienda, con precio de referencia bajo y entrada inicial más accesible.",
     mortgageProfile: {
       productIds: ["VIS", "VIS_II", "PRIVATE"],
       requiresFirstHome: true,
@@ -50,11 +50,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 1000,
     matchReason: "precio_entrada",
-    matchBadge: "Recomendado",
+    matchBadge: "Buen escenario",
     imagen:
       "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Proyecto VIS funcional para compradores que buscan dar el primer paso con buena relación cuota-valor.",
+      "Proyecto VIS funcional para quienes buscan empezar su camino hacia vivienda propia con un precio de referencia más bajo.",
     mortgageProfile: {
       productIds: ["VIS", "VIS_II", "PRIVATE"],
       requiresFirstHome: true,
@@ -81,11 +81,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 1000,
     matchReason: "precio_entrada",
-    matchBadge: "Buen fit",
+    matchBadge: "Alineada",
     imagen:
       "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Departamento pensado para perfiles que quieren entrar al mercado con una entrada manejable y buen metraje.",
+      "Departamento pensado para perfiles que buscan una primera propiedad con entrada manejable y buen metraje.",
     mortgageProfile: {
       productIds: ["VIS", "VIS_II", "PRIVATE"],
       requiresFirstHome: true,
@@ -112,11 +112,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 1200,
     matchReason: "entrada",
-    matchBadge: "Familiar",
+    matchBadge: "Más espacio",
     imagen:
       "https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Opción de primera vivienda con más metraje, ideal para quienes quieren equilibrio entre precio y espacio.",
+      "Opción de primera vivienda con más metraje, pensada para quienes buscan equilibrio entre precio y espacio.",
     mortgageProfile: {
       productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
@@ -147,7 +147,7 @@ export const mockProperties = [
     imagen:
       "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Suite funcional y bien ubicada para quienes buscan entrar rápido a su primera propiedad con una cuota manejable.",
+      "Suite funcional y bien ubicada para quienes buscan una primera propiedad compacta en una zona conectada.",
     mortgageProfile: {
       productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
@@ -174,11 +174,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 2000,
     matchReason: "precio_entrada",
-    matchBadge: "Buen match",
+    matchBadge: "Buen escenario",
     imagen:
       "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Departamento moderno de 2 dormitorios en zona estratégica, ideal para primera vivienda.",
+      "Departamento moderno de 2 dormitorios en zona estratégica, pensado para una primera vivienda urbana.",
     mortgageProfile: {
       productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
@@ -205,11 +205,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 2500,
     matchReason: "precio_entrada",
-    matchBadge: "Recomendado",
+    matchBadge: "Ubicación fuerte",
     imagen:
       "https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Proyecto en sector consolidado, atractivo para quienes buscan ubicación y valorización futura.",
+      "Proyecto en sector consolidado, atractivo para quienes buscan ubicación, conectividad y potencial de valorización.",
     mortgageProfile: {
       productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
@@ -236,11 +236,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 2200,
     matchReason: "precio_entrada",
-    matchBadge: "Recomendado",
+    matchBadge: "Buen balance",
     imagen:
       "https://images.unsplash.com/photo-1480074568708-e7b720bb3f09?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Proyecto con buena relación metraje-precio para compradores que quieren balance entre valor y comodidad.",
+      "Proyecto con buena relación metraje-precio para quienes buscan balance entre valor, comodidad y ubicación.",
     mortgageProfile: {
       productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
@@ -267,11 +267,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 3000,
     matchReason: "programa",
-    matchBadge: "Top match",
+    matchBadge: "Muy alineada",
     imagen:
       "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Proyecto nuevo con buenos acabados y distribución eficiente, pensado para perfiles de primera compra con mayor capacidad.",
+      "Proyecto nuevo con buenos acabados y distribución eficiente, pensado para perfiles de primera compra con mayor rango estimado.",
     mortgageProfile: {
       productIds: ["VIP", "PRIVATE"],
       requiresFirstHome: true,
@@ -302,7 +302,7 @@ export const mockProperties = [
     imagen:
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Suite bien ubicada para compradores urbanos que priorizan ubicación y facilidad de entrada.",
+      "Suite bien ubicada para perfiles urbanos que priorizan ubicación, practicidad y entrada más manejable.",
     mortgageProfile: {
       productIds: ["BIESS_STD", "PRIVATE"],
       requiresFirstHome: false,
@@ -329,11 +329,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 0,
     matchReason: "precio",
-    matchBadge: "Entrada fácil",
+    matchBadge: "Entrada baja",
     imagen:
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Loft compacto en una de las zonas más dinámicas de Quito. Buen fit para compra urbana.",
+      "Loft compacto en una de las zonas más dinámicas de Quito, pensado para quienes buscan una opción urbana de menor metraje.",
     mortgageProfile: {
       productIds: ["BIESS_STD", "PRIVATE"],
       requiresFirstHome: false,
@@ -360,7 +360,7 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 0,
     matchReason: "entrada",
-    matchBadge: "Match familiar",
+    matchBadge: "Familiar",
     imagen:
       "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1200&q=80",
     descripcion:
@@ -395,7 +395,7 @@ export const mockProperties = [
     imagen:
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Suite premium en Cumbayá para usuarios que priorizan zona, estilo de vida y potencial de renta futura.",
+      "Suite en Cumbayá para usuarios que priorizan zona, estilo de vida y potencial de uso futuro.",
     mortgageProfile: {
       productIds: ["PRIVATE"],
       requiresFirstHome: false,
@@ -422,11 +422,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 3500,
     matchReason: "entrada",
-    matchBadge: "Premium",
+    matchBadge: "Valle",
     imagen:
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Departamento contemporáneo con excelente diseño, ideal para perfiles que buscan mejor calidad de vida en el valle.",
+      "Departamento contemporáneo con buen diseño, pensado para quienes buscan calidad de vida en el valle.",
     mortgageProfile: {
       productIds: ["PRIVATE"],
       requiresFirstHome: false,
@@ -453,7 +453,7 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 0,
     matchReason: "cuota",
-    matchBadge: "Upsize",
+    matchBadge: "Más amplitud",
     imagen:
       "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=1200&q=80",
     descripcion:
@@ -488,7 +488,7 @@ export const mockProperties = [
     imagen:
       "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Casa de proyecto nuevo en Tumbaco, ideal para familia que quiere más área y entorno residencial.",
+      "Casa de proyecto nuevo en Tumbaco, pensada para familias que buscan más área y entorno residencial.",
     mortgageProfile: {
       productIds: ["PRIVATE"],
       requiresFirstHome: false,
@@ -515,11 +515,11 @@ export const mockProperties = [
     porcentajeEntradaRequerida: 0.10,
     reservaMinima: 3000,
     matchReason: "programa",
-    matchBadge: "Muy buen fit",
+    matchBadge: "Muy alineada",
     imagen:
       "https://images.unsplash.com/photo-1464146072230-91cabc968266?auto=format&fit=crop&w=1200&q=80",
     descripcion:
-      "Proyecto atractivo para perfiles que quieren maximizar ubicación y metraje en Quito.",
+      "Proyecto atractivo para perfiles que quieren balancear ubicación, metraje y precio de referencia en Quito.",
     mortgageProfile: {
       productIds: ["PRIVATE"],
       requiresFirstHome: false,

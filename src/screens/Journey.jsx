@@ -2,13 +2,41 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Edit3 } from "lucide-react";
 import { API_BASE } from "../lib/api";
+import { saveSnapshot } from "../lib/snapshots.js";
 import { getCustomerToken, getCustomer } from "../lib/customerSession.js";
+import {
+  saveSelectedPropertyToBackend,
+  saveJourneyStateToBackend,
+} from "../lib/userAppState.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
 const TOTAL_STEPS = 4;
+
+const TARGET_PRICE_MIN = 30000;
+const TARGET_PRICE_MAX = 250000;
+const TARGET_PRICE_STEP = 500;
+
+const ENTRY_STEP = 500;
+const MONTHLY_ENTRY_MIN = 0;
+const MONTHLY_ENTRY_MAX = 2000;
+const MONTHLY_ENTRY_STEP = 50;
+
+const TARGET_PRICE_PRESETS = [70000, 85000, 100000, 120000, 150000, 200000];
+
+function roundToStep(value, step = 500) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n / step) * step;
+}
+
+function roundUpToStep(value, step = 500) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.ceil(n / step) * step;
+}
 
 const SNAPSHOT_ENGINE = "mortgage_matcher_app";
 const SNAPSHOT_VERSION = "app_v2";
@@ -58,25 +86,25 @@ const PREFERENCIA_PAGO_HIPOTECA_OPCIONES = [
     value: "cuota_baja",
     title: "Cuota más baja",
     description:
-      "Prefiero pagar menos cada mes, aunque el crédito pueda durar más y pagar más intereses.",
+      "Prefiero una cuota mensual más baja, aunque el plazo referencial sea más largo y el costo total pueda ser mayor.",
   },
   {
     value: "equilibrio",
     title: "Equilibrio",
     description:
-      "Busco una cuota manejable, pero sin alargar demasiado el crédito.",
+      "Busco una cuota manejable, pero sin extender demasiado el plazo referencial.",
   },
   {
     value: "menos_intereses",
-    title: "Pagar menos intereses",
+    title: "Menor costo total",
     description:
-      "Prefiero una cuota más alta si eso ayuda a reducir el costo total.",
+      "Prefiero una cuota más alta si eso ayuda a reducir el costo total referencial.",
   },
   {
     value: "no_estoy_seguro",
     title: "No estoy seguro",
     description:
-      "Quiero que HabitaLibre me recomiende la ruta más conveniente según mi perfil.",
+      "Quiero que HabitaLibre ordene una ruta referencial según mis datos declarados.",
   },
 ];
 
@@ -513,12 +541,62 @@ function ScreenWrap({ children, scrollRef }) {
           "radial-gradient(1000px 700px at 80% 10%, rgba(59,130,246,0.10), transparent 60%)," +
           "linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(15,23,42,1) 100%)",
         color: "white",
-        padding: "92px 22px 170px",
-        fontFamily: "system-ui",
+        fontFamily:
+          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         boxSizing: "border-box",
       }}
     >
-      {children}
+      <style>
+        {`
+          .hl-journey-page {
+            width: 100%;
+            min-height: 100dvh;
+            box-sizing: border-box;
+            padding: 32px 18px 96px;
+          }
+
+          .hl-journey-shell {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+          }
+
+          .hl-main-card {
+            width: 100%;
+            box-sizing: border-box;
+          }
+
+          @media (min-width: 640px) {
+            .hl-journey-page {
+              padding: 40px 28px 110px;
+            }
+
+            .hl-journey-shell {
+              max-width: 620px;
+            }
+          }
+
+          @media (min-width: 900px) {
+            .hl-journey-page {
+              padding: 48px 40px 120px;
+            }
+
+            .hl-journey-shell {
+              max-width: 760px;
+            }
+          }
+
+          @media (min-width: 1200px) {
+            .hl-journey-shell {
+              max-width: 820px;
+            }
+          }
+        `}
+      </style>
+
+      <div className="hl-journey-page">
+        <div className="hl-journey-shell">{children}</div>
+      </div>
     </div>
   );
 }
@@ -550,13 +628,14 @@ function Pill({ children, tone = "neutral" }) {
 function SectionCard({ children, style }) {
   return (
     <div
+      className="hl-main-card"
       style={{
         marginTop: 18,
-        padding: 18,
-        borderRadius: 24,
+        padding: "clamp(18px, 3vw, 26px)",
+        borderRadius: 28,
         background: "rgba(255,255,255,0.06)",
         border: "1px solid rgba(255,255,255,0.10)",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.22)",
+        boxShadow: "0 18px 50px rgba(0,0,0,0.28)",
         ...style,
       }}
     >
@@ -603,6 +682,29 @@ function SectionTitle({ eyebrow, title, subtitle }) {
           {subtitle}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function FinancialDisclaimer({ compact = false, style = {} }) {
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.24)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.95)",
+        fontSize: 11,
+        lineHeight: 1.4,
+        ...style,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga, aprueba, financia ni cobra créditos. Las condiciones finales dependen exclusivamente de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. La información mostrada es orientativa y se basa en datos declarados por el usuario. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
     </div>
   );
 }
@@ -734,6 +836,57 @@ function SliderField({
           {helper}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function QuickAmountChips({ options = [], value, onChange }) {
+  if (!Array.isArray(options) || !options.length) return null;
+
+  const current = Number(value) || 0;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8,
+        marginTop: -10,
+        marginBottom: 18,
+      }}
+    >
+      {options.map((opt) => {
+        const optionValue =
+          typeof opt === "object" ? Number(opt.value) : Number(opt);
+
+        const label =
+          typeof opt === "object" ? opt.label : money(optionValue);
+
+        const selected = Math.abs(current - optionValue) < 1;
+
+        return (
+          <button
+            key={`${label}-${optionValue}`}
+            type="button"
+            onClick={() => onChange(String(optionValue))}
+            style={{
+              borderRadius: 999,
+              border: selected
+                ? "1px solid rgba(37,211,166,0.65)"
+                : "1px solid rgba(255,255,255,0.12)",
+              background: selected
+                ? "rgba(37,211,166,0.14)"
+                : "rgba(255,255,255,0.06)",
+              color: selected ? "#25d3a6" : "rgba(226,232,240,0.92)",
+              padding: "8px 11px",
+              fontSize: 12,
+              fontWeight: 900,
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -939,8 +1092,9 @@ async function apiPost(path, body) {
 }
 
 export default function Journey() {
-  const navigate = useNavigate();
-  const scrollerRef = useRef(null);
+ const navigate = useNavigate();
+const scrollerRef = useRef(null);
+const topAnchorRef = useRef(null);
 
   const currentOwnerEmail = getStorageOwnerEmail();
 
@@ -1039,24 +1193,24 @@ export default function Journey() {
   );
 
   const [creditHistoryStatus, setCreditHistoryStatus] = useState(
-  existing?.form?.creditHistoryStatus || "unknown"
-);
+    existing?.form?.creditHistoryStatus || "unknown"
+  );
 
-const [hasActiveDelinquency, setHasActiveDelinquency] = useState(
-  existing?.form?.hasActiveDelinquency || "unknown"
-);
+  const [hasActiveDelinquency, setHasActiveDelinquency] = useState(
+    existing?.form?.hasActiveDelinquency || "unknown"
+  );
 
-const [delinquencyRange, setDelinquencyRange] = useState(
-  existing?.form?.delinquencyRange || "none"
-);
+  const [delinquencyRange, setDelinquencyRange] = useState(
+    existing?.form?.delinquencyRange || "none"
+  );
 
-const [recentCreditDenied, setRecentCreditDenied] = useState(
-  existing?.form?.recentCreditDenied || "unknown"
-);
+  const [recentCreditDenied, setRecentCreditDenied] = useState(
+    existing?.form?.recentCreditDenied || "unknown"
+  );
 
-const [declaredCreditScore, setDeclaredCreditScore] = useState(
-  existing?.form?.declaredCreditScore || ""
-);
+  const [declaredCreditScore, setDeclaredCreditScore] = useState(
+    existing?.form?.declaredCreditScore || ""
+  );
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -1070,12 +1224,12 @@ const [declaredCreditScore, setDeclaredCreditScore] = useState(
   const esMixto = tipoIngreso === "Mixto";
 
   const handleActiveDelinquencyChange = (value) => {
-  setHasActiveDelinquency(value);
+    setHasActiveDelinquency(value);
 
-  if (value !== "yes") {
-    setDelinquencyRange("none");
-  }
-};
+    if (value !== "yes") {
+      setDelinquencyRange("none");
+    }
+  };
 
   const toNum = (v) => {
     const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
@@ -1094,6 +1248,50 @@ const [declaredCreditScore, setDeclaredCreditScore] = useState(
     return Math.round((e / v) * 100);
   }, [valorVivienda, entrada]);
 
+const targetPriceNum = toNum(valorVivienda);
+
+const targetPriceSliderMax = useMemo(() => {
+  if (targetPriceNum > TARGET_PRICE_MAX) {
+    return roundUpToStep(targetPriceNum, TARGET_PRICE_STEP);
+  }
+
+  return TARGET_PRICE_MAX;
+}, [targetPriceNum]);
+
+const entradaSliderMax = useMemo(() => {
+  if (shouldAskTargetValue && targetPriceNum > 0) {
+    return Math.max(10000, roundUpToStep(targetPriceNum * 0.4, ENTRY_STEP));
+  }
+
+  return 80000;
+}, [shouldAskTargetValue, targetPriceNum]);
+
+const entradaQuickOptions = useMemo(() => {
+  if (shouldAskTargetValue && targetPriceNum > 0) {
+    return [
+      { value: roundToStep(targetPriceNum * 0.03, ENTRY_STEP), label: "3%" },
+      { value: roundToStep(targetPriceNum * 0.05, ENTRY_STEP), label: "5%" },
+      { value: roundToStep(targetPriceNum * 0.1, ENTRY_STEP), label: "10%" },
+      { value: roundToStep(targetPriceNum * 0.15, ENTRY_STEP), label: "15%" },
+      { value: roundToStep(targetPriceNum * 0.2, ENTRY_STEP), label: "20%" },
+    ];
+  }
+
+  return [3000, 5000, 10000, 15000, 20000, 30000];
+}, [shouldAskTargetValue, targetPriceNum]);
+
+useEffect(() => {
+  if (!shouldAskTargetValue) return;
+  if (targetPriceNum <= 0) return;
+
+  const currentEntry = toNum(entrada);
+
+  if (currentEntry > entradaSliderMax) {
+    setEntrada(String(entradaSliderMax));
+  }
+}, [shouldAskTargetValue, targetPriceNum, entradaSliderMax]);
+
+
   const capacidadActual =
     snapshotGuardado?.precioMaxVivienda ||
     snapshotGuardado?.maxCompra ||
@@ -1107,6 +1305,58 @@ const [declaredCreditScore, setDeclaredCreditScore] = useState(
     null;
 
   useEffect(() => {
+  if (!editMode) return;
+
+  const scrollToTop = () => {
+    try {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    } catch {}
+
+    try {
+      topAnchorRef.current?.scrollIntoView({
+        behavior: "auto",
+        block: "start",
+      });
+    } catch {}
+
+    try {
+      scrollerRef.current?.scrollTo?.({
+        top: 0,
+        behavior: "auto",
+      });
+    } catch {}
+
+    try {
+      window.scrollTo({
+        top: 0,
+        behavior: "auto",
+      });
+    } catch {}
+
+    try {
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    } catch {}
+  };
+
+  const raf = window.requestAnimationFrame(() => {
+    scrollToTop();
+  });
+
+  const timeout = window.setTimeout(() => {
+    scrollToTop();
+  }, 80);
+
+  return () => {
+    window.cancelAnimationFrame(raf);
+    window.clearTimeout(timeout);
+  };
+}, [step, editMode]);
+
+
+  useEffect(() => {
     const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
     const previousJourney =
       previousJourneyEnvelope?.ownerEmail === currentOwnerEmail
@@ -1117,37 +1367,37 @@ const [declaredCreditScore, setDeclaredCreditScore] = useState(
       ...previousJourney,
       step,
       updatedAt: new Date().toISOString(),
-     form: {
-  nacionalidad,
-  estadoCivil,
-  edad,
-  tipoIngreso,
-  tipoContrato,
-  aniosEstabilidad,
-  mesesActividad,
-  sustentoIndependiente,
-  ingreso,
-  ingresoPareja,
-  deudas,
-  afiliadoIESS,
-  aportesTotales,
-  aportesConsecutivos,
-  ciudadCompra,
-  objetivoViviendaModo,
-  valorVivienda,
-  entrada,
-  capacidadEntradaMensual,
-  tieneVivienda,
-  primeraVivienda,
-  tipoVivienda,
-  horizonteCompra,
-  preferenciaPagoHipoteca,
-  creditHistoryStatus,
-  hasActiveDelinquency,
-  delinquencyRange,
-  recentCreditDenied,
-  declaredCreditScore,
-},
+      form: {
+        nacionalidad,
+        estadoCivil,
+        edad,
+        tipoIngreso,
+        tipoContrato,
+        aniosEstabilidad,
+        mesesActividad,
+        sustentoIndependiente,
+        ingreso,
+        ingresoPareja,
+        deudas,
+        afiliadoIESS,
+        aportesTotales,
+        aportesConsecutivos,
+        ciudadCompra,
+        objetivoViviendaModo,
+        valorVivienda,
+        entrada,
+        capacidadEntradaMensual,
+        tieneVivienda,
+        primeraVivienda,
+        tipoVivienda,
+        horizonteCompra,
+        preferenciaPagoHipoteca,
+        creditHistoryStatus,
+        hasActiveDelinquency,
+        delinquencyRange,
+        recentCreditDenied,
+        declaredCreditScore,
+      },
     };
 
     saveJSON(LS_JOURNEY, {
@@ -1179,14 +1429,14 @@ const [declaredCreditScore, setDeclaredCreditScore] = useState(
     tieneVivienda,
     primeraVivienda,
     tipoVivienda,
-horizonteCompra,
-preferenciaPagoHipoteca,
-creditHistoryStatus,
-hasActiveDelinquency,
-delinquencyRange,
-recentCreditDenied,
-declaredCreditScore,
-]);
+    horizonteCompra,
+    preferenciaPagoHipoteca,
+    creditHistoryStatus,
+    hasActiveDelinquency,
+    delinquencyRange,
+    recentCreditDenied,
+    declaredCreditScore,
+  ]);
 
   function validate(s) {
     if (s === 1) {
@@ -1309,154 +1559,185 @@ declaredCreditScore,
       tipoVivienda,
       tiempoCompra: horizonteCompra || null,
       horizonteCompra: horizonteCompra || null,
-     preferenciaPagoHipoteca,
-
-creditHistoryStatus,
-hasActiveDelinquency,
-delinquencyRange,
-recentCreditDenied,
-declaredCreditScore: declaredCreditScore ? toNum(declaredCreditScore) : null,
-
-origen: "journey_mobile",
+      preferenciaPagoHipoteca,
+      creditHistoryStatus,
+      hasActiveDelinquency,
+      delinquencyRange,
+      recentCreditDenied,
+      declaredCreditScore: declaredCreditScore ? toNum(declaredCreditScore) : null,
+      origen: "journey_mobile",
     };
   }
 
-  async function handleCalcular() {
-    if (loading) return;
+async function handleCalcular() {
+  if (loading) return;
 
-    const token = getCustomerToken();
+  const token = getCustomerToken();
 
-    if (!token) {
-      navigate("/login?next=/journey", { replace: true });
-      return;
-    }
+  if (!token) {
+    navigate("/login?next=/journey", { replace: true });
+    return;
+  }
 
-    const e3 = validate(3);
-    if (e3) return setErr(e3);
+  const e3 = validate(3);
+  if (e3) return setErr(e3);
 
-    const e4 = validate(4);
-    if (e4) return setErr(e4);
+  const e4 = validate(4);
+  if (e4) return setErr(e4);
 
-    setLoading(true);
-    setErr("");
+  setLoading(true);
+  setErr("");
+
+  try {
+    const entradaPayload = buildEntradaPayload();
+    const resultado = await apiPost("/api/mortgage/match", entradaPayload);
+
+    const snapshot = buildDurableSnapshot(resultado, entradaPayload);
+
+    const ownerEmail = getStorageOwnerEmail();
+
+    saveJSON(LS_SNAPSHOT, {
+      ownerEmail,
+      data: snapshot,
+    });
 
     try {
-      const entradaPayload = buildEntradaPayload();
-      const resultado = await apiPost("/api/mortgage/match", entradaPayload);
-
-      const snapshot = buildDurableSnapshot(resultado, entradaPayload);
-
-      const ownerEmail = getStorageOwnerEmail();
-
-      saveJSON(LS_SNAPSHOT, {
-        ownerEmail,
-        data: snapshot,
+      await saveSnapshot({
+        input: entradaPayload,
+        output: snapshot,
       });
-
-      const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
-      const previousJourney =
-        previousJourneyEnvelope?.ownerEmail === ownerEmail
-          ? previousJourneyEnvelope.data || {}
-          : {};
-
-      const previousSelectedEnvelope = loadJSON(LS_SELECTED_PROPERTY);
-      const previousSelected =
-        previousSelectedEnvelope?.ownerEmail === ownerEmail
-          ? normalizeSelectedProperty(previousSelectedEnvelope.data)
-          : null;
-
-      const matchedProperties = Array.isArray(snapshot?.matchedProperties)
-        ? snapshot.matchedProperties
-        : [];
-
-      const reEvaluatedSelectedRaw = findMatchedPropertyById(
-        matchedProperties,
-        previousSelected
+      console.log("[HL] Snapshot guardado en backend");
+    } catch (snapshotErr) {
+      console.warn(
+        "[HL] No se pudo guardar snapshot en backend:",
+        snapshotErr?.message || snapshotErr
       );
+    }
 
-      const reEvaluatedSelected = reEvaluatedSelectedRaw
-        ? normalizeSelectedProperty({
-            ...reEvaluatedSelectedRaw,
-            selectedAt: previousSelected?.selectedAt || new Date().toISOString(),
-            source: previousSelected?.source || "journey_recalc",
-          })
-        : previousSelected;
+    const previousJourneyEnvelope = loadJSON(LS_JOURNEY);
+    const previousJourney =
+      previousJourneyEnvelope?.ownerEmail === ownerEmail
+        ? previousJourneyEnvelope.data || {}
+        : {};
 
-      const selectedPropertyStatus = reEvaluatedSelected
-        ? getSelectedPropertyStatus(reEvaluatedSelectedRaw || reEvaluatedSelected)
+    const previousSelectedEnvelope = loadJSON(LS_SELECTED_PROPERTY);
+    const previousSelected =
+      previousSelectedEnvelope?.ownerEmail === ownerEmail
+        ? normalizeSelectedProperty(previousSelectedEnvelope.data)
         : null;
 
-      if (reEvaluatedSelected) {
-        saveJSON(LS_SELECTED_PROPERTY, {
-          ownerEmail,
-          data: {
-            ...reEvaluatedSelected,
-            status: selectedPropertyStatus,
-            lastEvaluatedAt: new Date().toISOString(),
-          },
-        });
+    const matchedProperties = Array.isArray(snapshot?.matchedProperties)
+      ? snapshot.matchedProperties
+      : [];
+
+    const reEvaluatedSelectedRaw = findMatchedPropertyById(
+      matchedProperties,
+      previousSelected
+    );
+
+    const reEvaluatedSelected = reEvaluatedSelectedRaw
+      ? normalizeSelectedProperty({
+          ...reEvaluatedSelectedRaw,
+          selectedAt: previousSelected?.selectedAt || new Date().toISOString(),
+          source: previousSelected?.source || "journey_recalc",
+        })
+      : previousSelected;
+
+    const selectedPropertyStatus = reEvaluatedSelected
+      ? getSelectedPropertyStatus(reEvaluatedSelectedRaw || reEvaluatedSelected)
+      : null;
+
+    const finalSelectedProperty = reEvaluatedSelected
+      ? {
+          ...reEvaluatedSelected,
+          status: selectedPropertyStatus,
+          selectedPropertyStatus,
+          lastEvaluatedAt: new Date().toISOString(),
+        }
+      : null;
+
+    if (finalSelectedProperty) {
+      saveJSON(LS_SELECTED_PROPERTY, {
+        ownerEmail,
+        data: finalSelectedProperty,
+      });
+    }
+
+    const nextJourney = {
+      ...previousJourney,
+      step: 4,
+      updatedAt: new Date().toISOString(),
+      form: {
+        nacionalidad,
+        estadoCivil,
+        edad,
+        tipoIngreso,
+        tipoContrato,
+        aniosEstabilidad,
+        mesesActividad,
+        sustentoIndependiente,
+        ingreso,
+        ingresoPareja,
+        deudas,
+        afiliadoIESS,
+        aportesTotales,
+        aportesConsecutivos,
+        ciudadCompra,
+        objetivoViviendaModo,
+        valorVivienda,
+        entrada,
+        capacidadEntradaMensual,
+        tieneVivienda,
+        primeraVivienda,
+        tipoVivienda,
+        horizonteCompra,
+        preferenciaPagoHipoteca,
+        creditHistoryStatus,
+        hasActiveDelinquency,
+        delinquencyRange,
+        recentCreditDenied,
+        declaredCreditScore,
+      },
+      resultado: snapshot,
+      propiedadElegida: !!finalSelectedProperty,
+      propiedadId:
+        finalSelectedProperty?.id || previousJourney?.propiedadId || null,
+      propiedadSeleccionada:
+        finalSelectedProperty || previousJourney?.propiedadSeleccionada || null,
+      selectedProperty:
+        finalSelectedProperty || previousJourney?.selectedProperty || null,
+      selectedPropertyStatus:
+        selectedPropertyStatus || previousJourney?.selectedPropertyStatus || null,
+    };
+
+    saveJSON(LS_JOURNEY, {
+      ownerEmail,
+      data: nextJourney,
+    });
+
+    try {
+      await saveJourneyStateToBackend(nextJourney);
+
+      if (finalSelectedProperty) {
+        await saveSelectedPropertyToBackend(finalSelectedProperty);
       }
 
-      saveJSON(LS_JOURNEY, {
-        ownerEmail,
-        data: {
-          ...previousJourney,
-          step: 4,
-          updatedAt: new Date().toISOString(),
-          form: {
-  nacionalidad,
-  estadoCivil,
-  edad,
-  tipoIngreso,
-  tipoContrato,
-  aniosEstabilidad,
-  mesesActividad,
-  sustentoIndependiente,
-  ingreso,
-  ingresoPareja,
-  deudas,
-  afiliadoIESS,
-  aportesTotales,
-  aportesConsecutivos,
-  ciudadCompra,
-  objetivoViviendaModo,
-  valorVivienda,
-  entrada,
-  capacidadEntradaMensual,
-  tieneVivienda,
-  primeraVivienda,
-  tipoVivienda,
-  horizonteCompra,
-  preferenciaPagoHipoteca,
-  creditHistoryStatus,
-  hasActiveDelinquency,
-  delinquencyRange,
-  recentCreditDenied,
-  declaredCreditScore,
-},
-          resultado: snapshot,
-          propiedadElegida: !!reEvaluatedSelected,
-          propiedadId:
-            reEvaluatedSelected?.id || previousJourney?.propiedadId || null,
-          propiedadSeleccionada: reEvaluatedSelected
-            ? {
-                ...reEvaluatedSelected,
-                status: selectedPropertyStatus,
-                lastEvaluatedAt: new Date().toISOString(),
-              }
-            : previousJourney?.propiedadSeleccionada || null,
-          selectedPropertyStatus,
-        },
-      });
-
-      navigate("/", { replace: true });
-    } catch (ex) {
-      console.error(ex);
-      setErr(ex?.message || "No se pudo calcular tu resultado ahora.");
-    } finally {
-      setLoading(false);
+      console.log("[HL] Journey operativo guardado en backend");
+    } catch (appStateErr) {
+      console.warn(
+        "[HL] No se pudo guardar journey operativo en backend:",
+        appStateErr?.message || appStateErr
+      );
     }
+
+    navigate("/", { replace: true });
+  } catch (ex) {
+    console.error(ex);
+    setErr(ex?.message || "No se pudo generar tu estimación ahora.");
+  } finally {
+    setLoading(false);
   }
+}
 
   const recalculateSameInfo = () => {
     setErr("");
@@ -1471,10 +1752,19 @@ origen: "journey_mobile",
   const progress = (step / TOTAL_STEPS) * 100;
 
   return (
-    <ScreenWrap scrollRef={scrollerRef}>
-      <div
-        style={{
-          display: "flex",
+  <ScreenWrap scrollRef={scrollerRef}>
+    <div
+      ref={topAnchorRef}
+      aria-hidden="true"
+      style={{
+        height: 1,
+        width: "100%",
+      }}
+    />
+
+    <div
+      style={{
+        display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
           gap: 12,
@@ -1489,7 +1779,7 @@ origen: "journey_mobile",
               marginBottom: 10,
             }}
           >
-            {hasResult ? "Mi capacidad" : "Precalificador HabitaLibre"}
+            {hasResult ? "Mi orientación" : "Guía HabitaLibre"}
           </div>
 
           <div
@@ -1503,9 +1793,9 @@ origen: "journey_mobile",
             }}
           >
             {hasResult && !editMode
-              ? "Tu evaluación ya está lista"
+              ? "Tu estimación ya está lista"
               : hasResult
-              ? "Actualiza tu evaluación"
+              ? "Actualiza tu estimación"
               : "Completa tu perfil"}
           </div>
 
@@ -1519,10 +1809,10 @@ origen: "journey_mobile",
             }}
           >
             {hasResult && !editMode
-              ? "Puedes mantener tu resultado actual o probar con otra información para ver cómo cambia tu capacidad."
+              ? "Puedes mantener tu estimación actual o probar con otra información para ver cómo cambia tu rango referencial."
               : hasResult
-              ? "Edita tu información paso a paso y actualiza tu cálculo al final."
-              : "Te toma menos de 2 minutos. Te damos capacidad estimada, cuota y ruta sugerida."}
+              ? "Edita tu información paso a paso y actualiza tu estimación al final."
+              : "Te toma menos de 2 minutos. Te damos un rango estimado, una cuota referencial y una ruta orientativa."}
           </div>
         </div>
 
@@ -1577,9 +1867,9 @@ origen: "journey_mobile",
           }}
         >
           <SectionTitle
-            eyebrow="Evaluación guardada"
-            title="Tu evaluación ya está lista"
-            subtitle="Ya calculamos tu capacidad con la información que ingresaste."
+            eyebrow="Estimación guardada"
+            title="Tu orientación ya está lista"
+            subtitle="Ya generamos una estimación referencial con la información que ingresaste."
           />
 
           <div
@@ -1591,15 +1881,17 @@ origen: "journey_mobile",
             }}
           >
             <StatBox
-              label="Vivienda aprox."
+              label="Rango aprox."
               value={capacidadActual ? money(capacidadActual) : "—"}
             />
             <StatBox
-              label="Cuota estimada"
+              label="Cuota referencial"
               value={cuotaActual ? money(cuotaActual) : "—"}
               accent
             />
           </div>
+
+          <FinancialDisclaimer compact />
 
           <div
             style={{
@@ -1658,7 +1950,7 @@ origen: "journey_mobile",
                 fontSize: 15,
               }}
             >
-              Ver mi resultado actual
+              Ver mi orientación actual
             </button>
           </div>
 
@@ -1671,7 +1963,8 @@ origen: "journey_mobile",
             }}
           >
             Si cambias ingresos, deudas, entrada o preferencia de pago,
-            HabitaLibre actualizará tu capacidad y tus rutas hipotecarias.
+            HabitaLibre actualizará tu rango estimado y tus rutas hipotecarias
+            referenciales.
           </div>
         </SectionCard>
       ) : null}
@@ -1698,15 +1991,17 @@ origen: "journey_mobile",
                 }}
               >
                 <StatBox
-                  label="Vivienda aprox."
+                  label="Rango aprox."
                   value={capacidadActual ? money(capacidadActual) : "—"}
                 />
                 <StatBox
-                  label="Cuota estimada"
+                  label="Cuota referencial"
                   value={cuotaActual ? money(cuotaActual) : "—"}
                   accent
                 />
               </div>
+
+              <FinancialDisclaimer compact />
             </SectionCard>
           ) : null}
 
@@ -1716,7 +2011,7 @@ origen: "journey_mobile",
                 <SectionTitle
                   eyebrow="Paso 1"
                   title="Tu perfil base"
-                  subtitle="Esto nos ayuda a entender qué tan sólido es tu perfil para aplicar."
+                  subtitle="Esto nos ayuda a entender mejor tu situación para construir una orientación hipotecaria referencial."
                 />
 
                 <SelectField
@@ -1731,7 +2026,7 @@ origen: "journey_mobile",
 
                 <SelectField
                   label="Estado civil"
-                  helper="Si estás casad@ o en unión de hecho, podremos considerar el ingreso de tu pareja."
+                  helper="Si estás casad@ o en unión de hecho, podremos considerar el ingreso de tu pareja para una estimación más completa."
                   value={estadoCivil}
                   onChange={setEstadoCivil}
                   options={[
@@ -1789,12 +2084,12 @@ origen: "journey_mobile",
                           label: "Servicios profesionales",
                         },
                       ]}
-                      helper="Algunos bancos son más favorables con contratos indefinidos."
+                      helper="Algunas entidades financieras pueden considerar este dato dentro de sus propios procesos externos."
                     />
 
                     <SliderField
                       label="Años en tu trabajo actual"
-                      helper="Para ingresos dependientes normalmente se pide mínimo 1 año."
+                      helper="Para ingresos dependientes normalmente se usa como referencia mínimo 1 año de estabilidad."
                       min={0}
                       max={40}
                       step={1}
@@ -1814,7 +2109,7 @@ origen: "journey_mobile",
 
                     <SliderField
                       label="Meses en tu actividad económica actual"
-                      helper="Para ingresos independientes normalmente se piden al menos 24 meses."
+                      helper="Para ingresos independientes normalmente se usa como referencia al menos 24 meses de actividad."
                       min={0}
                       max={240}
                       step={1}
@@ -1825,7 +2120,7 @@ origen: "journey_mobile",
 
                     <SelectField
                       label="¿Cómo sustentas tus ingresos?"
-                      helper="Esto puede afectar la facilidad de aprobación."
+                      helper="Esto ayuda a mejorar la calidad de la orientación, pero no representa una evaluación formal de ninguna entidad."
                       value={sustentoIndependiente}
                       onChange={setSustentoIndependiente}
                       options={[
@@ -1860,25 +2155,24 @@ origen: "journey_mobile",
               <>
                 <SectionTitle
                   eyebrow="Paso 2"
-                  title="Tu capacidad mensual"
-                  subtitle="Aquí definimos cuánto podrías sostener de forma sana cada mes."
+                  title="Tu margen mensual estimado"
+                  subtitle="Aquí estimamos cuánto podrías sostener de forma prudente cada mes."
                 />
 
                 <SliderField
-                  label="Tu ingreso neto mensual"
-                  min={450}
-                  max={15000}
-                  step={50}
-                  value={ingreso}
-                  onChange={setIngreso}
-                  format={(v) => money(v)}
-                />
-
+  label="Tu ingreso neto mensual"
+  min={486}
+  max={8000}
+  step={50}
+  value={ingreso}
+  onChange={setIngreso}
+  format={(v) => money(v)}
+/>
                 {esParejaFormal && (
                   <SliderField
                     label="Ingreso neto mensual de tu pareja"
-                    min={0}
-                    max={15000}
+                    min={486}
+                    max={8000}
                     step={50}
                     value={ingresoPareja}
                     onChange={setIngresoPareja}
@@ -1911,12 +2205,12 @@ origen: "journey_mobile",
                     <SectionTitle
                       eyebrow="BIESS"
                       title="Tus aportes"
-                      subtitle="Esto solo aplica si luego quieres evaluar una ruta BIESS."
+                      subtitle="Esto solo aplica si luego quieres comparar una ruta referencial BIESS."
                     />
 
                     <SliderField
                       label="Aportes IESS totales"
-                      helper="Para BIESS suelen requerirse al menos 36 aportes totales."
+                      helper="Para BIESS suele usarse como referencia al menos 36 aportes totales."
                       min={0}
                       max={600}
                       step={1}
@@ -1927,7 +2221,7 @@ origen: "journey_mobile",
 
                     <SliderField
                       label="Aportes IESS consecutivos"
-                      helper="Suelen pedir mínimo 13 aportes consecutivos."
+                      helper="Suele usarse como referencia mínimo 13 aportes consecutivos."
                       min={0}
                       max={600}
                       step={1}
@@ -1961,7 +2255,7 @@ origen: "journey_mobile",
                   value={objetivoViviendaModo}
                   onChange={setObjetivoViviendaModo}
                   options={OBJETIVO_VIVIENDA_OPCIONES}
-                  helper="Si todavía no sabes el valor, no pasa nada. Primero calculamos qué sí podrías comprar."
+                  helper="Si todavía no sabes el valor, no pasa nada. Primero estimamos tu rango referencial."
                 />
 
                 {shouldAskTargetValue ? (
@@ -1984,44 +2278,61 @@ origen: "journey_mobile",
                         accent
                       />
                     </div>
+<SliderField
+  label={
+    objetivoViviendaModo === "propiedad"
+      ? "Valor aproximado de la propiedad (USD)"
+      : "Valor aproximado del rango que te interesa (USD)"
+  }
+  min={TARGET_PRICE_MIN}
+  max={targetPriceSliderMax}
+  step={TARGET_PRICE_STEP}
+  value={valorVivienda || String(TARGET_PRICE_MIN)}
+  onChange={setValorVivienda}
+  format={(v) => money(v)}
+/>
 
-                    <SliderField
-                      label={
-                        objetivoViviendaModo === "propiedad"
-                          ? "Valor aproximado de la propiedad (USD)"
-                          : "Valor aproximado del rango que te interesa (USD)"
-                      }
-                      min={30000}
-                      max={500000}
-                      step={1000}
-                      value={valorVivienda || "30000"}
-                      onChange={setValorVivienda}
-                      format={(v) => money(v)}
-                    />
+<QuickAmountChips
+  value={valorVivienda || TARGET_PRICE_MIN}
+  onChange={setValorVivienda}
+  options={TARGET_PRICE_PRESETS}
+/>
                   </>
                 ) : null}
 
                 <SliderField
-                  label="¿Cuánto tienes ahorrado hoy para empezar?"
-                  helper="Incluye ahorros, cesantía, fondos de reserva o dinero que sí podrías usar para tu compra."
-                  min={0}
-                  max={500000}
-                  step={500}
-                  value={entrada}
-                  onChange={setEntrada}
-                  format={(v) => money(v)}
-                />
+  label="¿Cuánto tienes ahorrado hoy para empezar?"
+  helper="Incluye ahorros, cesantía, fondos de reserva o dinero que sí podrías usar para tu compra."
+  min={0}
+  max={entradaSliderMax}
+  step={ENTRY_STEP}
+  value={entrada}
+  onChange={setEntrada}
+  format={(v) => money(v)}
+/>
 
-                <SliderField
-                  label="¿Cuánto podrías pagar al mes para completar la entrada?"
-                  helper="Esto nos ayuda a ver si podrías completar lo que te falta más adelante, sobre todo en proyectos en construcción."
-                  min={0}
-                  max={2000}
-                  step={50}
-                  value={capacidadEntradaMensual}
-                  onChange={setCapacidadEntradaMensual}
-                  format={(v) => money(v)}
-                />
+<QuickAmountChips
+  value={entrada}
+  onChange={setEntrada}
+  options={entradaQuickOptions}
+/>
+
+              <SliderField
+  label="¿Cuánto podrías destinar al mes para completar la entrada?"
+  helper="Esto ayuda a estimar si podrías completar lo que te falta más adelante, sobre todo en proyectos en construcción."
+  min={MONTHLY_ENTRY_MIN}
+  max={MONTHLY_ENTRY_MAX}
+  step={MONTHLY_ENTRY_STEP}
+  value={capacidadEntradaMensual}
+  onChange={setCapacidadEntradaMensual}
+  format={(v) => money(v)}
+/>
+
+<QuickAmountChips
+  value={capacidadEntradaMensual}
+  onChange={setCapacidadEntradaMensual}
+  options={[100, 200, 300, 400, 500, 750, 1000]}
+/>
 
                 <SectionTitle eyebrow="Condiciones" title="Tu situación actual" />
 
@@ -2088,108 +2399,110 @@ origen: "journey_mobile",
 
             {step === 4 && (
               <>
-               <SectionTitle
-  eyebrow="Paso 4"
-  title="Historial crediticio y estilo de hipoteca"
-  subtitle="Esto nos ayuda a estimar no solo tu capacidad de pago, sino también qué tan listo estaría tu perfil para una revisión bancaria."
-/>
+                <SectionTitle
+                  eyebrow="Paso 4"
+                  title="Datos de referencia para tu orientación hipotecaria"
+                  subtitle="Esto nos ayuda a darte una estimación más completa sobre tu preparación. No realizamos evaluación crediticia formal ni aprobación de préstamos."
+                />
 
-<SectionCard
-  style={{
-    marginTop: 0,
-    marginBottom: 16,
-    background: "rgba(2,6,23,0.20)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "none",
-  }}
->
-  <SectionTitle
-    eyebrow="Validación crediticia"
-    title="Tu historial de pagos"
-    subtitle="Los bancos también revisan tu comportamiento de pago. Si no estás seguro, puedes marcarlo así y continuar."
-  />
+                <FinancialDisclaimer />
 
-  <SelectField
-    label="¿Cómo consideras tu historial crediticio?"
-    value={creditHistoryStatus}
-    onChange={setCreditHistoryStatus}
-    options={[
-      {
-        value: "excellent",
-        label: "Excelente — siempre pago a tiempo",
-      },
-      {
-        value: "good",
-        label: "Bueno — he tenido atrasos pequeños",
-      },
-      {
-        value: "regular",
-        label: "Regular — he tenido atrasos importantes",
-      },
-      {
-        value: "complicated",
-        label: "Complicado — tengo deudas vencidas o reportes negativos",
-      },
-      {
-        value: "unknown",
-        label: "No estoy seguro",
-      },
-    ]}
-  />
+                <SectionCard
+                  style={{
+                    marginTop: 16,
+                    marginBottom: 16,
+                    background: "rgba(2,6,23,0.20)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    boxShadow: "none",
+                  }}
+                >
+                  <SectionTitle
+                    eyebrow="Información declarada"
+                    title="Tu historial financiero declarado"
+                    subtitle="Las entidades financieras pueden considerar tu comportamiento de pago en sus propios procesos externos. Si no estás seguro, puedes marcarlo así y continuar."
+                  />
 
-  <SelectField
-    label="¿Tienes actualmente alguna deuda vencida o en mora?"
-    value={hasActiveDelinquency}
-    onChange={handleActiveDelinquencyChange}
-    options={[
-      { value: "no", label: "No" },
-      { value: "yes", label: "Sí" },
-      { value: "unknown", label: "No estoy seguro" },
-    ]}
-  />
+                  <SelectField
+                    label="¿Cómo describirías tu historial financiero?"
+                    value={creditHistoryStatus}
+                    onChange={setCreditHistoryStatus}
+                    options={[
+                      {
+                        value: "excellent",
+                        label: "Excelente — siempre pago a tiempo",
+                      },
+                      {
+                        value: "good",
+                        label: "Bueno — he tenido atrasos pequeños",
+                      },
+                      {
+                        value: "regular",
+                        label: "Regular — he tenido atrasos importantes",
+                      },
+                      {
+                        value: "complicated",
+                        label: "Complicado — tengo obligaciones pendientes o reportes por revisar",
+                      },
+                      {
+                        value: "unknown",
+                        label: "No estoy seguro",
+                      },
+                    ]}
+                  />
 
-  {hasActiveDelinquency === "yes" ? (
-    <SelectField
-      label="¿Hace cuánto está vencida aproximadamente?"
-      value={delinquencyRange}
-      onChange={setDelinquencyRange}
-      options={[
-        { value: "less_than_30", label: "Menos de 30 días" },
-        { value: "30_to_90", label: "Entre 30 y 90 días" },
-        { value: "more_than_90", label: "Más de 90 días" },
-        { value: "unknown", label: "No estoy seguro" },
-      ]}
-    />
-  ) : null}
+                  <SelectField
+                    label="¿Tienes alguna obligación pendiente que debamos considerar en tu estimación?"
+                    value={hasActiveDelinquency}
+                    onChange={handleActiveDelinquencyChange}
+                    options={[
+                      { value: "no", label: "No" },
+                      { value: "yes", label: "Sí" },
+                      { value: "unknown", label: "No estoy seguro" },
+                    ]}
+                  />
 
-  <SelectField
-    label="¿Te han negado recientemente un crédito por historial crediticio?"
-    value={recentCreditDenied}
-    onChange={setRecentCreditDenied}
-    options={[
-      { value: "no", label: "No" },
-      { value: "yes", label: "Sí" },
-      { value: "unknown", label: "No estoy seguro" },
-    ]}
-  />
+                  {hasActiveDelinquency === "yes" ? (
+                    <SelectField
+                      label="¿Hace cuánto está pendiente aproximadamente?"
+                      value={delinquencyRange}
+                      onChange={setDelinquencyRange}
+                      options={[
+                        { value: "less_than_30", label: "Menos de 30 días" },
+                        { value: "30_to_90", label: "Entre 30 y 90 días" },
+                        { value: "more_than_90", label: "Más de 90 días" },
+                        { value: "unknown", label: "No estoy seguro" },
+                      ]}
+                    />
+                  ) : null}
 
-  <SliderField
-    label="Score crediticio aproximado"
-    helper="Opcional. Si no lo conoces, déjalo en 0. Más adelante podremos ayudarte a interpretarlo."
-    min={0}
-    max={1000}
-    step={10}
-    value={declaredCreditScore || "0"}
-    onChange={setDeclaredCreditScore}
-    format={(v) => (Number(v) > 0 ? `${v}` : "No lo sé")}
-  />
-</SectionCard>
+                  <SelectField
+                    label="¿Has tenido dificultad reciente al consultar opciones financieras?"
+                    value={recentCreditDenied}
+                    onChange={setRecentCreditDenied}
+                    options={[
+                      { value: "no", label: "No" },
+                      { value: "yes", label: "Sí" },
+                      { value: "unknown", label: "No estoy seguro" },
+                    ]}
+                  />
 
-<SectionTitle
-  eyebrow="Preferencia de pago"
-  title="Tu estilo de hipoteca"
-  subtitle="Esto no define una oferta final, pero nos ayuda a recomendarte una ruta más alineada con lo que prefieres."
-/>
+                  <SliderField
+                    label="Score financiero aproximado"
+                    helper="Opcional. Si no lo conoces, déjalo en 0. Este dato es solo declarativo y orientativo."
+                    min={0}
+                    max={1000}
+                    step={10}
+                    value={declaredCreditScore || "0"}
+                    onChange={setDeclaredCreditScore}
+                    format={(v) => (Number(v) > 0 ? `${v}` : "No lo sé")}
+                  />
+                </SectionCard>
+
+                <SectionTitle
+                  eyebrow="Preferencia de pago"
+                  title="Tu preferencia de cuota referencial"
+                  subtitle="Esto no define una oferta final. Solo nos ayuda a ordenar rutas referenciales según lo que prefieres."
+                />
 
                 <div
                   style={{
@@ -2221,8 +2534,8 @@ origen: "journey_mobile",
                   }}
                 >
                   <SectionTitle
-                    title="Resumen antes de calcular"
-                    subtitle="Con esto estimaremos capacidad, cuota y rutas hipotecarias compatibles."
+                    title="Resumen antes de estimar"
+                    subtitle="Con esto estimaremos un rango de compra, una cuota referencial y rutas hipotecarias orientativas."
                   />
 
                   <div
@@ -2261,8 +2574,8 @@ origen: "journey_mobile",
                         lineHeight: 1.55,
                       }}
                     >
-                      Primero estimaremos tu capacidad máxima de compra con tu
-                      perfil actual.
+                      Primero estimaremos tu rango máximo referencial de compra
+                      con tu perfil actual.
                     </div>
                   )}
 
@@ -2274,7 +2587,7 @@ origen: "journey_mobile",
                       lineHeight: 1.55,
                     }}
                   >
-                    Capacidad mensual para completar entrada:{" "}
+                    Monto mensual disponible para completar entrada:{" "}
                     <strong style={{ color: "white" }}>
                       {money(toNum(capacidadEntradaMensual))}
                     </strong>
@@ -2292,29 +2605,31 @@ origen: "journey_mobile",
                     <strong style={{ color: "white" }}>
                       {getPaymentPreferenceTitle(preferenciaPagoHipoteca)}
                     </strong>
-
-                    <div
-  style={{
-    marginTop: 8,
-    fontSize: 13,
-    opacity: 0.82,
-    lineHeight: 1.55,
-  }}
->
-  Historial crediticio declarado:{" "}
-  <strong style={{ color: "white" }}>
-    {creditHistoryStatus === "excellent"
-      ? "Excelente"
-      : creditHistoryStatus === "good"
-      ? "Bueno"
-      : creditHistoryStatus === "regular"
-      ? "Regular"
-      : creditHistoryStatus === "complicated"
-      ? "Complicado"
-      : "No estoy seguro"}
-  </strong>
-</div>
                   </div>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 13,
+                      opacity: 0.82,
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    Historial financiero declarado:{" "}
+                    <strong style={{ color: "white" }}>
+                      {creditHistoryStatus === "excellent"
+                        ? "Excelente"
+                        : creditHistoryStatus === "good"
+                        ? "Bueno"
+                        : creditHistoryStatus === "regular"
+                        ? "Regular"
+                        : creditHistoryStatus === "complicated"
+                        ? "Complicado"
+                        : "No estoy seguro"}
+                    </strong>
+                  </div>
+
+                  <FinancialDisclaimer compact />
                 </SectionCard>
 
                 <div
@@ -2327,8 +2642,8 @@ origen: "journey_mobile",
                   }}
                 >
                   Esta preferencia no garantiza un plazo específico. HabitaLibre
-                  la usa para ordenar y explicar rutas dentro de las reglas
-                  reales de cada producto hipotecario.
+                  la usa para ordenar y explicar rutas referenciales dentro de
+                  criterios generales de categorías hipotecarias.
                 </div>
               </>
             )}
@@ -2412,12 +2727,12 @@ origen: "journey_mobile",
                   }}
                 >
                   {loading
-                    ? "Analizando…"
+                    ? "Estimando…"
                     : hasResult
-                    ? "Actualizar resultado"
+                    ? "Actualizar estimación"
                     : getCustomerToken()
-                    ? "Ver resultados"
-                    : "Entrar para ver resultados"}
+                    ? "Ver orientación"
+                    : "Entrar para guardar orientación"}
                 </button>
               )}
             </div>
@@ -2435,7 +2750,7 @@ origen: "journey_mobile",
         }}
       >
         {getCustomerToken()
-          ? "Sesión activa: tu resultado se guardará en tu cuenta."
+          ? "Sesión activa: tu estimación se guardará en tu cuenta."
           : "Tip: crea una cuenta para guardar tu progreso y retomar tu camino."}
       </div>
 

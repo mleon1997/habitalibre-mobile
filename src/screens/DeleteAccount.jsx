@@ -169,7 +169,14 @@ export default function DeleteAccount() {
         onConfirm={runDelete}
       />
 
-      <Screen>
+      <Screen
+        style={{
+          paddingLeft: 22,
+          paddingRight: 22,
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 26px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 150px)",
+        }}
+      >
         <div style={{ maxWidth: 560, margin: "0 auto" }}>
           <button
             type="button"
@@ -181,7 +188,7 @@ export default function DeleteAccount() {
               color: UI.subtext,
               fontWeight: 800,
               cursor: "pointer",
-              padding: 0,
+              padding: "4px 0",
               fontSize: 14,
             }}
           >
@@ -190,12 +197,12 @@ export default function DeleteAccount() {
 
           <h1
             style={{
-              fontSize: 28,
+              fontSize: 30,
               fontWeight: 950,
               margin: 0,
-              marginBottom: 16,
+              marginBottom: 20,
               color: UI.text,
-              letterSpacing: -0.6,
+              letterSpacing: -0.8,
               lineHeight: 1.05,
             }}
           >

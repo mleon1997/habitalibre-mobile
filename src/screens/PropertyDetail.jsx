@@ -1,10 +1,14 @@
 // src/screens/PropertyDetail.jsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, MapPin } from "lucide-react";
 import { moneyUSD } from "../lib/money";
-import mockProperties from "../data/mockProperties.js";
+import { API_BASE } from "../lib/api";
 import { getCustomer } from "../lib/customerSession.js";
+import {
+  saveSelectedPropertyToBackend,
+  saveJourneyStateToBackend,
+} from "../lib/userAppState.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
@@ -41,7 +45,6 @@ function loadOwnedData(key) {
 
   if (!envelope) return null;
 
-  // Formato nuevo: { ownerEmail, data }
   if (envelope?.ownerEmail && "data" in envelope) {
     if (
       ownerEmail &&
@@ -50,7 +53,6 @@ function loadOwnedData(key) {
       return envelope.data ?? null;
     }
 
-    // si no hay owner actual, permitir leer igual
     if (!ownerEmail) {
       return envelope.data ?? null;
     }
@@ -58,7 +60,6 @@ function loadOwnedData(key) {
     return null;
   }
 
-  // Formato viejo / legacy
   return envelope;
 }
 
@@ -79,6 +80,16 @@ function pick(snapshot, keys) {
 function n(v, def = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : def;
+}
+
+function getPropertyId(property) {
+  return (
+    property?.id ||
+    property?._id ||
+    property?._normalizedId ||
+    property?.propertyId ||
+    null
+  );
 }
 
 function maybeNum(v) {
@@ -103,9 +114,9 @@ function formatMonthly(v) {
   return Number.isFinite(x) ? `${moneyUSD(x)}/mes` : "—";
 }
 
-function formatProbability(prob) {
-  if (!prob) return "—";
-  return String(prob);
+function formatCompatibility(value) {
+  if (!value) return "—";
+  return String(value);
 }
 
 function formatMatchReason(reason) {
@@ -113,22 +124,22 @@ function formatMatchReason(reason) {
     precio: "Precio",
     entrada: "Entrada",
     precio_entrada: "Precio + entrada",
-    cuota: "Cuota",
-    programa: "Programa",
+    cuota: "Cuota referencial",
+    programa: "Categoría",
   };
   return map[reason] || reason || "Precio";
 }
 
 function formatEstadoCompra(estado) {
   const map = {
-    top_match: "Top match",
+    top_match: "Más alineada",
     entrada_viable_hipoteca_futura_viable:
-      "Entrada viable + hipoteca futura viable",
+      "Entrada alineada + ruta futura referencial",
     entrada_viable_hipoteca_futura_debil:
-      "Entrada viable, hipoteca por fortalecer",
-    entrada_no_viable: "Entrada no viable",
+      "Entrada alineada, ruta por fortalecer",
+    entrada_no_viable: "Entrada por fortalecer",
     ruta_cercana: "Ruta cercana",
-    fuera_de_reglas: "Fuera de reglas",
+    fuera_de_reglas: "Por revisar",
   };
   return map[estado] || "Pendiente de análisis";
 }
@@ -186,19 +197,21 @@ function Pill({ children, tone = "neutral" }) {
   );
 }
 
-function PrimaryButton({ children, onClick, style }) {
+function PrimaryButton({ children, onClick, style, disabled = false }) {
   return (
     <button
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       style={{
         width: "100%",
         padding: 14,
         borderRadius: 16,
         border: "none",
-        background: UI.green,
+        background: disabled ? "rgba(37,211,166,0.55)" : UI.green,
         color: "#052019",
         fontWeight: 900,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.85 : 1,
         ...style,
       }}
     >
@@ -238,8 +251,12 @@ function StatCard({ label, value }) {
         border: `1px solid ${UI.borderSoft}`,
       }}
     >
-      <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>{label}</div>
-      <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>{value}</div>
+      <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
+        {label}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -305,6 +322,28 @@ function ToneBox({ tone = "neutral", children }) {
   );
 }
 
+function FinancialDisclaimer({ compact = false }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.42,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Las cifras mostradas son estimaciones referenciales para orientación hipotecaria. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
+    </div>
+  );
+}
+
 function NotFound({ onBack }) {
   return (
     <div
@@ -329,8 +368,16 @@ function NotFound({ onBack }) {
         <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900 }}>
           No encontramos esta propiedad
         </div>
-        <div style={{ marginTop: 8, fontSize: 13, opacity: 0.78, lineHeight: 1.45 }}>
-          Puede que el id no exista o que todavía no esté cargada en tu inventario.
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            opacity: 0.78,
+            lineHeight: 1.45,
+          }}
+        >
+          Puede que el id no exista o que todavía no esté cargada en tu
+          inventario.
         </div>
         <div style={{ marginTop: 14 }}>
           <PrimaryButton onClick={onBack}>Volver a propiedades</PrimaryButton>
@@ -343,10 +390,69 @@ function NotFound({ onBack }) {
 export default function PropertyDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
+ const [savingSelection, setSavingSelection] = useState(false);
+const [backendProperty, setBackendProperty] = useState(null);
+const [loadingBackendProperty, setLoadingBackendProperty] = useState(true);
 
   const snapshot = useMemo(() => loadOwnedData(LS_SNAPSHOT), []);
   const journey = useMemo(() => loadOwnedData(LS_JOURNEY), []);
+useEffect(() => {
+  let isMounted = true;
 
+  async function loadPropertyFromBackend() {
+    try {
+      setLoadingBackendProperty(true);
+
+      const res = await fetch(
+        `${API_BASE}/properties/${encodeURIComponent(id)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(
+          data?.message || "No se pudo cargar la propiedad desde backend."
+        );
+      }
+
+      if (!isMounted) return;
+
+      setBackendProperty(data?.property || null);
+
+      console.log("[PropertyDetail] Propiedad real cargada:", {
+        id,
+        found: !!data?.property,
+      });
+    } catch (error) {
+      console.warn(
+        "[PropertyDetail] Error cargando propiedad real:",
+        error?.message || error
+      );
+
+      if (!isMounted) return;
+      setBackendProperty(null);
+    } finally {
+      if (!isMounted) return;
+      setLoadingBackendProperty(false);
+    }
+  }
+
+  if (id) {
+    loadPropertyFromBackend();
+  } else {
+    setLoadingBackendProperty(false);
+  }
+
+  return () => {
+    isMounted = false;
+  };
+}, [id]);
   const matchedProperties =
     pick(snapshot, ["matchedProperties"]) ||
     snapshot?.plan?.routeSignals?.matchedProperties ||
@@ -357,21 +463,61 @@ export default function PropertyDetail() {
     pick(snapshot, ["propiedades"]) ||
     [];
 
-  const propertyFromSnapshot = useMemo(() => {
-    if (!Array.isArray(matchedProperties)) return null;
-    return matchedProperties.find((p) => String(p.id) === String(id)) || null;
-  }, [matchedProperties, id]);
+const propertyFromSnapshot = useMemo(() => {
+  if (!Array.isArray(matchedProperties)) return null;
 
-  const propertyFromMock = useMemo(
-    () => mockProperties.find((p) => String(p.id) === String(id)) || null,
-    [id]
+  return (
+    matchedProperties.find((p) => String(getPropertyId(p)) === String(id)) ||
+    null
   );
+}, [matchedProperties, id]);
 
-  const property = propertyFromSnapshot || propertyFromMock;
 
-  if (!property) {
-    return <NotFound onBack={() => navigate("/marketplace")} />;
-  }
+
+const property = propertyFromSnapshot || backendProperty;
+
+if (!property && loadingBackendProperty) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: UI.bg,
+        color: "white",
+        padding: 22,
+        fontFamily: "system-ui",
+      }}
+    >
+      <div
+        style={{
+          marginTop: 80,
+          padding: 20,
+          borderRadius: 24,
+          background: UI.card,
+          border: `1px solid ${UI.border}`,
+        }}
+      >
+        <div style={{ fontSize: 14, opacity: 0.8 }}>Propiedad</div>
+        <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900 }}>
+          Cargando propiedad...
+        </div>
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            opacity: 0.78,
+            lineHeight: 1.45,
+          }}
+        >
+          Estamos consultando el inventario real de HabitaLibre.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+if (!property) {
+  return <NotFound onBack={() => navigate("/marketplace")} />;
+}
 
   const precio = n(property?.precio);
 
@@ -392,7 +538,8 @@ export default function PropertyDetail() {
     pick(snapshot, ["precioMaxPerfil"]) ??
     pick(snapshot, ["precioMax"]) ??
     snapshot?.financialCapacity?.estimatedMaxPropertyValue ??
-    snapshot?.homeRecommendation?.profileProgramsThatCouldWorkIfRangeAdjusted?.[0]?.priceMax ??
+    snapshot?.homeRecommendation?.profileProgramsThatCouldWorkIfRangeAdjusted?.[0]
+      ?.priceMax ??
     property?.evaluacionHipotecaHoy?.precioMaxVivienda ??
     property?.evaluacionHipotecaFutura?.precioMaxVivienda ??
     null;
@@ -471,134 +618,178 @@ export default function PropertyDetail() {
   const heroTitle =
     property.titulo || property.nombre || property.proyecto || "Propiedad";
   const heroLocation =
-    property.sector || property.zona || property.ciudadZona || property.ciudad || "Quito";
+    property.sector ||
+    property.zona ||
+    property.ciudadZona ||
+    property.ciudad ||
+    "Quito";
 
   const descripcionReal =
     property.descripcion ||
-    `${heroTitle} es una propiedad orientada a primera vivienda, ubicada en ${heroLocation}. Esta opción se muestra porque se alinea con tu perfil actual y con una ruta estimada de compra dentro de la app.`;
+    `${heroTitle} es una propiedad orientada a primera vivienda, ubicada en ${heroLocation}. Esta opción se muestra porque parece alinearse con tu perfil actual y con una ruta referencial de compra dentro de la app.`;
 
   const mainBadgeLabel = hasAnalisisCompletoMinimo
-    ? property?.matchBadgeCalculado || property?.matchBadge || formatEstadoCompra(estadoCompra)
+    ? property?.matchBadgeCalculado ||
+      property?.matchBadge ||
+      formatEstadoCompra(estadoCompra)
     : "Pendiente de análisis";
 
   const estadoLabel = hasAnalisisCompletoMinimo
     ? formatEstadoCompra(estadoCompra)
     : "Análisis parcial";
 
-  const futureReasonText =
-    evaluacionHipotecaFutura?.viable
-      ? faltanteEntrada === 0
-        ? "Con la entrada requerida ya cubierta, esta propiedad podría calzar con tu ruta hipotecaria al momento de la entrega."
-        : evaluacionHipotecaFutura?.razon || "No disponible"
-      : evaluacionHipotecaFutura?.razon || "No disponible";
+  const futureReasonText = evaluacionHipotecaFutura?.viable
+    ? faltanteEntrada === 0
+      ? "Con la entrada requerida ya cubierta, esta propiedad podría alinearse con una ruta futura al momento de la entrega."
+      : evaluacionHipotecaFutura?.razon || "No disponible"
+    : evaluacionHipotecaFutura?.razon || "No disponible";
 
-function handleSelectProperty() {
-  const propertyId =
-    property?.id ||
-    property?._id ||
-    property?.propertyId ||
-    id ||
-    null;
+  async function handleSelectProperty() {
+    if (savingSelection) return;
 
-  const propertyTitle =
-    property?.titulo ||
-    property?.nombre ||
-    property?.title ||
-    property?.name ||
-    property?.proyecto ||
-    "Propiedad elegida";
+    const propertyId =
+      property?.id || property?._id || property?.propertyId || id || null;
 
-  const propertyCity =
-    property?.ciudad ||
-    property?.zona ||
-    property?.ciudadZona ||
-    property?.sector ||
-    journey?.form?.ciudadCompra ||
-    journey?.ciudadCompra ||
-    "Ubicación pendiente";
+    const propertyTitle =
+      property?.titulo ||
+      property?.nombre ||
+      property?.title ||
+      property?.name ||
+      property?.proyecto ||
+      "Propiedad elegida";
 
-  const propertyPriceRaw =
-    property?.precio ??
-    property?.price ??
-    property?.valor ??
-    property?.listPrice ??
-    null;
+    const propertyCity =
+      property?.ciudad ||
+      property?.zona ||
+      property?.ciudadZona ||
+      property?.sector ||
+      journey?.form?.ciudadCompra ||
+      journey?.ciudadCompra ||
+      "Ubicación pendiente";
 
-  const propertyPrice = Number.isFinite(Number(propertyPriceRaw))
-    ? Number(propertyPriceRaw)
-    : null;
+    const propertyPriceRaw =
+      property?.precio ??
+      property?.price ??
+      property?.valor ??
+      property?.listPrice ??
+      null;
 
-  const propertyImage =
-    property?.imagen ||
-    property?.image ||
-    property?.imageUrl ||
-    property?.foto ||
-    property?.cover ||
-    null;
+    const propertyPrice = Number.isFinite(Number(propertyPriceRaw))
+      ? Number(propertyPriceRaw)
+      : null;
 
-  const normalizedProperty = {
-    // ids
-    id: propertyId,
-    _id: propertyId,
-    propertyId: propertyId,
+    const propertyImage =
+      property?.imagen ||
+      property?.image ||
+      property?.imageUrl ||
+      property?.foto ||
+      property?.cover ||
+      null;
 
-    // naming estándar
-    titulo: propertyTitle,
-    nombre: propertyTitle,
-    proyecto: propertyTitle,
+    const selectedPropertyStatus =
+      property?.estadoCompra ||
+      property?.status ||
+      property?.selectedPropertyStatus ||
+      null;
 
-    // location estándar
-    ciudad: propertyCity,
-    zona: propertyCity,
-    sector: property?.sector || propertyCity,
-    ciudadZona: property?.ciudadZona || propertyCity,
+    const normalizedProperty = {
+      id: propertyId,
+      _id: propertyId,
+      propertyId,
 
-    // price estándar
-    precio: propertyPrice,
-    price: propertyPrice,
+      titulo: propertyTitle,
+      nombre: propertyTitle,
+      proyecto: propertyTitle,
+      title: propertyTitle,
+      name: propertyTitle,
 
-    // media
-    imagen: propertyImage,
-    image: propertyImage,
+      ciudad: propertyCity,
+      zona: propertyCity,
+      sector: property?.sector || propertyCity,
+      ciudadZona: property?.ciudadZona || propertyCity,
 
-    // detalles útiles
-    cuotaEstimada:
-      property?.cuotaEstimada ||
-      property?.cuota ||
-      property?.evaluacionHipotecaFutura?.cuotaReferencia ||
-      property?.evaluacionHipotecaHoy?.cuotaReferencia ||
-      snapshot?.cuotaEstimada ||
-      snapshot?.cuotaMensual ||
-      snapshot?.bestMortgage?.cuota ||
-      null,
+      precio: propertyPrice,
+      price: propertyPrice,
 
-    entradaMinima:
-      property?.entradaMinima ??
-      property?.entradaRequerida ??
-      property?.evaluacionEntrada?.entradaRequerida ??
-      null,
+      imagen: propertyImage,
+      image: propertyImage,
 
-    descripcion:
-      property?.descripcion ||
-      `${propertyTitle} es una propiedad que hoy se alinea con tu ruta estimada dentro de HabitaLibre.`,
+      status: selectedPropertyStatus,
+      selectedPropertyStatus,
 
-    source: "property_detail",
-    selectedAt: new Date().toISOString(),
+      estadoCompra: property?.estadoCompra || null,
+      matchBadge: property?.matchBadge || null,
+      matchBadgeCalculado: property?.matchBadgeCalculado || null,
+      matchReason: property?.matchReason || null,
+      matchReasonCalculado: property?.matchReasonCalculado || null,
 
-    raw: property,
-  };
+      evaluacionEntrada: property?.evaluacionEntrada || null,
+      evaluacionHipotecaHoy:
+        property?.evaluacionHipotecaHoy ||
+        property?.evaluacionHipoteca ||
+        null,
+      evaluacionHipotecaFutura: property?.evaluacionHipotecaFutura || null,
+      evaluacionReglasPropiedad: property?.evaluacionReglasPropiedad || null,
 
-  saveOwnedData(LS_SELECTED_PROPERTY, normalizedProperty);
+      cuotaEstimada:
+        property?.cuotaEstimada ||
+        property?.cuota ||
+        property?.evaluacionHipotecaFutura?.cuotaReferencia ||
+        property?.evaluacionHipotecaHoy?.cuotaReferencia ||
+        snapshot?.cuotaEstimada ||
+        snapshot?.cuotaMensual ||
+        snapshot?.bestMortgage?.cuota ||
+        null,
 
-  saveOwnedData(LS_JOURNEY, {
-    ...(journey || {}),
-    propiedadElegida: true,
-    propiedadId: propertyId,
-    propiedadSeleccionada: normalizedProperty,
-  });
+      entradaMinima:
+        property?.entradaMinima ??
+        property?.entradaRequerida ??
+        property?.evaluacionEntrada?.entradaRequerida ??
+        null,
 
-  navigate("/ruta");
-}
+      descripcion:
+        property?.descripcion ||
+        `${propertyTitle} es una propiedad que hoy parece alinearse con tu ruta referencial dentro de HabitaLibre.`,
+
+      source: "property_detail",
+      selectedAt: new Date().toISOString(),
+
+      raw: property,
+    };
+
+    const nextJourney = {
+      ...(journey || {}),
+      propiedadElegida: true,
+      propiedadId: propertyId,
+      propiedadSeleccionada: normalizedProperty,
+      selectedProperty: normalizedProperty,
+      selectedPropertyStatus,
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveOwnedData(LS_SELECTED_PROPERTY, normalizedProperty);
+    saveOwnedData(LS_JOURNEY, nextJourney);
+
+    try {
+      setSavingSelection(true);
+
+      await saveSelectedPropertyToBackend(normalizedProperty);
+      await saveJourneyStateToBackend(nextJourney);
+
+      console.log("[HL] Propiedad seleccionada guardada en backend", {
+        propertyId,
+        selectedPropertyStatus,
+      });
+    } catch (err) {
+      console.warn(
+        "[HL] No se pudo guardar propiedad seleccionada en backend:",
+        err?.message || err
+      );
+    } finally {
+      setSavingSelection(false);
+      navigate("/ruta");
+    }
+  }
 
   return (
     <div
@@ -667,12 +858,23 @@ function handleSelectProperty() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Pill tone={toneEstado}>{mainBadgeLabel}</Pill>
 
-            {property.proyectoNuevo ? <Pill>Proyecto nuevo</Pill> : <Pill>Entrega inmediata</Pill>}
+            {property.proyectoNuevo ? (
+              <Pill>Proyecto nuevo</Pill>
+            ) : (
+              <Pill>Entrega inmediata</Pill>
+            )}
 
             <Pill>{formatMatchReason(property.matchReason)}</Pill>
           </div>
 
-          <div style={{ marginTop: 14, fontSize: 30, fontWeight: 980, lineHeight: 1.02 }}>
+          <div
+            style={{
+              marginTop: 14,
+              fontSize: 30,
+              fontWeight: 980,
+              lineHeight: 1.02,
+            }}
+          >
             {heroTitle}
           </div>
 
@@ -702,15 +904,24 @@ function handleSelectProperty() {
           >
             <div>
               <div style={{ fontSize: 12, color: UI.textDim, fontWeight: 800 }}>
-                Precio
+                Precio de referencia
               </div>
-              <div style={{ marginTop: 4, fontSize: 40, fontWeight: 980, lineHeight: 1 }}>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 40,
+                  fontWeight: 980,
+                  lineHeight: 1,
+                }}
+              >
                 {moneyUSD(precio)}
               </div>
             </div>
 
             <Pill tone={toneEstado}>{estadoLabel}</Pill>
           </div>
+
+          <FinancialDisclaimer compact />
 
           <div
             style={{
@@ -720,7 +931,10 @@ function handleSelectProperty() {
               gap: 10,
             }}
           >
-            <StatCard label="Área" value={property.m2 != null ? `${property.m2} m²` : "—"} />
+            <StatCard
+              label="Área"
+              value={property.m2 != null ? `${property.m2} m²` : "—"}
+            />
             <StatCard
               label="Dormitorios"
               value={property.dormitorios != null ? String(property.dormitorios) : "—"}
@@ -738,7 +952,7 @@ function handleSelectProperty() {
 
         <InfoCard
           title="Cómo se alinea con tu perfil"
-          subtitle="Aquí resumimos cómo se alinea esta propiedad con tu perfil actual y qué podrías ajustar."
+          subtitle="Aquí resumimos cómo esta propiedad se compara con tu rango estimado actual y qué podrías ajustar."
         >
           <div style={{ display: "grid", gap: 10 }}>
             <ToneBox tone={toneEstado}>
@@ -746,8 +960,8 @@ function handleSelectProperty() {
               <div style={{ marginTop: 6 }}>
                 {hasAnalisisCompletoMinimo
                   ? property?.matchReasonCalculado ||
-                    "Analizamos esta propiedad con base en tu perfil y en el esquema financiero del proyecto."
-                  : "Todavía no tenemos suficiente información para confirmar el encaje completo de esta propiedad con tu perfil."}
+                    "Analizamos esta propiedad con base en tus datos declarados y en el esquema referencial del proyecto."
+                  : "Todavía no tenemos suficiente información para mostrar un encaje completo de esta propiedad con tu perfil."}
               </div>
             </ToneBox>
 
@@ -759,26 +973,31 @@ function handleSelectProperty() {
             <ToneBox>
               {hasPrecioMax ? (
                 <>
-                  Tu precio máximo estimado hoy es <strong>{moneyUSD(precioMaxVivienda)}</strong>.
+                  Tu rango estimado de compra hoy es{" "}
+                  <strong>{moneyUSD(precioMaxVivienda)}</strong>.
                   {calzaPrecio ? (
-                    <> Esta propiedad <strong>sí entra</strong> dentro de ese rango.</>
+                    <> Esta propiedad está dentro de ese rango estimado.</>
                   ) : (
                     <>
-                      {" "}Esta propiedad queda <strong>{moneyUSD(gapPrecio)}</strong> por encima de tu
-                      rango hipotecario actual.
+                      {" "}
+                      Esta propiedad queda{" "}
+                      <strong>{moneyUSD(gapPrecio)}</strong> por encima de tu
+                      rango estimado actual.
                     </>
                   )}
                 </>
               ) : (
-                <>Aún no tenemos tu precio máximo calculado.</>
+                <>Aún no tenemos tu rango estimado de compra.</>
               )}
             </ToneBox>
 
             <ToneBox>
               {hasEntradaDisponible ? (
                 <>
-                  Tu entrada registrada es <strong>{moneyUSD(entradaDisponible)}</strong>, equivalente a{" "}
-                  <strong>{formatPct(entradaPct)}</strong> del valor de esta propiedad.
+                  Tu entrada registrada es{" "}
+                  <strong>{moneyUSD(entradaDisponible)}</strong>, equivalente a{" "}
+                  <strong>{formatPct(entradaPct)}</strong> del valor de esta
+                  propiedad.
                 </>
               ) : (
                 <>Aún no tenemos una entrada registrada para esta propiedad.</>
@@ -799,7 +1018,10 @@ function handleSelectProperty() {
                 gap: 10,
               }}
             >
-              <StatCard label="Entrada requerida" value={formatMoney(entradaRequerida)} />
+              <StatCard
+                label="Entrada requerida"
+                value={formatMoney(entradaRequerida)}
+              />
 
               <StatCard
                 label="Faltante de entrada"
@@ -838,23 +1060,26 @@ function handleSelectProperty() {
                 <strong>
                   {evaluacionEntrada?.viableEntrada
                     ? faltanteEntrada === 0
-                      ? "Ya cumples la entrada requerida para este proyecto."
-                      : "La entrada se ve viable para ti."
-                    : "La entrada todavía no se ve viable para ti."}
+                      ? "Ya cubres la entrada requerida para este proyecto."
+                      : "La entrada se ve alcanzable según tu información actual."
+                    : "La entrada todavía necesita fortalecerse."}
                 </strong>
                 <div style={{ marginTop: 6 }}>
                   {evaluacionEntrada?.viableEntrada
                     ? faltanteEntrada === 0
                       ? "No necesitas completar una cuota mensual de entrada en esta etapa."
-                      : evaluacionEntrada?.razon || "La entrada podría completarse dentro del plazo estimado."
-                    : evaluacionEntrada?.razon || "No tenemos todavía el análisis de entrada."}
+                      : evaluacionEntrada?.razon ||
+                        "La entrada podría completarse dentro del plazo estimado."
+                    : evaluacionEntrada?.razon ||
+                      "No tenemos todavía el análisis de entrada."}
                 </div>
               </ToneBox>
             ) : (
               <ToneBox tone="amber">
                 <strong>Entrada pendiente de análisis</strong>
                 <div style={{ marginTop: 6 }}>
-                  Todavía no tenemos suficiente información para calcular la entrada de esta propiedad.
+                  Todavía no tenemos suficiente información para estimar la
+                  entrada de esta propiedad.
                 </div>
               </ToneBox>
             )}
@@ -862,20 +1087,30 @@ function handleSelectProperty() {
         </InfoCard>
 
         <InfoCard
-          title="Ruta hipotecaria"
-          subtitle="Aquí ves si esta propiedad se alinea con una hipoteca hoy, una hipoteca futura o una recomendación general de tu perfil."
+          title="Ruta referencial"
+          subtitle="Aquí ves si esta propiedad se alinea con una ruta actual, una ruta futura o una referencia general según tu perfil."
         >
           <div style={{ display: "grid", gap: 10 }}>
             {evaluacionHipotecaHoy ? (
               <ToneBox tone={evaluacionHipotecaHoy?.viable ? "green" : "amber"}>
-                <strong>Hipoteca en escenario actual</strong>
+                <strong>Ruta referencial en escenario actual</strong>
                 <div style={{ marginTop: 6 }}>
                   {evaluacionHipotecaHoy?.razon || "No disponible"}
                 </div>
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.82, lineHeight: 1.45 }}>
-                  Producto: <strong>{evaluacionHipotecaHoy?.productoSugerido || "—"}</strong>
-                  {" • "}Probabilidad:{" "}
-                  <strong>{formatProbability(evaluacionHipotecaHoy?.probabilidad)}</strong>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    opacity: 0.82,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Categoría:{" "}
+                  <strong>{evaluacionHipotecaHoy?.productoSugerido || "—"}</strong>
+                  {" • "}Compatibilidad:{" "}
+                  <strong>
+                    {formatCompatibility(evaluacionHipotecaHoy?.probabilidad)}
+                  </strong>
                   {" • "}Score: <strong>{n(evaluacionHipotecaHoy?.score)}</strong>
                 </div>
               </ToneBox>
@@ -883,58 +1118,83 @@ function handleSelectProperty() {
 
             {evaluacionHipotecaFutura ? (
               <ToneBox tone={evaluacionHipotecaFutura?.viable ? "green" : "amber"}>
-                <strong>Hipoteca futura al momento de entrega</strong>
-                <div style={{ marginTop: 6 }}>
-                  {futureReasonText}
-                </div>
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.82, lineHeight: 1.45 }}>
-                  Monto hipotecario proyectado:{" "}
-                  <strong>{formatMoney(evaluacionHipotecaFutura?.montoHipotecaProyectado)}</strong>
-                  {" • "}Producto:{" "}
+                <strong>Ruta futura referencial al momento de entrega</strong>
+                <div style={{ marginTop: 6 }}>{futureReasonText}</div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    opacity: 0.82,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Monto estimado a financiar:{" "}
+                  <strong>
+                    {formatMoney(evaluacionHipotecaFutura?.montoHipotecaProyectado)}
+                  </strong>
+                  {" • "}Categoría:{" "}
                   <strong>{evaluacionHipotecaFutura?.productoSugerido || "—"}</strong>
-                  {" • "}Probabilidad:{" "}
-                  <strong>{formatProbability(evaluacionHipotecaFutura?.probabilidad)}</strong>
-                  {" • "}Score: <strong>{n(evaluacionHipotecaFutura?.score)}</strong>
+                  {" • "}Compatibilidad:{" "}
+                  <strong>
+                    {formatCompatibility(evaluacionHipotecaFutura?.probabilidad)}
+                  </strong>
+                  {" • "}Score:{" "}
+                  <strong>{n(evaluacionHipotecaFutura?.score)}</strong>
                 </div>
               </ToneBox>
             ) : null}
 
-            {!evaluacionHipotecaHoy && !evaluacionHipotecaFutura && bankSuggested ? (
+            {!evaluacionHipotecaHoy &&
+            !evaluacionHipotecaFutura &&
+            bankSuggested ? (
               <ToneBox tone="amber">
-                <strong>Mejor ruta estimada</strong>
+                <strong>Ruta referencial destacada</strong>
                 <div style={{ marginTop: 6 }}>
-                  {bankSuggested.banco || "Hipoteca sugerida"}
+                  {bankSuggested.banco || "Ruta referencial sugerida"}
                 </div>
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.82, lineHeight: 1.4 }}>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    opacity: 0.82,
+                    lineHeight: 1.4,
+                  }}
+                >
                   {bankSuggested.tasaAnual != null
-                    ? `Tasa ${(Number(bankSuggested.tasaAnual) * 100).toFixed(2)}%`
-                    : "Tasa —"}
+                    ? `Tasa ref. ${(Number(bankSuggested.tasaAnual) * 100).toFixed(
+                        2
+                      )}%`
+                    : "Tasa ref. —"}
                   {" • "}
                   {bankSuggested.cuota != null
-                    ? `Cuota aprox. ${moneyUSD(bankSuggested.cuota)}`
-                    : "Cuota —"}
+                    ? `Cuota ref. ${moneyUSD(bankSuggested.cuota)}`
+                    : "Cuota ref. —"}
                   {" • "}
                   {bankSuggested.montoPrestamo != null
-                    ? `Monto aprox. ${moneyUSD(bankSuggested.montoPrestamo)}`
-                    : "Monto —"}
+                    ? `Monto estimado ${moneyUSD(bankSuggested.montoPrestamo)}`
+                    : "Monto estimado —"}
                 </div>
               </ToneBox>
             ) : null}
 
             {!hasHipotecaData ? (
               <ToneBox tone="amber">
-                <strong>Ruta hipotecaria pendiente</strong>
+                <strong>Ruta referencial pendiente</strong>
                 <div style={{ marginTop: 6 }}>
-                  Todavía no hay una ruta hipotecaria calculada para esta propiedad.
+                  Todavía no hay una ruta referencial calculada para esta
+                  propiedad.
                 </div>
               </ToneBox>
             ) : null}
 
             {productoElegido ? (
               <ToneBox>
-                Tu producto sugerido general actual es <strong>{String(productoElegido)}</strong>.
+                Tu categoría referencial general actual es{" "}
+                <strong>{String(productoElegido)}</strong>.
               </ToneBox>
             ) : null}
+
+            <FinancialDisclaimer />
           </div>
         </InfoCard>
 
@@ -948,8 +1208,13 @@ function handleSelectProperty() {
         </InfoCard>
 
         <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
-          <PrimaryButton onClick={handleSelectProperty}>
-            Seleccionar esta propiedad
+          <PrimaryButton
+            onClick={handleSelectProperty}
+            disabled={savingSelection}
+          >
+            {savingSelection
+              ? "Guardando propiedad..."
+              : "Usar esta propiedad como referencia"}
           </PrimaryButton>
 
           <SecondaryButton onClick={() => navigate("/marketplace")}>

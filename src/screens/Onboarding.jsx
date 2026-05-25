@@ -2,64 +2,65 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setSeenOnboarding } from "../lib/appOnboarding.js";
 
-import onboarding1 from "../assets/onboarding/onboarding-1.png";
-import onboarding2 from "../assets/onboarding/onboarding-2.png";
-import onboarding3 from "../assets/onboarding/onboarding-3.png";
-import onboarding4 from "../assets/onboarding/onboarding-4.png";
+const onboarding1 = "/onboarding/onboarding-1.jpg";
+const onboarding2 = "/onboarding/onboarding-2.jpg";
+const onboarding3 = "/onboarding/onboarding-3.jpg";
+const onboarding4 = "/onboarding/onboarding-4.jpg";
 
 const slides = [
   {
     id: 1,
     accent: "Tu punto de partida",
-    title: "Descubre cuánto podrías comprar",
-    body: "Conoce tu capacidad estimada y entiende desde dónde empieza tu camino.",
+    title: "Entiende tu rango estimado de compra",
+    body: "Conoce una estimación inicial y entiende desde dónde empieza tu camino hacia vivienda propia.",
     image: onboarding1,
     imagePosition: "center 67%",
   },
   {
     id: 2,
     accent: "Claridad antes de decidir",
-    title: "Encuentra tu mejor ruta hipotecaria",
-    body: "Comparamos rutas como VIS, VIP, BIESS y banca privada según tu perfil.",
+    title: "Compara rutas de compra referenciales",
+    body: "Explora escenarios como VIS, VIP, BIESS o banca privada de forma educativa, según tus datos declarados.",
     image: onboarding2,
     imagePosition: "center 58%",
   },
   {
     id: 3,
-    accent: "Opciones que sí encajan",
-    title: "Explora propiedades compatibles",
-    body: "Mira viviendas alineadas con tu capacidad, cuota y entrada disponible.",
+    accent: "Opciones más alineadas",
+    title: "Explora propiedades según tu escenario",
+    body: "Mira viviendas que podrían alinearse con tu rango estimado, tu entrada disponible y tu camino de preparación.",
     image: onboarding3,
     imagePosition: "center 58%",
   },
   {
     id: 4,
     accent: "Tu camino, paso a paso",
-    title: "Avanza con una ruta clara",
-    body: "Guarda tu progreso y sigue los próximos pasos según tu perfil.",
+    title: "Avanza con más orden y claridad",
+    body: "Guarda tu progreso y sigue próximos pasos referenciales para prepararte mejor antes de conversar con actores externos.",
     image: onboarding4,
     imagePosition: "center 58%",
   },
 ];
 
 const styles = {
-  page: {
-    minHeight: "100dvh",
-    width: "100%",
-    backgroundColor: "#081120",
-    backgroundImage:
-      "radial-gradient(900px 620px at 50% 18%, rgba(45,212,191,0.12), transparent 56%), radial-gradient(circle at top, rgba(17,58,130,0.20) 0%, rgba(8,17,32,1) 36%, rgba(3,9,22,1) 100%)",
-    color: "#FFFFFF",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    boxSizing: "border-box",
-    padding:
-      "calc(env(safe-area-inset-top, 0px) + 18px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px)",
-    overflow: "hidden",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif',
-  },
+page: {
+  minHeight: "100dvh",
+  width: "100%",
+  backgroundColor: "#081120",
+  backgroundImage:
+    "radial-gradient(900px 620px at 50% 18%, rgba(45,212,191,0.12), transparent 56%), radial-gradient(circle at top, rgba(17,58,130,0.20) 0%, rgba(8,17,32,1) 36%, rgba(3,9,22,1) 100%)",
+  color: "#FFFFFF",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "flex-start",
+  overflowY: "auto",
+  overflowX: "hidden",
+  boxSizing: "border-box",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 18px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px)",
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif',
+},
 
   header: {
     display: "flex",
@@ -77,8 +78,8 @@ const styles = {
   },
 
   logoFrame: {
-    width: 58,
-    height: 58,
+    width: 52,
+    height: 52,
     borderRadius: 21,
     display: "flex",
     alignItems: "center",
@@ -151,8 +152,8 @@ const styles = {
 
   heroFrame: {
     width: "100%",
-height: "min(37vh, 335px)",
-minHeight: 265,
+    height: "min(29vh, 250px)",
+    minHeight: 220,
     borderRadius: 34,
     overflow: "hidden",
     background:
@@ -170,7 +171,7 @@ minHeight: 265,
   },
 
   textBlock: {
-    marginTop: 18,
+    marginTop: 14,
   },
 
   accentPill: {
@@ -188,7 +189,7 @@ minHeight: 265,
 
   title: {
     margin: 0,
-    fontSize: 30,
+    fontSize: 27,
     lineHeight: 1.04,
     fontWeight: 980,
     letterSpacing: "-0.045em",
@@ -198,7 +199,7 @@ minHeight: 265,
   body: {
     marginTop: 11,
     marginBottom: 0,
-    fontSize: 16,
+    fontSize: 14.5,
     lineHeight: 1.42,
     color: "rgba(255,255,255,0.76)",
     maxWidth: 420,
@@ -209,6 +210,18 @@ minHeight: 265,
     maxWidth: 560,
     margin: "0 auto",
     flexShrink: 0,
+      paddingBottom: "max(18px, env(safe-area-inset-bottom, 0px))",
+  },
+
+  disclaimer: {
+    marginBottom: 14,
+    padding: "10px 12px",
+    borderRadius: 16,
+    border: "1px solid rgba(245,158,11,0.22)",
+    background: "rgba(245,158,11,0.08)",
+    color: "rgba(254,243,199,0.96)",
+    fontSize: 11,
+    lineHeight: 1.42,
   },
 
   dots: {
@@ -216,7 +229,7 @@ minHeight: 265,
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    marginBottom: 18,
+    marginBottom: 10,
   },
 
   dotButton: {
@@ -274,7 +287,9 @@ function HeaderBrand() {
 
       <div style={styles.brandText}>
         <div style={styles.fallbackWordmark}>HabitaLibre</div>
-        <div style={styles.tagline}>Tu camino a tu primera vivienda</div>
+        <div style={styles.tagline}>
+          Orientación para tu primera vivienda
+        </div>
       </div>
     </div>
   );
@@ -366,6 +381,10 @@ export default function Onboarding() {
               />
             );
           })}
+        </div>
+
+        <div style={styles.disclaimer}>
+          <strong>Orientación referencial.</strong> HabitaLibre no otorga ni aprueba créditos.
         </div>
 
         <button onClick={handleNext} style={styles.primaryBtn}>

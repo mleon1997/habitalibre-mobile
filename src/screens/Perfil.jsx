@@ -96,7 +96,7 @@ function formatMoney(v) {
   return `$${n}`;
 }
 
-function normalizeProbabilityLabel(v) {
+function normalizeCompatibilityLabel(v) {
   if (v == null || String(v).trim() === "") return null;
   const s = String(v).trim().toLowerCase();
 
@@ -370,6 +370,28 @@ function PrimaryActionCard({ eyebrow, title, onClick }) {
   );
 }
 
+function FinancialDisclaimer({ compact = false }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.42,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Los resultados mostrados son referenciales y pueden variar según la revisión y condiciones finales de cada entidad externa regulada."}
+    </div>
+  );
+}
+
 export default function Perfil() {
   const navigate = useNavigate();
 
@@ -411,17 +433,6 @@ export default function Perfil() {
   const ciudadCompraValue = pickProfileField(journey, form, snapshot, ["ciudadCompra"]);
   const horizonteCompraValue = pickProfileField(journey, form, snapshot, ["horizonteCompra", "tiempoCompra"]);
   const tipoViviendaValue = pickProfileField(journey, form, snapshot, ["tipoVivienda"]);
-
-  const hasScenarioInfo = Boolean(
-    edadValue ||
-      estadoCivilValue ||
-      ingresoValue ||
-      entradaValue ||
-      primeraViviendaValue ||
-      ciudadCompraValue ||
-      horizonteCompraValue ||
-      tipoViviendaValue
-  );
 
   const user = useMemo(() => {
     const nombre =
@@ -479,9 +490,9 @@ export default function Perfil() {
   }, [user, edadValue, estadoCivilValue]);
 
   const estadoPerfil = useMemo(() => {
-if (accountCompletion >= 85) return "Datos completos";
-if (accountCompletion >= 60) return "Cuenta en progreso";
-return "Faltan datos";
+    if (accountCompletion >= 85) return "Datos completos";
+    if (accountCompletion >= 60) return "Cuenta en progreso";
+    return "Faltan datos";
   }, [accountCompletion]);
 
   const score = useMemo(() => {
@@ -490,10 +501,10 @@ return "Faltan datos";
   }, [snapshot]);
 
   const estadoActual = useMemo(() => {
-    if (!snapshot) return "Aún no has hecho tu evaluación";
+    if (!snapshot) return "Aún no has generado tu orientación";
 
     return (
-      normalizeProbabilityLabel(
+      normalizeCompatibilityLabel(
         snapshot?.probabilidadLabel ||
           snapshot?.probabilidad ||
           snapshot?.output?.probabilidad ||
@@ -510,7 +521,7 @@ return "Faltan datos";
       : "neutral";
 
   const resumenRuta = useMemo(() => {
-    if (!hasEvaluation) return "Aún no has hecho tu evaluación";
+    if (!hasEvaluation) return "Aún no has generado tu orientación";
 
     const partes = [];
 
@@ -518,7 +529,7 @@ return "Faltan datos";
     if (horizonteCompraValue) partes.push(`${horizonteCompraValue} meses`);
     if (tipoViviendaValue) partes.push(tipoViviendaValue);
 
-    return partes.length ? partes.join(" · ") : "Tu evaluación ya está disponible";
+    return partes.length ? partes.join(" · ") : "Tu orientación ya está disponible";
   }, [hasEvaluation, ciudadCompraValue, horizonteCompraValue, tipoViviendaValue]);
 
   const ingresoLabel = hasEvaluation && ingresoValue != null ? formatMoney(ingresoValue) : "No definido";
@@ -534,18 +545,22 @@ return "Faltan datos";
     navigate("/perfil/editar");
   }
 
-  const shouldShowJourneyBlock = hasEvaluation;
-  const routeButtonLabel = hasEvaluation ? "Actualizar mi ruta" : "Empezar evaluación";
+  const routeButtonLabel = hasEvaluation ? "Actualizar mi orientación" : "Generar orientación";
   const routeButtonTarget = hasEvaluation ? "/journey" : "/journey/full";
-  const routeActionTitle = hasEvaluation ? "Ver mi camino a casa" : "Completar mi capacidad";
+  const routeActionTitle = hasEvaluation ? "Ver mi camino a casa" : "Completar mi orientación";
+  const routeTitle = hasEvaluation ? "Resumen de tu escenario" : "Aún no tienes orientación";
 
-  return (
-    <Screen
-      style={{
-        paddingTop: 78,
-        paddingBottom: 110,
-      }}
-    >
+ return (
+  <Screen
+    style={{
+      paddingTop: 78,
+      paddingBottom: 110,
+    }}
+    contentStyle={{
+      padding: "0 22px",
+      boxSizing: "border-box",
+    }}
+  >
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <div
           style={{
@@ -700,7 +715,7 @@ return "Faltan datos";
               </div>
 
               <Chip tone={completionTone}>
-               {accountCompletion >= 85 ? "Completa" : "En progreso"}
+                {accountCompletion >= 85 ? "Completa" : "En progreso"}
               </Chip>
             </div>
 
@@ -727,8 +742,10 @@ return "Faltan datos";
             }}
           >
             <MetricCard label="Score HabitaLibre" value={score} />
-            <MetricCard label="Estado hipotecario" value={estadoActual} />
+            <MetricCard label="Compatibilidad estimada" value={estadoActual} />
           </div>
+
+          <FinancialDisclaimer compact />
         </Card>
 
         <div style={{ marginBottom: 20 }}>
@@ -778,7 +795,7 @@ return "Faltan datos";
 
         <div style={{ marginBottom: 20 }}>
           <SectionTitle right={{ label: "Ver ruta", onClick: () => navigate(hasEvaluation ? "/ruta" : "/journey/full") }}>
-            Tu ruta hipotecaria
+            Tu ruta de compra
           </SectionTitle>
 
           <Card style={{ padding: 16 }}>
@@ -790,7 +807,7 @@ return "Faltan datos";
                 marginBottom: 6,
               }}
             >
-              {hasEvaluation ? "Resumen de tu escenario" : "Aún no tienes evaluación"}
+              {routeTitle}
             </div>
 
             <div
@@ -812,8 +829,8 @@ return "Faltan datos";
                   gap: 10,
                 }}
               >
-                <InlineInfo label="Ingreso" value={ingresoLabel} />
-                <InlineInfo label="Entrada" value={entradaLabel} />
+                <InlineInfo label="Ingreso declarado" value={ingresoLabel} />
+                <InlineInfo label="Entrada declarada" value={entradaLabel} />
                 <InlineInfo label="Primera vivienda" value={viviendaLabel} />
               </div>
             ) : (
@@ -828,9 +845,11 @@ return "Faltan datos";
                   color: UI.subtext,
                 }}
               >
-                Primero completa tu evaluación para ver tu capacidad estimada, tu cuota referencial y tu ruta hipotecaria.
+                Primero completa tu orientación para ver tu rango estimado, tu cuota referencial y tu ruta de compra.
               </div>
             )}
+
+            <FinancialDisclaimer compact />
 
             <button
               type="button"
@@ -868,7 +887,7 @@ return "Faltan datos";
             />
             <PrimaryActionCard
               eyebrow="Ayuda"
-              title="Hablar con un asesor"
+              title="Ver guía educativa"
               onClick={() => navigate("/asesor")}
             />
           </div>
@@ -919,9 +938,9 @@ return "Faltan datos";
             lineHeight: 1.55,
           }}
         >
-          Los resultados mostrados en HabitaLibre son referenciales
-          y pueden variar según la evaluación y verificación final de cada entidad
-          financiera.
+          HabitaLibre no otorga, aprueba, financia ni cobra créditos. Los
+          resultados mostrados son referenciales y pueden variar según la
+          revisión y condiciones finales de cada entidad externa regulada.
         </div>
 
         <SecondaryButton

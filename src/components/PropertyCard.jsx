@@ -33,12 +33,12 @@ function formatMonthly(v) {
 
 function formatEstadoCompra(estado) {
   const map = {
-    top_match: "Compra inmediata",
-    entrada_viable_hipoteca_futura_viable: "Entrada viable + hipoteca viable",
-    entrada_viable_hipoteca_futura_debil: "Entrada viable, hipoteca por fortalecer",
-    entrada_no_viable: "Entrada no viable",
+    top_match: "Más alineada hoy",
+    entrada_viable_hipoteca_futura_viable: "Entrada alineada + ruta futura",
+    entrada_viable_hipoteca_futura_debil: "Entrada alineada, ruta por fortalecer",
+    entrada_no_viable: "Entrada por fortalecer",
     ruta_cercana: "Ruta cercana",
-    fuera_de_reglas: "Fuera de reglas",
+    fuera_de_reglas: "Por revisar",
   };
   return map[estado] || "Ruta por definir";
 }
@@ -198,13 +198,34 @@ function StepRow({ index, title, text, tone = "neutral" }) {
   );
 }
 
-export default function PropertyCard({ property, onClick }) {
-  if (!property) return null;
+function FinancialDisclaimer({ compact = true }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.42,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      HabitaLibre no otorga ni aprueba créditos. Las condiciones finales
+      dependen exclusivamente de cada entidad financiera.
+    </div>
+  );
+}
 
+export default function PropertyCard({ property, onClick }) {
   const snapshot = useMemo(() => loadJSON(LS_SNAPSHOT), []);
   const journey = useMemo(() => loadJSON(LS_JOURNEY), []);
 
   const plan = useMemo(() => {
+    if (!property) return null;
+
     try {
       return buildPropertyPlan({
         property,
@@ -216,6 +237,8 @@ export default function PropertyCard({ property, onClick }) {
       return null;
     }
   }, [property, journey, snapshot]);
+
+  if (!property) return null;
 
   const {
     titulo,
@@ -246,37 +269,38 @@ export default function PropertyCard({ property, onClick }) {
 
   const badgeFinal = matchBadgeCalculado || matchBadge || "Buen match";
 
-  const routeLabel = plan?.routeLabel || matchReasonCalculado || estadoLabel || "Ruta por definir";
+  const routeLabel =
+    plan?.routeLabel || matchReasonCalculado || estadoLabel || "Ruta por definir";
 
   const headline =
-  plan?.status === "viable_today"
-    ? "Ruta viable"
-    : plan?.status === "needs_down_payment"
-    ? "Ruta cercana"
-    : estadoCompra === "top_match"
-    ? "Compra posible"
-    : estadoCompra === "entrada_viable_hipoteca_futura_viable"
-    ? "Ruta viable"
-    : estadoCompra === "entrada_viable_hipoteca_futura_debil"
-    ? "Con ajustes"
-    : estadoCompra === "entrada_no_viable"
-    ? "Explorar ruta"
-    : "Ruta por definir";
+    plan?.status === "viable_today"
+      ? "Ruta alineada"
+      : plan?.status === "needs_down_payment"
+      ? "Ruta cercana"
+      : estadoCompra === "top_match"
+      ? "Alineada hoy"
+      : estadoCompra === "entrada_viable_hipoteca_futura_viable"
+      ? "Ruta futura"
+      : estadoCompra === "entrada_viable_hipoteca_futura_debil"
+      ? "Con ajustes"
+      : estadoCompra === "entrada_no_viable"
+      ? "Explorar ruta"
+      : "Ruta por definir";
 
   const summaryText =
     plan?.status === "viable_today"
-      ? "Esta propiedad sí podría encajar con tu perfil actual."
+      ? "Esta propiedad podría alinearse con tu perfil actual de forma referencial."
       : plan?.status === "needs_down_payment"
-      ? "Todavía necesitas fortalecer la entrada para avanzar con esta propiedad."
+      ? "Todavía necesitas fortalecer la entrada para seguir trabajando esta propiedad."
       : estadoCompra === "top_match"
-      ? "Tu perfil sí podría sostener esta compra hoy."
+      ? "Tu perfil parece alinearse con esta propiedad dentro de tu rango estimado actual."
       : estadoCompra === "entrada_viable_hipoteca_futura_viable"
-      ? "Puedes completar la entrada y luego aplicar a hipoteca."
+      ? "Podrías completar la entrada y luego comparar una ruta hipotecaria referencial."
       : estadoCompra === "entrada_viable_hipoteca_futura_debil"
-      ? "La entrada se ve alcanzable, pero la hipoteca requiere fortalecerse."
+      ? "La entrada se ve alcanzable, pero la ruta referencial requiere fortalecerse."
       : estadoCompra === "entrada_no_viable"
-      ? "La entrada todavía no calza con tu capacidad actual."
-      : "Explora cómo se ve tu ruta estimada de entrada y financiamiento.";
+      ? "La entrada todavía no se alinea con tu capacidad actual."
+      : "Explora cómo se ve tu ruta estimada de entrada y monto referencial.";
 
   const entradaTotal = plan?.entradaTotal ?? null;
   const teFaltaHoy = plan?.teFaltaHoy ?? null;
@@ -383,7 +407,7 @@ export default function PropertyCard({ property, onClick }) {
                 lineHeight: 1.1,
               }}
             >
-              Precio
+              Precio ref.
             </div>
             <div
               style={{
@@ -455,7 +479,7 @@ export default function PropertyCard({ property, onClick }) {
                 fontWeight: 800,
               }}
             >
-              Plan de compra estimado
+              Plan referencial de compra
             </div>
 
             <div
@@ -506,10 +530,12 @@ export default function PropertyCard({ property, onClick }) {
               />
 
               <MiniStat
-                label="Hipoteca estimada"
+                label="Ruta estimada"
                 value={hipotecaEstimada || "Por definir"}
               />
             </div>
+
+            <FinancialDisclaimer compact />
 
             <div
               style={{
@@ -523,8 +549,17 @@ export default function PropertyCard({ property, onClick }) {
                   <StepRow
                     key={step.id || idx}
                     index={idx + 1}
-                    title={step.title}
-                    text={step.subtitle}
+                    title={String(step.title || "")
+                      .replace(/hipoteca/gi, "ruta referencial")
+                      .replace(/crédito/gi, "ruta referencial")
+                      .replace(/préstamo/gi, "monto referencial")}
+                    text={String(step.subtitle || "")
+                      .replace(/aplicar a hipoteca/gi, "comparar una ruta hipotecaria")
+                      .replace(/hipoteca viable/gi, "ruta referencial alineada")
+                      .replace(/hipoteca/gi, "ruta referencial")
+                      .replace(/crédito/gi, "ruta referencial")
+                      .replace(/préstamo/gi, "monto referencial")
+                      .replace(/financiamiento/gi, "monto referencial")}
                     tone={step.tone || "neutral"}
                   />
                 ))
@@ -538,14 +573,14 @@ export default function PropertyCard({ property, onClick }) {
                   />
                   <StepRow
                     index={2}
-                    title="Hipoteca"
-                    text="Todavía no hay una ruta hipotecaria sólida."
+                    title="Ruta referencial"
+                    text="Todavía no hay una ruta referencial suficientemente clara."
                     tone="danger"
                   />
                   <StepRow
                     index={3}
                     title="Resultado"
-                    text="Explora cómo se ve tu ruta estimada de entrada y financiamiento."
+                    text="Explora cómo se ve tu ruta estimada de entrada y monto referencial."
                     tone="neutral"
                   />
                 </>
@@ -577,7 +612,7 @@ export default function PropertyCard({ property, onClick }) {
 
             {cuotaHipotecaEstimada != null ? (
               <div style={{ marginTop: 6 }}>
-                Cuota hipotecaria estimada:{" "}
+                Cuota ref. estimada:{" "}
                 <strong style={{ color: UI.text }}>
                   {moneyUSD(cuotaHipotecaEstimada)}
                 </strong>.

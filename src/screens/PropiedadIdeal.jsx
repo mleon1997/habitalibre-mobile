@@ -164,6 +164,8 @@ function pickRecommendedProperty(snapshot, journey) {
     journey?.match?.items ||
     snapshot?.marketplace?.items ||
     snapshot?.propiedades ||
+    snapshot?.output?.marketplace?.items ||
+    snapshot?.output?.propiedades ||
     [];
 
   if (Array.isArray(market) && market.length > 0) {
@@ -174,10 +176,16 @@ function pickRecommendedProperty(snapshot, journey) {
   }
 
   const ciudad = journey?.form?.ciudadCompra || journey?.ciudadCompra || "Quito";
+
   const capacidadVivienda =
     snapshot?.precioMaxVivienda ||
+    snapshot?.output?.precioMaxVivienda ||
     snapshot?.maxCompra ||
+    snapshot?.output?.maxCompra ||
     snapshot?.montoMaximo ||
+    snapshot?.output?.montoMaximo ||
+    snapshot?.financialCapacity?.estimatedMaxPropertyValue ||
+    snapshot?.output?.financialCapacity?.estimatedMaxPropertyValue ||
     90000;
 
   const precio = Math.max(
@@ -187,8 +195,13 @@ function pickRecommendedProperty(snapshot, journey) {
 
   const cuota =
     snapshot?.cuotaEstimada ||
+    snapshot?.output?.cuotaEstimada ||
     snapshot?.cuotaMensual ||
+    snapshot?.output?.cuotaMensual ||
     snapshot?.bestMortgage?.cuota ||
+    snapshot?.output?.bestMortgage?.cuota ||
+    snapshot?.financialCapacity?.estimatedMonthlyPayment ||
+    snapshot?.output?.financialCapacity?.estimatedMonthlyPayment ||
     450;
 
   return {
@@ -225,52 +238,67 @@ export default function PropiedadIdeal() {
   }, [selectedPropertyRaw, journey]);
 
   const property = useMemo(() => {
-    return (
-      selectedProperty ||
-      pickRecommendedProperty(snapshot, journey)
-    );
+    return selectedProperty || pickRecommendedProperty(snapshot, journey);
   }, [selectedProperty, snapshot, journey]);
 
   const isUserSelected = !!selectedProperty;
 
   const viviendaPosible =
     snapshot?.precioMaxVivienda ||
+    snapshot?.output?.precioMaxVivienda ||
     snapshot?.maxCompra ||
+    snapshot?.output?.maxCompra ||
     snapshot?.montoMaximo ||
+    snapshot?.output?.montoMaximo ||
     snapshot?.montoPrestamoMax ||
+    snapshot?.output?.montoPrestamoMax ||
+    snapshot?.financialCapacity?.estimatedMaxPropertyValue ||
+    snapshot?.output?.financialCapacity?.estimatedMaxPropertyValue ||
     null;
 
   const prestamoBanco =
     snapshot?.montoPrestamoBest ||
+    snapshot?.output?.montoPrestamoBest ||
     snapshot?.montoPrestamo ||
+    snapshot?.output?.montoPrestamo ||
     snapshot?.bestMortgage?.montoPrestamo ||
+    snapshot?.output?.bestMortgage?.montoPrestamo ||
     snapshot?.montoMaximo ||
     snapshot?.output?.montoMaximo ||
+    snapshot?.financialCapacity?.estimatedMaxLoanAmount ||
+    snapshot?.output?.financialCapacity?.estimatedMaxLoanAmount ||
     null;
 
   const cuota =
     property?.cuotaEstimada ||
     property?.cuota ||
     snapshot?.cuotaEstimada ||
+    snapshot?.output?.cuotaEstimada ||
     snapshot?.cuotaMensual ||
+    snapshot?.output?.cuotaMensual ||
     snapshot?.bestMortgage?.cuota ||
+    snapshot?.output?.bestMortgage?.cuota ||
+    snapshot?.financialCapacity?.estimatedMonthlyPayment ||
+    snapshot?.output?.financialCapacity?.estimatedMonthlyPayment ||
     null;
 
   const probabilidadRaw =
     snapshot?.probabilidadLabel ||
+    snapshot?.output?.probabilidadLabel ||
     snapshot?.probabilidad ||
+    snapshot?.output?.probabilidad ||
     snapshot?.bestMortgage?.probabilidad ||
+    snapshot?.output?.bestMortgage?.probabilidad ||
     "Alta";
 
-  const nombreUsuario =
-    journey?.form?.nombre ||
-    journey?.nombre ||
-    "Hola";
+  const nombreUsuario = journey?.form?.nombre || journey?.nombre || "Hola";
 
   const entradaMinima =
     property?.entradaMinima ??
     journey?.form?.entrada ??
     journey?.entrada ??
+    snapshot?.entradaDisponible ??
+    snapshot?.output?.entradaDisponible ??
     null;
 
   const valorViviendaPropiedad = property?.precio ?? null;
@@ -282,9 +310,15 @@ export default function PropiedadIdeal() {
     journey?.ciudadCompra ||
     "Ubicación por definir";
 
-
   return (
-    <Screen style={{ paddingBottom: 110 }}>
+    <Screen
+      style={{
+        paddingLeft: 22,
+        paddingRight: 22,
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 26px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 150px)",
+      }}
+    >
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <div
           style={{
@@ -292,10 +326,10 @@ export default function PropiedadIdeal() {
             justifyContent: "space-between",
             alignItems: "flex-start",
             gap: 12,
-            marginBottom: 18,
+            marginBottom: 22,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{
                 fontSize: 14,
@@ -317,7 +351,7 @@ export default function PropiedadIdeal() {
                 color: UI.text,
               }}
             >
-              Una opción alineada contigo 
+              Una opción alineada contigo
             </h1>
 
             <div
@@ -329,24 +363,28 @@ export default function PropiedadIdeal() {
                 maxWidth: 420,
               }}
             >
-            {isUserSelected
-  ? `${nombreUsuario}, esta propiedad puede servir como base para seguir avanzando dentro de tu ruta.`
-  : `${nombreUsuario}, esta es una opción que sí encaja con tu capacidad actual de compra.`}
+              {isUserSelected
+                ? `${nombreUsuario}, esta propiedad puede servir como base para seguir avanzando dentro de tu ruta.`
+                : `${nombreUsuario}, esta es una opción que sí encaja con tu capacidad actual de compra.`}
             </div>
           </div>
 
-          <Chip tone="good">Probabilidad {String(probabilidadRaw)}</Chip>
+          <div style={{ marginTop: 4, flexShrink: 0 }}>
+            <Chip tone="good">Probabilidad {String(probabilidadRaw)}</Chip>
+          </div>
         </div>
 
         <Card style={{ overflow: "hidden", padding: 0, marginBottom: 18 }}>
           <div
             style={{
               width: "100%",
-              height: 160,
+              height: 170,
               backgroundImage: property?.imagen ? `url(${property.imagen})` : "none",
               backgroundSize: "cover",
               backgroundPosition: "center",
-              backgroundColor: property?.imagen ? undefined : "rgba(255,255,255,0.04)",
+              backgroundColor: property?.imagen
+                ? undefined
+                : "rgba(255,255,255,0.04)",
               borderBottom: UI.border,
             }}
           />
@@ -362,7 +400,7 @@ export default function PropiedadIdeal() {
                 flexWrap: "wrap",
               }}
             >
-              <div>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div
                   style={{
                     fontSize: 24,
@@ -387,7 +425,7 @@ export default function PropiedadIdeal() {
               </div>
 
               <Chip tone="good">
-            {isUserSelected ? "Base de tu ruta" : "Alineada contigo"}
+                {isUserSelected ? "Base de tu ruta" : "Alineada contigo"}
               </Chip>
             </div>
 
@@ -533,7 +571,8 @@ export default function PropiedadIdeal() {
                   lineHeight: 1.35,
                 }}
               >
-                Tu entrada ayuda a convertir el préstamo en el valor total de vivienda que podrías alcanzar.
+                Tu entrada ayuda a convertir el préstamo en el valor total de
+                vivienda que podrías alcanzar.
               </div>
             </div>
 
@@ -547,7 +586,10 @@ export default function PropiedadIdeal() {
               }}
             >
               <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 6 }}>
-                ✔ {isUserSelected ? "Elegiste una opción alineada contigo" : "Esta opción va bien con tu perfil"}
+                ✔{" "}
+                {isUserSelected
+                  ? "Elegiste una opción alineada contigo"
+                  : "Esta opción va bien con tu perfil"}
               </div>
               <div
                 style={{
@@ -562,9 +604,9 @@ export default function PropiedadIdeal() {
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
-         <PrimaryButton onClick={() => navigate("/ruta")}>
-  Quiero avanzar con esta propiedad
-</PrimaryButton>
+              <PrimaryButton onClick={() => navigate("/ruta")}>
+                Quiero avanzar con esta propiedad
+              </PrimaryButton>
 
               <SecondaryButton onClick={() => navigate("/marketplace")}>
                 Ver más opciones
@@ -592,7 +634,9 @@ export default function PropiedadIdeal() {
               marginBottom: 12,
             }}
           >
-            Si esta opción te interesa, HabitaLibre la puede tomar como base para seguir guiando tu caso y mostrarte el siguiente paso más conveniente.
+            Si esta opción te interesa, HabitaLibre la puede tomar como base
+            para seguir guiando tu caso y mostrarte el siguiente paso más
+            conveniente.
           </div>
 
           <SecondaryButton onClick={() => navigate("/ruta")}>

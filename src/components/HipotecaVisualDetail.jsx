@@ -177,15 +177,15 @@ function getProductLabel(route) {
     route?.producto ||
     route?.mortgageId ||
     route?.id ||
-    "Ruta hipotecaria";
+    "Ruta hipotecaria referencial";
 
   const key = String(raw).toUpperCase();
 
   const map = {
     VIS: "Vivienda de Interés Social",
     VIP: "Vivienda de Interés Público",
-    PRIVATE: "Hipoteca Privada",
-    PRIVATE_BANK: "Banca Privada",
+    PRIVATE: "Ruta hipotecaria privada",
+    PRIVATE_BANK: "Banca privada",
     BIESS: "BIESS",
     BIESS_CREDICASA: "BIESS Vivienda Premier 2.99%",
     BIESS_MEDIA: "BIESS Vivienda Media",
@@ -204,14 +204,14 @@ function getProviderLabel(route) {
     route?.provider ||
     route?.channel ||
     route?.product?.channel ||
-    "Banca Privada";
+    "Entidad financiera";
 
   const key = String(raw).toUpperCase();
 
   const map = {
-    PRIVATE_BANK: "Banca Privada",
-    PRIVATE: "Banca Privada",
-    BANCA_PRIVADA: "Banca Privada",
+    PRIVATE_BANK: "Banca privada",
+    PRIVATE: "Banca privada",
+    BANCA_PRIVADA: "Banca privada",
     BIESS: "BIESS",
   };
 
@@ -353,6 +353,28 @@ function Section({ title, subtitle, children }) {
       ) : null}
 
       <div style={{ marginTop: 14 }}>{children}</div>
+    </div>
+  );
+}
+
+function FinancialDisclaimer({ compact = false }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.42,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Las cifras mostradas son simulaciones referenciales para orientación hipotecaria. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
     </div>
   );
 }
@@ -575,7 +597,7 @@ export default function HipotecaVisualDetail({
                 color: "#8FE3D4",
               }}
             >
-              Comparador visual
+              Comparador educativo
             </div>
 
             <h2
@@ -587,7 +609,7 @@ export default function HipotecaVisualDetail({
                 letterSpacing: -0.8,
               }}
             >
-              Entiende tu hipoteca
+              Entiende tu ruta referencial
             </h2>
 
             <div
@@ -598,12 +620,12 @@ export default function HipotecaVisualDetail({
                 lineHeight: 1.45,
               }}
             >
-              Tu ruta fue calculada con un plazo referencial de{" "}
+              Esta ruta fue calculada con un plazo referencial de{" "}
               <strong style={{ color: "rgba(248,250,252,0.96)" }}>
                 {data.routeYears} años
               </strong>
-              . Mira cómo cambia la cuota, el tiempo y los intereses dentro de
-              los plazos disponibles para este producto.
+              . Mira cómo cambiarían la cuota estimada, el tiempo y el costo
+              financiero dentro de escenarios disponibles o referenciales.
             </div>
           </div>
 
@@ -626,11 +648,13 @@ export default function HipotecaVisualDetail({
           </button>
         </div>
 
+        <FinancialDisclaimer />
+
         <Section
           title={`${providerLabel}`}
           subtitle={`${productLabel}. ${
             data.policyLabel ? `${data.policyLabel}. ` : ""
-          }Valores referenciales según tu perfil actual.`}
+          }Valores referenciales según tus datos declarados.`}
         >
           <div
             style={{
@@ -640,16 +664,19 @@ export default function HipotecaVisualDetail({
             }}
           >
             <MetricCard
-              label="Valor vivienda"
+              label="Valor vivienda ref."
               value={moneyUSD(data.estimatedHomeValue)}
             />
-            <MetricCard label="Préstamo" value={moneyUSD(data.loanAmount)} />
+            <MetricCard
+              label="Monto estimado a financiar"
+              value={moneyUSD(data.loanAmount)}
+            />
             <MetricCard
               label="Entrada estimada"
               value={moneyUSD(data.downPayment)}
             />
             <MetricCard
-              label="Tasa referencial"
+              label="Tasa ref. anual"
               value={`${(data.annualRate * 100).toFixed(2)}%`}
             />
           </div>
@@ -666,7 +693,7 @@ export default function HipotecaVisualDetail({
               color: "rgba(226,232,240,0.82)",
             }}
           >
-            Plazo usado en tu ruta:{" "}
+            Plazo usado en esta ruta referencial:{" "}
             <strong style={{ color: "#8FE3D4" }}>{data.routeYears} años</strong>
             {data.policyLabel ? ` · ${data.policyLabel}` : ""}.
           </div>
@@ -676,8 +703,8 @@ export default function HipotecaVisualDetail({
           title="Cómo cambia según el plazo"
           subtitle={
             data.options.length > 1
-              ? "Estos son los plazos disponibles o referenciales para esta ruta. No todos dependen solo de ti: la entidad financiera define la oferta final."
-              : "Esta ruta tiene un plazo referencial principal. La entidad financiera define la oferta final."
+              ? "Estos son plazos disponibles o referenciales para comparar escenarios. Las condiciones finales dependen exclusivamente de la entidad financiera."
+              : "Esta ruta tiene un plazo referencial principal. La entidad financiera define las condiciones finales."
           }
         >
           <div
@@ -767,7 +794,7 @@ export default function HipotecaVisualDetail({
                       color: "rgba(203,213,225,0.62)",
                     }}
                   >
-                    cuota aprox.
+                    cuota ref.
                   </div>
                 </button>
               );
@@ -776,11 +803,11 @@ export default function HipotecaVisualDetail({
         </Section>
 
         <Section
-          title={`Escenario a ${data.selected.years} años`}
+          title={`Escenario referencial a ${data.selected.years} años`}
           subtitle={
             data.selected.isRouteTerm
-              ? "Este es el plazo usado para calcular tu ruta principal."
-              : "Este escenario es una comparación educativa para entender cómo cambia una hipoteca si el producto y la entidad permiten otro plazo."
+              ? "Este es el plazo usado para calcular tu ruta principal referencial."
+              : "Este escenario es una comparación educativa para entender cómo cambiaría la cuota si la entidad y el producto permitieran otro plazo."
           }
         >
           <div
@@ -791,7 +818,7 @@ export default function HipotecaVisualDetail({
             }}
           >
             <MetricCard
-              label="Cuota mensual"
+              label="Cuota mensual ref."
               value={moneyUSD(data.selected.payment)}
               hint="Referencia mensual estimada"
             />
@@ -801,14 +828,14 @@ export default function HipotecaVisualDetail({
               hint={`Edad actual usada: ${userAge}`}
             />
             <MetricCard
-              label="Total pagado"
+              label="Total estimado"
               value={moneyUSD(data.selected.totalPaid)}
-              hint="Cuotas acumuladas"
+              hint="Cuotas acumuladas estimadas"
             />
             <MetricCard
-              label="Intereses"
+              label="Costo financiero estimado"
               value={moneyUSD(data.selected.totalInterest)}
-              hint="Costo financiero estimado"
+              hint="Intereses estimados"
             />
           </div>
 
@@ -823,8 +850,8 @@ export default function HipotecaVisualDetail({
         </Section>
 
         <Section
-          title="Tu vida dentro de la hipoteca"
-          subtitle="Una hipoteca no solo es una cuota. También es tiempo."
+          title="Tu vida dentro de esta ruta"
+          subtitle="Una ruta hipotecaria no solo es una cuota. También es tiempo."
         >
           <div
             style={{
@@ -921,7 +948,7 @@ export default function HipotecaVisualDetail({
         </Section>
 
         <Section
-          title="¿A dónde se va tu cuota?"
+          title="¿A dónde se iría tu cuota referencial?"
           subtitle="Al inicio, una parte importante de la cuota suele ir a intereses. Con el tiempo, más parte va a capital."
         >
           <div style={{ display: "grid", gap: 14 }}>
@@ -957,8 +984,8 @@ export default function HipotecaVisualDetail({
         </Section>
 
         <Section
-          title="¿Quieres terminar antes?"
-          subtitle="Si la entidad permite abonos a capital, podrías reducir tiempo e intereses. Esto es una simulación referencial."
+          title="¿Qué pasaría si abonas más?"
+          subtitle="Si la entidad permite abonos a capital, podrías reducir tiempo e intereses. Esto es solo una simulación referencial."
         >
           <div
             style={{
@@ -1032,7 +1059,7 @@ export default function HipotecaVisualDetail({
             }}
           >
             Esta simulación asume que la entidad permite abonos directos a
-            capital sin penalidad. Las condiciones finales dependen del banco o
+            capital sin penalidad. Las condiciones finales dependen de cada
             entidad financiera.
           </div>
         </Section>
@@ -1048,19 +1075,19 @@ export default function HipotecaVisualDetail({
             }}
           >
             <div>
-              ✓ Tu ruta principal fue calculada a {data.routeYears} años.
+              ✓ Tu ruta principal fue estimada a {data.routeYears} años.
             </div>
             <div>
-              ✓ Un plazo más largo suele bajar la cuota, pero aumenta el tiempo
-              de pago.
+              ✓ Un plazo más largo suele bajar la cuota referencial, pero aumenta
+              el tiempo de pago.
             </div>
             <div>
-              ✓ Un plazo más corto suele subir la cuota, pero puede reducir
-              intereses.
+              ✓ Un plazo más corto suele subir la cuota referencial, pero puede
+              reducir intereses.
             </div>
             <div>
-              ✓ Los plazos finales dependen de la entidad financiera y del
-              producto.
+              ✓ Los plazos finales, tasas, cuotas, fechas de pago y condiciones
+              dependen exclusivamente de la entidad financiera.
             </div>
           </div>
         </Section>
@@ -1094,7 +1121,7 @@ export default function HipotecaVisualDetail({
                 cursor: "pointer",
               }}
             >
-              Confirmar esta ruta hipotecaria
+              Guardar esta ruta referencial
             </button>
           ) : null}
 
@@ -1125,8 +1152,9 @@ export default function HipotecaVisualDetail({
             textAlign: "center",
           }}
         >
-          Simulación referencial. No representa aprobación final ni oferta
-          definitiva de una entidad financiera.
+          HabitaLibre no otorga, aprueba, financia ni cobra créditos. Esta es
+          una simulación referencial y educativa; no representa aprobación, oferta
+          ni promesa de financiamiento de ninguna entidad financiera.
         </div>
       </div>
     </div>

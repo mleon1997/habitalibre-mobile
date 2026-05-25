@@ -116,16 +116,16 @@ function getProviderLabel(value) {
   const key = String(value || "").trim().toUpperCase();
 
   const map = {
-    PRIVATE_BANK: "Banca Privada",
-    PRIVATE: "Banca Privada",
-    BANCA_PRIVADA: "Banca Privada",
+    PRIVATE_BANK: "Banca privada",
+    PRIVATE: "Banca privada",
+    BANCA_PRIVADA: "Banca privada",
     BIESS: "BIESS",
   };
 
   return map[key] || String(value || "Entidad financiera");
 }
 
-function getMortgageProductLabel(value, fallback = "Hipoteca") {
+function getMortgageProductLabel(value, fallback = "Ruta hipotecaria referencial") {
   const key = String(value || "").trim().toUpperCase();
 
   const map = {
@@ -138,11 +138,11 @@ function getMortgageProductLabel(value, fallback = "Hipoteca") {
     BIESS_MEDIA: "BIESS Vivienda Media",
     BIESS_ALTA: "BIESS Vivienda Alta",
     BIESS_LUJO: "BIESS Vivienda de Lujo",
-    PRIVATE: "Hipoteca Privada",
-    PRIVATE_BANK: "Banca Privada",
+    PRIVATE: "Ruta hipotecaria privada",
+    PRIVATE_BANK: "Banca privada",
   };
 
-  return map[key] || fallback || String(value || "Hipoteca");
+  return map[key] || fallback || String(value || "Ruta hipotecaria referencial");
 }
 
 function normalizeMortgageRoute(route, snapshot) {
@@ -186,7 +186,7 @@ function normalizeMortgageRoute(route, snapshot) {
     source?.label ||
     source?.name ||
     source?.product?.name ||
-    getMortgageProductLabel(mortgageId, "Hipoteca");
+    getMortgageProductLabel(mortgageId, "Ruta hipotecaria referencial");
 
   const montoPrestamo =
     source?.montoPrestamo ??
@@ -305,12 +305,34 @@ function normalizeSelectedProperty(property) {
   };
 }
 
+function FinancialDisclaimer({ compact = false }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,0.22)",
+        background: "rgba(245,158,11,0.08)",
+        color: "rgba(254,243,199,0.96)",
+        fontSize: 11,
+        lineHeight: 1.42,
+      }}
+    >
+      <strong>Estimación referencial.</strong>{" "}
+      {compact
+        ? "HabitaLibre no otorga ni aprueba créditos. Las condiciones finales dependen de cada entidad financiera."
+        : "HabitaLibre no es banco, cooperativa, prestamista ni entidad financiera. No otorgamos, aprobamos, financiamos, intermediamos ni cobramos créditos. Esta guía usa datos declarados y simulaciones referenciales para orientación hipotecaria. La aprobación final, tasa, plazo, cuota, fechas de pago y condiciones dependen exclusivamente de la entidad financiera regulada."}
+    </div>
+  );
+}
+
 function buildQuestionAnswer(questionId, ctx) {
   const route = ctx.route || {};
   const property = ctx.property || null;
 
-  const bank = route.providerLabel || "la entidad recomendada";
-  const product = route.productLabel || "esta hipoteca";
+  const provider = route.providerLabel || "la entidad de referencia";
+  const product = route.productLabel || "esta ruta referencial";
   const cuota = n(route.cuota);
   const monto = n(route.montoPrestamo);
   const rate = route.annualRate;
@@ -319,60 +341,60 @@ function buildQuestionAnswer(questionId, ctx) {
 
   if (questionId === "why") {
     return {
-      title: "¿Por qué esta ruta puede servirte?",
+      title: "¿Por qué aparece esta ruta referencial?",
       paragraphs: [
-        `Esta ruta aparece porque tu perfil encaja con las condiciones principales de ${product}.`,
-        `La referencia actual es ${bank}, con una cuota estimada de ${
+        `Esta ruta aparece porque tus datos declarados parecen compatibles con criterios generales de ${product}.`,
+        `Como referencia de mercado, se muestra ${provider}, con una cuota referencial de ${
           cuota ? moneyUSD(cuota) : "—"
-        } y una tasa referencial de ${rate != null ? formatRate(rate) : "—"}.`,
+        } y una tasa anual referencial de ${rate != null ? formatRate(rate) : "—"}.`,
       ],
       bullets: [
         route.probabilidad
-          ? `Probabilidad estimada: ${route.probabilidad}.`
+          ? `Compatibilidad estimada: ${route.probabilidad}.`
           : null,
         valorVivienda
-          ? `Valor de vivienda estimado: hasta ${moneyUSD(valorVivienda)}.`
+          ? `Valor de vivienda usado como referencia: hasta ${moneyUSD(valorVivienda)}.`
           : null,
-        monto ? `Monto financiado aproximado: ${moneyUSD(monto)}.` : null,
+        monto ? `Monto estimado a financiar: ${moneyUSD(monto)}.` : null,
       ].filter(Boolean),
     };
   }
 
   if (questionId === "payment") {
     return {
-      title: "¿Qué significa mi cuota estimada?",
+      title: "¿Qué significa mi cuota referencial?",
       paragraphs: [
-        "La cuota estimada es una referencia mensual para comparar si esta ruta entra dentro de tu capacidad actual.",
-        "No es una aprobación final ni una oferta definitiva del banco. Es una estimación para ayudarte a decidir mejor.",
+        "La cuota referencial es una estimación mensual para comparar si esta ruta podría entrar dentro de tu rango actual.",
+        "No es aprobación, oferta, promesa de financiamiento ni evaluación formal de ninguna entidad financiera.",
       ],
       bullets: [
         cuota ? `Cuota referencial: ${moneyUSD(cuota)} al mes.` : null,
-        rate != null ? `Tasa usada en la estimación: ${formatRate(rate)}.` : null,
+        rate != null ? `Tasa anual usada como referencia: ${formatRate(rate)}.` : null,
         valorVivienda
           ? `Valor de vivienda usado como referencia: ${moneyUSD(valorVivienda)}.`
           : null,
-        monto ? `Monto financiado aproximado: ${moneyUSD(monto)}.` : null,
+        monto ? `Monto estimado a financiar: ${moneyUSD(monto)}.` : null,
       ].filter(Boolean),
     };
   }
 
   if (questionId === "improve") {
     let mainAdvice =
-      "Mantener deudas bajas, mejorar ingreso demostrable y elegir una propiedad dentro de tu rango puede fortalecer tu perfil.";
+      "Mantener deudas bajas, mejorar ingreso demostrable y elegir una propiedad dentro de tu rango estimado puede fortalecer tu preparación.";
 
     if (factor === "cuota") {
       mainAdvice =
-        "Tu principal punto a cuidar parece ser la cuota. Reducir deudas o mejorar ingreso disponible puede ayudarte a sostener mejor esta ruta.";
+        "Tu principal punto a cuidar parece ser la cuota referencial. Reducir deudas o mejorar ingreso disponible puede ayudarte a sostener mejor esta ruta.";
     }
 
     if (factor === "entrada") {
       mainAdvice =
-        "Tu principal punto a mejorar parece ser la entrada. Aumentar la entrada disponible puede abrir mejores opciones.";
+        "Tu principal punto a mejorar parece ser la entrada. Aumentar la entrada disponible puede abrir rutas referenciales más cómodas.";
     }
 
     if (factor === "programa") {
       mainAdvice =
-        "Tu principal punto a revisar parece ser el encaje con el programa. Conviene verificar que la vivienda cumpla las condiciones de esta ruta.";
+        "Tu principal punto a revisar parece ser el encaje con la categoría hipotecaria. Conviene verificar que la vivienda cumpla las condiciones generales de esta ruta.";
     }
 
     return {
@@ -381,8 +403,8 @@ function buildQuestionAnswer(questionId, ctx) {
       bullets: [
         "Evita asumir nuevas deudas antes de avanzar.",
         "Mantén ingresos demostrables y consistentes.",
-        "Compara propiedades dentro del rango sugerido.",
-        "Confirma que la vivienda elegida calce con el programa hipotecario.",
+        "Compara propiedades dentro de tu rango estimado.",
+        "Confirma que la vivienda elegida calce con la categoría hipotecaria referencial.",
       ],
     };
   }
@@ -391,7 +413,7 @@ function buildQuestionAnswer(questionId, ctx) {
     return {
       title: "¿Qué documentos debería preparar?",
       paragraphs: [
-        "Todavía no necesitas enviar nada desde aquí. Esta guía solo te ayuda a entender qué deberías tener listo cuando decidas avanzar.",
+        "Todavía no necesitas enviar nada desde aquí. Esta guía solo te ayuda a entender qué podrías tener listo si decides avanzar en tu proceso de compra.",
       ],
       bullets: [
         "Cédula o documento de identidad.",
@@ -407,15 +429,15 @@ function buildQuestionAnswer(questionId, ctx) {
     return {
       title: "¿Qué pasa si cambio de propiedad?",
       paragraphs: [
-        "Cambiar de propiedad puede cambiar el resultado, porque el precio, tipo de vivienda y programa aplicable influyen en la ruta hipotecaria.",
+        "Cambiar de propiedad puede cambiar tu estimación, porque el precio, tipo de vivienda y categoría aplicable influyen en la ruta referencial.",
         property
           ? `Ahora estás usando como referencia: ${property.titulo}.`
           : "Todavía no vemos una propiedad elegida como base en esta pantalla.",
       ],
       bullets: [
-        "Una vivienda más barata puede mejorar la viabilidad.",
-        "Una vivienda nueva puede abrir rutas VIS/VIP si cumple condiciones.",
-        "Una vivienda fuera del rango del programa puede requerir otra hipoteca.",
+        "Una vivienda más barata puede mejorar tu rango estimado.",
+        "Una vivienda nueva puede abrir rutas VIS/VIP si cumple condiciones generales.",
+        "Una vivienda fuera del rango de una categoría puede requerir otra ruta referencial.",
       ],
     };
   }
@@ -425,10 +447,10 @@ function buildQuestionAnswer(questionId, ctx) {
     const isAdjusted = route.couldWorkIfAdjusted === true;
 
     return {
-      title: "¿Estoy listo para avanzar?",
+      title: "¿Estoy preparado para avanzar?",
       paragraphs: [
         isCurrentGoal
-          ? "Con los datos actuales, esta ruta se ve alineada con tu perfil y con la meta que estás revisando."
+          ? "Con los datos actuales, esta ruta se ve alineada de forma referencial con tu perfil y con la meta que estás revisando."
           : isAdjusted
           ? "Esta ruta podría servir como camino de trabajo, pero quizá requiere ajustar rango, entrada o condiciones antes de avanzar."
           : "Esta ruta es una referencia útil, pero todavía conviene revisar bien propiedad, documentos y condiciones antes de avanzar.",
@@ -438,9 +460,9 @@ function buildQuestionAnswer(questionId, ctx) {
           ? "Ya tienes una propiedad base para revisar."
           : "Te conviene elegir una propiedad base.",
         route.status === "confirmed"
-          ? "Esta ruta ya fue confirmada en tu camino."
-          : "Puedes confirmar esta ruta para que aparezca como paso completado en Ruta.",
-        "Después de confirmar, el siguiente paso lógico es preparar documentos.",
+          ? "Esta ruta ya fue guardada en tu camino."
+          : "Puedes guardar esta ruta referencial para que aparezca como paso completado en Ruta.",
+        "Después de guardar la ruta, el siguiente paso lógico es preparar documentos.",
       ],
     };
   }
@@ -448,7 +470,7 @@ function buildQuestionAnswer(questionId, ctx) {
   return {
     title: "Guía rápida",
     paragraphs: [
-      "Esta guía usa tu información de HabitaLibre para explicar tu ruta hipotecaria de forma simple.",
+      "Esta guía usa tu información de HabitaLibre para explicar tu ruta hipotecaria referencial de forma simple.",
     ],
     bullets: [],
   };
@@ -457,11 +479,11 @@ function buildQuestionAnswer(questionId, ctx) {
 const quickQuestions = [
   {
     id: "why",
-    label: "¿Por qué me recomiendan esta hipoteca?",
+    label: "¿Por qué aparece esta ruta?",
   },
   {
     id: "payment",
-    label: "¿Qué significa mi cuota estimada?",
+    label: "¿Qué significa mi cuota referencial?",
   },
   {
     id: "improve",
@@ -477,7 +499,7 @@ const quickQuestions = [
   },
   {
     id: "ready",
-    label: "¿Estoy listo para avanzar?",
+    label: "¿Estoy preparado para avanzar?",
   },
 ];
 
@@ -568,7 +590,7 @@ export default function Asesor() {
                 fontWeight: 850,
               }}
             >
-              Guía AI hipotecaria
+              Guía educativa
             </div>
 
             <h1
@@ -579,7 +601,7 @@ export default function Asesor() {
                 letterSpacing: -0.6,
               }}
             >
-              Aclaremos tu hipoteca
+              Aclaremos tu ruta referencial
             </h1>
 
             <div
@@ -591,18 +613,18 @@ export default function Asesor() {
                 maxWidth: 420,
               }}
             >
-              Te explicamos esta ruta antes de que decidas avanzar.
+              Te explicamos esta ruta antes de que decidas tu siguiente paso.
             </div>
           </div>
 
-          <Chip tone="neutral">AI</Chip>
+          <Chip tone="neutral">Guía</Chip>
         </div>
 
         {hasRoute ? (
           <Card style={{ marginTop: 18 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Chip tone={routeConfirmed ? "good" : "neutral"}>
-                {routeConfirmed ? "Ruta confirmada" : "Estás revisando"}
+                {routeConfirmed ? "Ruta guardada" : "Estás revisando"}
               </Chip>
 
               {route?.productLabel ? (
@@ -612,7 +634,7 @@ export default function Asesor() {
 
             <div style={{ marginTop: 14 }}>
               <div style={{ fontWeight: 950, fontSize: 22, lineHeight: 1.1 }}>
-                {route?.providerLabel || "Ruta hipotecaria"}
+                {route?.providerLabel || "Ruta hipotecaria referencial"}
               </div>
 
               {route?.productLabel ? (
@@ -636,10 +658,13 @@ export default function Asesor() {
                   lineHeight: 1.4,
                 }}
               >
-                Esta es la ruta que estás revisando. La guía te ayuda a entender
-                cuota, monto y próximos pasos.
+                Esta es la ruta referencial que estás revisando. La guía te
+                ayuda a entender cuota estimada, monto referencial y próximos
+                pasos.
               </div>
             </div>
+
+            <FinancialDisclaimer compact />
 
             <div
               style={{
@@ -651,7 +676,7 @@ export default function Asesor() {
             >
               <InnerCard style={{ marginTop: 0 }}>
                 <div style={{ fontSize: 12, opacity: 0.68, fontWeight: 800 }}>
-                  Valor vivienda estimado
+                  Valor vivienda ref.
                 </div>
                 <div style={{ marginTop: 6, fontWeight: 900, fontSize: 20 }}>
                   {route?.valorViviendaEstimado != null
@@ -662,7 +687,7 @@ export default function Asesor() {
 
               <InnerCard style={{ marginTop: 0 }}>
                 <div style={{ fontSize: 12, opacity: 0.68, fontWeight: 800 }}>
-                  Cuota estimada
+                  Cuota ref.
                 </div>
                 <div style={{ marginTop: 6, fontWeight: 900, fontSize: 20 }}>
                   {route?.cuota != null ? moneyUSD(route.cuota) : "—"}
@@ -680,16 +705,16 @@ export default function Asesor() {
             >
               {route?.montoPrestamo != null ? (
                 <Chip tone="neutral">
-                  Monto financiado {moneyUSD(route.montoPrestamo)}
+                  Monto estimado a financiar {moneyUSD(route.montoPrestamo)}
                 </Chip>
               ) : null}
 
               {route?.annualRate != null ? (
-                <Chip tone="neutral">Tasa {formatRate(route.annualRate)}</Chip>
+                <Chip tone="neutral">Tasa ref. {formatRate(route.annualRate)}</Chip>
               ) : null}
 
               {route?.probabilidad ? (
-                <Chip tone="neutral">Probabilidad {route.probabilidad}</Chip>
+                <Chip tone="neutral">Compatibilidad {route.probabilidad}</Chip>
               ) : null}
 
               {route?.factorLimitante ? (
@@ -703,11 +728,11 @@ export default function Asesor() {
               <PrimaryButton disabled={!hasRoute} onClick={handleConfirmRoute}>
                 {routeConfirmed
                   ? "Ver esta ruta en mi camino"
-                  : "Confirmar esta ruta en mi camino"}
+                  : "Guardar esta ruta referencial"}
               </PrimaryButton>
 
               <SecondaryButton onClick={() => nav("/marketplace")}>
-                Volver a comparar hipotecas
+                Volver a comparar rutas
               </SecondaryButton>
             </div>
           </Card>
@@ -725,13 +750,16 @@ export default function Asesor() {
                 fontSize: 14,
               }}
             >
-              Primero compara tus opciones hipotecarias en Match. Luego vuelve
-              aquí para resolver dudas sobre la ruta que más te interese.
+              Primero compara tus rutas hipotecarias referenciales en Match.
+              Luego vuelve aquí para resolver dudas sobre la ruta que más te
+              interese.
             </div>
+
+            <FinancialDisclaimer compact />
 
             <div style={{ marginTop: 14 }}>
               <PrimaryButton onClick={() => nav("/marketplace")}>
-                Ver hipotecas en Match
+                Ver rutas en Match
               </PrimaryButton>
             </div>
           </Card>
@@ -869,12 +897,14 @@ export default function Asesor() {
                 opacity: 0.86,
               }}
             >
-              <div>1) Entiende por qué esta ruta encaja contigo.</div>
-              <div>2) Resuelve dudas sobre cuota, tasa y monto posible.</div>
-              <div>3) Confirma la hipoteca si quieres avanzar.</div>
+              <div>1) Entiende por qué esta ruta aparece como referencia.</div>
+              <div>2) Revisa cuota referencial, tasa referencial y monto estimado.</div>
+              <div>3) Guarda la ruta si quieres usarla como base en tu camino.</div>
               <div>4) Sigue tu progreso desde la pantalla Ruta.</div>
             </div>
           </InnerCard>
+
+          <FinancialDisclaimer />
 
           <div
             style={{
@@ -885,8 +915,8 @@ export default function Asesor() {
             }}
           >
             Esta guía usa los datos calculados por HabitaLibre. No representa
-            una aprobación final ni una oferta definitiva de una entidad
-            financiera.
+            aprobación, oferta, promesa de financiamiento ni evaluación formal
+            de una entidad financiera.
           </div>
         </Card>
       </div>
