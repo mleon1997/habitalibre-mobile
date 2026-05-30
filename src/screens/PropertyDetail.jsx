@@ -21,7 +21,6 @@ const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
 /* ---------------- storage ---------------- */
-
 function loadJSON(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -60,7 +59,9 @@ function loadOwnedData(key) {
       return envelope.data ?? null;
     }
 
-    if (!ownerEmail) return envelope.data ?? null;
+    if (!ownerEmail) {
+      return envelope.data ?? null;
+    }
 
     return null;
   }
@@ -73,16 +74,12 @@ function saveOwnedData(key, data) {
   saveJSON(key, { ownerEmail, data });
 }
 
-/* ---------------- helpers ---------------- */
-
 function pick(snapshot, keys) {
   if (!snapshot) return null;
-
   for (const k of keys) {
     if (snapshot?.[k] != null) return snapshot[k];
     if (snapshot?.output?.[k] != null) return snapshot.output[k];
   }
-
   return null;
 }
 
@@ -150,8 +147,7 @@ function formatMatchReason(reason) {
     cuota: "Cuota referencial",
     programa: "Categoría",
   };
-
-  return map[reason] || reason || "";
+  return map[reason] || reason || "Precio";
 }
 
 function formatEstadoCompra(estado) {
@@ -178,7 +174,7 @@ function normalizeArray(value) {
 
   if (typeof value === "string") {
     return value
-      .split(/[,;\n]/)
+      .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
   }
@@ -187,6 +183,11 @@ function normalizeArray(value) {
 }
 
 function getGalleryImages(property) {
+  const gallery =
+    normalizeArray(property?.galeria) ||
+    normalizeArray(property?.gallery) ||
+    [];
+
   const candidates = [
     ...normalizeArray(property?.galeria),
     ...normalizeArray(property?.gallery),
@@ -228,193 +229,46 @@ function getFloorPlan(property) {
 }
 
 function getNearbyItems(property) {
-  return [
+  const fromProperty = [
     ...normalizeArray(property?.nearby),
     ...normalizeArray(property?.cercaDe),
     ...normalizeArray(property?.entorno),
     ...normalizeArray(property?.puntosCercanos),
-  ].slice(0, 8);
-}
+  ];
 
-function getPropertyMapUrl(property = {}) {
-  return (
-    property?.googleMapsUrl ||
-    property?.googleMapUrl ||
-    property?.mapsUrl ||
-    property?.mapUrl ||
-    property?.ubicacionGoogleMaps ||
-    property?.urlGoogleMaps ||
-    property?.linkMaps ||
-    property?.linkGoogleMaps ||
-    property?.linkUbicacion ||
-    property?.urlUbicacion ||
-    property?.ubicacionUrl ||
-    property?.urlMapa ||
-    property?.mapaUrl ||
-    property?.maps ||
-    property?.googleMaps ||
-    property?.locationUrl ||
-    property?.raw?.googleMapsUrl ||
-    property?.raw?.googleMapUrl ||
-    property?.raw?.mapsUrl ||
-    property?.raw?.mapUrl ||
-    property?.raw?.ubicacionGoogleMaps ||
-    property?.raw?.urlGoogleMaps ||
-    property?.raw?.linkMaps ||
-    property?.raw?.linkGoogleMaps ||
-    property?.raw?.linkUbicacion ||
-    property?.raw?.urlUbicacion ||
-    property?.raw?.ubicacionUrl ||
-    property?.raw?.urlMapa ||
-    property?.raw?.mapaUrl ||
-    ""
-  );
-}
+  if (fromProperty.length) return fromProperty.slice(0, 8);
 
-function getPropertyAddress(property = {}) {
-  return (
-    property?.direccion ||
-    property?.direccionReferencial ||
-    property?.address ||
-    property?.ubicacionTexto ||
-    property?.locationText ||
-    property?.mapAddress ||
-    property?.referenciaUbicacion ||
-    property?.raw?.direccion ||
-    property?.raw?.direccionReferencial ||
-    property?.raw?.address ||
-    property?.raw?.ubicacionTexto ||
-    property?.raw?.locationText ||
-    property?.raw?.mapAddress ||
-    ""
-  );
-}
-
-function normalizeCoordinate(value, type = "lat") {
-  const x = Number(value);
-
-  if (!Number.isFinite(x)) return null;
-
-  const max = type === "lat" ? 90 : 180;
-
-  if (Math.abs(x) <= max) return x;
-
-  const dividedBy1000 = x / 1000;
-  if (Math.abs(dividedBy1000) <= max) return dividedBy1000;
-
-  const dividedBy10000 = x / 10000;
-  if (Math.abs(dividedBy10000) <= max) return dividedBy10000;
-
-  const dividedBy100000 = x / 100000;
-  if (Math.abs(dividedBy100000) <= max) return dividedBy100000;
-
-  return null;
+  return [
+    "Zona financiera",
+    "Transporte cercano",
+    "Restaurantes y cafeterías",
+    "Supermercados y servicios",
+    "Parques urbanos",
+    "Avenidas principales",
+  ];
 }
 
 function getLatLng(property) {
-  const rawLat =
-    property?.lat ??
-    property?.latitude ??
-    property?.ubicacion?.lat ??
-    property?.location?.lat ??
-    property?.geo?.lat ??
-    property?.raw?.lat ??
-    property?.raw?.latitude ??
-    property?.raw?.ubicacion?.lat ??
-    property?.raw?.location?.lat ??
+  const lat =
+    maybeNum(property?.lat) ??
+    maybeNum(property?.latitude) ??
+    maybeNum(property?.ubicacion?.lat) ??
+    maybeNum(property?.location?.lat) ??
+    maybeNum(property?.geo?.lat) ??
     null;
 
-  const rawLng =
-    property?.lng ??
-    property?.lon ??
-    property?.longitude ??
-    property?.ubicacion?.lng ??
-    property?.ubicacion?.lon ??
-    property?.location?.lng ??
-    property?.location?.lon ??
-    property?.geo?.lng ??
-    property?.raw?.lng ??
-    property?.raw?.lon ??
-    property?.raw?.longitude ??
-    property?.raw?.ubicacion?.lng ??
-    property?.raw?.location?.lng ??
+  const lng =
+    maybeNum(property?.lng) ??
+    maybeNum(property?.lon) ??
+    maybeNum(property?.longitude) ??
+    maybeNum(property?.ubicacion?.lng) ??
+    maybeNum(property?.location?.lng) ??
+    maybeNum(property?.geo?.lng) ??
     null;
-
-  const lat = normalizeCoordinate(rawLat, "lat");
-  const lng = normalizeCoordinate(rawLng, "lng");
 
   if (lat == null || lng == null) return null;
-
   return { lat, lng };
 }
-
-function extractCoordsFromGoogleMapsUrl(url = "") {
-  const text = String(url || "");
-
-  const atMatch = text.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-  if (atMatch) {
-    return {
-      lat: normalizeCoordinate(atMatch[1], "lat"),
-      lng: normalizeCoordinate(atMatch[2], "lng"),
-    };
-  }
-
-  const bangMatch = text.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
-  if (bangMatch) {
-    return {
-      lat: normalizeCoordinate(bangMatch[1], "lat"),
-      lng: normalizeCoordinate(bangMatch[2], "lng"),
-    };
-  }
-
-  const queryMatch = text.match(/[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-  if (queryMatch) {
-    return {
-      lat: normalizeCoordinate(queryMatch[1], "lat"),
-      lng: normalizeCoordinate(queryMatch[2], "lng"),
-    };
-  }
-
-  return null;
-}
-
-function getMapEmbedSrc(property) {
-  const mapUrl = getPropertyMapUrl(property);
-  const coordsFromUrl = extractCoordsFromGoogleMapsUrl(mapUrl);
-  const coords =
-    getLatLng(property) ||
-    (coordsFromUrl?.lat != null && coordsFromUrl?.lng != null
-      ? coordsFromUrl
-      : null);
-  const address = getPropertyAddress(property);
-
-  if (mapUrl && String(mapUrl).includes("/maps/embed")) {
-    return mapUrl;
-  }
-
-  if (coords) {
-    return `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=15&output=embed`;
-  }
-
-  if (address) {
-    return `https://www.google.com/maps?q=${encodeURIComponent(
-      address
-    )}&z=15&output=embed`;
-  }
-
-  return "";
-}
-
-function normalizeComparable(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-/* ---------------- UI ---------------- */
 
 const UI = {
   bg: "linear-gradient(180deg, #071024 0%, #0b1a35 100%)",
@@ -434,14 +288,6 @@ const UI = {
   shadow: "0 10px 30px rgba(0,0,0,0.22)",
   shadowSoft: "0 10px 24px rgba(0,0,0,0.18)",
 };
-
-function autoGrid(min = 145) {
-  return {
-    display: "grid",
-    gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`,
-    gap: 10,
-  };
-}
 
 function Pill({ children, tone = "neutral" }) {
   let bg = "rgba(255,255,255,0.08)";
@@ -471,9 +317,6 @@ function Pill({ children, tone = "neutral" }) {
         background: bg,
         border: `1px solid ${br}`,
         fontWeight: 900,
-        lineHeight: 1,
-        display: "inline-flex",
-        alignItems: "center",
       }}
     >
       {children}
@@ -484,7 +327,6 @@ function Pill({ children, tone = "neutral" }) {
 function PrimaryButton({ children, onClick, style, disabled = false }) {
   return (
     <button
-      type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       style={{
@@ -508,7 +350,6 @@ function PrimaryButton({ children, onClick, style, disabled = false }) {
 function SecondaryButton({ children, onClick, style }) {
   return (
     <button
-      type="button"
       onClick={onClick}
       style={{
         width: "100%",
@@ -527,43 +368,21 @@ function SecondaryButton({ children, onClick, style }) {
   );
 }
 
-function StatCard({ label, value, accent = false }) {
+function StatCard({ label, value }) {
   return (
     <div
       style={{
         padding: 14,
         borderRadius: 18,
-        background: accent ? UI.greenBg : UI.cardSoft,
-        border: accent
-          ? `1px solid ${UI.greenBorder}`
-          : `1px solid ${UI.borderSoft}`,
+        background: UI.cardSoft,
+        border: `1px solid ${UI.borderSoft}`,
         minHeight: 76,
-        minWidth: 0,
       }}
     >
-      <div
-        style={{
-          fontSize: 11,
-          opacity: 0.72,
-          fontWeight: 800,
-          lineHeight: 1.25,
-        }}
-      >
+      <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
         {label}
       </div>
-
-      <div
-        style={{
-          marginTop: 6,
-          fontSize: "clamp(16px, 4.8vw, 22px)",
-          fontWeight: 950,
-          lineHeight: 1.12,
-          letterSpacing: -0.4,
-          wordBreak: "normal",
-          overflowWrap: "normal",
-          whiteSpace: "normal",
-        }}
-      >
+      <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>
         {value}
       </div>
     </div>
@@ -669,7 +488,6 @@ function NearbyChip({ children }) {
         background: UI.cardSoft,
         border: `1px solid ${UI.borderSoft}`,
         minHeight: 46,
-        minWidth: 0,
       }}
     >
       <CheckCircle2 size={16} color={UI.green} style={{ flexShrink: 0 }} />
@@ -687,35 +505,7 @@ function NearbyChip({ children }) {
   );
 }
 
-function MapPreview({ embedSrc, locationText }) {
-  if (embedSrc) {
-    return (
-      <div
-        style={{
-          borderRadius: 22,
-          overflow: "hidden",
-          border: `1px solid ${UI.borderSoft}`,
-          background: UI.cardSoft,
-        }}
-      >
-        <iframe
-          title={`Mapa de ${locationText || "propiedad"}`}
-          src={embedSrc}
-          width="100%"
-          height="260"
-          style={{
-            border: 0,
-            display: "block",
-            filter: "grayscale(0.04) contrast(0.96)",
-          }}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          allowFullScreen
-        />
-      </div>
-    );
-  }
-
+function MapPreview({ locationText }) {
   return (
     <div
       style={{
@@ -822,8 +612,6 @@ function NotFound({ onBack }) {
   );
 }
 
-/* ---------------- page ---------------- */
-
 export default function PropertyDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -836,170 +624,232 @@ export default function PropertyDetail() {
   const journey = useMemo(() => loadOwnedData(LS_JOURNEY), []);
 
   useEffect(() => {
-    let isMounted = true;
+  let isMounted = true;
 
-    function getToken() {
-      try {
-        return localStorage.getItem("hl_customer_token") || "";
-      } catch {
-        return "";
-      }
+  function getToken() {
+    try {
+      return localStorage.getItem("hl_customer_token") || "";
+    } catch {
+      return "";
     }
+  }
 
-    async function fetchJson(url) {
-      const token = getToken();
+  async function fetchJson(url) {
+    const token = getToken();
 
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
 
-      const data = await res.json().catch(() => null);
+    const data = await res.json().catch(() => null);
 
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.message || `Endpoint respondió ${res.status}`);
-      }
-
-      return data;
-    }
-
-    function extractProperties(data) {
-      if (Array.isArray(data)) return data;
-      if (Array.isArray(data?.properties)) return data.properties;
-      if (Array.isArray(data?.data?.properties)) return data.data.properties;
-      if (Array.isArray(data?.items)) return data.items;
-      if (Array.isArray(data?.data?.items)) return data.data.items;
-      if (Array.isArray(data?.results)) return data.results;
-      if (Array.isArray(data?.data?.results)) return data.data.results;
-
-      return [];
-    }
-
-    function findPropertyInList(properties, currentId) {
-      const target = String(currentId || "").trim();
-      const targetNormalized = normalizeComparable(target);
-
-      if (!Array.isArray(properties) || !target) return null;
-
-      return (
-        properties.find((p) => {
-          const candidates = [
-            p?.id,
-            p?._id,
-            p?.propertyId,
-            p?._normalizedId,
-            p?.slug,
-            p?.titulo,
-            p?.nombre,
-            p?.title,
-            p?.name,
-          ];
-
-          return candidates.some((candidate) => {
-            const raw = String(candidate || "").trim();
-            if (!raw) return false;
-
-            return raw === target || normalizeComparable(raw) === targetNormalized;
-          });
-        }) || null
+    if (!res.ok || data?.ok === false) {
+      throw new Error(
+        data?.message || `Endpoint respondió ${res.status}`
       );
     }
 
-    async function loadPropertyFromBackend() {
-      try {
-        setLoadingBackendProperty(true);
+    return data;
+  }
 
-        const encodedId = encodeURIComponent(id);
+  function extractProperties(data) {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.properties)) return data.properties;
+    if (Array.isArray(data?.data?.properties)) return data.data.properties;
+    if (Array.isArray(data?.items)) return data.items;
+    if (Array.isArray(data?.data?.items)) return data.data.items;
+    if (Array.isArray(data?.results)) return data.results;
+    if (Array.isArray(data?.data?.results)) return data.data.results;
 
-        const detailPaths = [
-          `/api/properties/${encodedId}`,
-          `/properties/${encodedId}`,
-          `/api/propiedades/${encodedId}`,
-          `/propiedades/${encodedId}`,
+    return [];
+  }
+
+  function normalizeComparable(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  function findPropertyInList(properties, currentId) {
+    const target = String(currentId || "").trim();
+    const targetNormalized = normalizeComparable(target);
+
+    if (!Array.isArray(properties) || !target) return null;
+
+    return (
+      properties.find((p) => {
+        const candidates = [
+          p?.id,
+          p?._id,
+          p?.propertyId,
+          p?._normalizedId,
+          p?.slug,
+          p?.titulo,
+          p?.nombre,
+          p?.title,
+          p?.name,
         ];
 
-        for (const path of detailPaths) {
-          try {
-            const url = `${API_BASE}${path}`;
-            const data = await fetchJson(url);
+        return candidates.some((candidate) => {
+          const raw = String(candidate || "").trim();
+          if (!raw) return false;
 
-            const property =
-              data?.property ||
-              data?.data?.property ||
-              data?.item ||
-              data?.result ||
-              null;
+          return raw === target || normalizeComparable(raw) === targetNormalized;
+        });
+      }) || null
+    );
+  }
 
-            if (property) {
-              if (!isMounted) return;
-              setBackendProperty(property);
-              return;
-            }
-          } catch (error) {
-            console.warn("[PropertyDetail] Falló endpoint detalle:", {
+  async function loadPropertyFromBackend() {
+    try {
+      setLoadingBackendProperty(true);
+
+      const encodedId = encodeURIComponent(id);
+
+      const detailPaths = [
+        `/api/properties/${encodedId}`,
+        `/properties/${encodedId}`,
+        `/api/propiedades/${encodedId}`,
+        `/propiedades/${encodedId}`,
+      ];
+
+      let detailError = null;
+
+      for (const path of detailPaths) {
+        try {
+          const url = `${API_BASE}${path}`;
+
+          console.log("[PropertyDetail] Probando detalle propiedad:", {
+            path,
+            url,
+            routeId: id,
+          });
+
+          const data = await fetchJson(url);
+
+          const property =
+            data?.property ||
+            data?.data?.property ||
+            data?.item ||
+            data?.result ||
+            null;
+
+          if (property) {
+            if (!isMounted) return;
+
+            setBackendProperty(property);
+
+            console.log("[PropertyDetail] Propiedad cargada por detalle:", {
               path,
               routeId: id,
-              error: error?.message || error,
+              propertyId: property?.id,
+              mongoId: property?._id,
+              titulo: property?.titulo,
             });
+
+            return;
           }
+        } catch (error) {
+          detailError = error;
+
+          console.warn("[PropertyDetail] Falló endpoint detalle:", {
+            path,
+            routeId: id,
+            error: error?.message || error,
+          });
         }
-
-        const listPaths = [
-          "/api/properties",
-          "/properties",
-          "/api/propiedades",
-          "/propiedades",
-          "/api/inventory/properties",
-          "/api/marketplace/properties",
-        ];
-
-        for (const path of listPaths) {
-          try {
-            const url = `${API_BASE}${path}`;
-            const data = await fetchJson(url);
-            const properties = extractProperties(data);
-            const found = findPropertyInList(properties, id);
-
-            if (found) {
-              if (!isMounted) return;
-              setBackendProperty(found);
-              return;
-            }
-          } catch (error) {
-            console.warn("[PropertyDetail] Falló endpoint listado:", {
-              path,
-              routeId: id,
-              error: error?.message || error,
-            });
-          }
-        }
-      } catch (error) {
-        console.warn(
-          "[PropertyDetail] Error cargando propiedad real:",
-          error?.message || error
-        );
-
-        if (!isMounted) return;
-        setBackendProperty(null);
-      } finally {
-        if (!isMounted) return;
-        setLoadingBackendProperty(false);
       }
-    }
 
-    if (id) {
-      loadPropertyFromBackend();
-    } else {
+      console.warn(
+        "[PropertyDetail] No se pudo cargar por detalle. Intentando fallback por listado:",
+        {
+          routeId: id,
+          error: detailError?.message || detailError,
+        }
+      );
+
+      const listPaths = [
+        "/api/properties",
+        "/properties",
+        "/api/propiedades",
+        "/propiedades",
+        "/api/inventory/properties",
+        "/api/marketplace/properties",
+      ];
+
+      let listError = null;
+
+      for (const path of listPaths) {
+        try {
+          const url = `${API_BASE}${path}`;
+
+          const data = await fetchJson(url);
+          const properties = extractProperties(data);
+          const found = findPropertyInList(properties, id);
+
+          console.log("[PropertyDetail] Fallback listado:", {
+            path,
+            routeId: id,
+            totalProperties: properties.length,
+            found: !!found,
+            foundId: found?.id,
+            foundMongoId: found?._id,
+            foundTitle: found?.titulo,
+          });
+
+          if (found) {
+            if (!isMounted) return;
+
+            setBackendProperty(found);
+            return;
+          }
+        } catch (error) {
+          listError = error;
+
+          console.warn("[PropertyDetail] Falló endpoint listado:", {
+            path,
+            routeId: id,
+            error: error?.message || error,
+          });
+        }
+      }
+
+      throw new Error(
+        listError?.message ||
+          detailError?.message ||
+          "No se pudo cargar la propiedad desde backend."
+      );
+    } catch (error) {
+      console.warn(
+        "[PropertyDetail] Error cargando propiedad real:",
+        error?.message || error
+      );
+
+      if (!isMounted) return;
+      setBackendProperty(null);
+    } finally {
+      if (!isMounted) return;
       setLoadingBackendProperty(false);
     }
+  }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
+  if (id) {
+    loadPropertyFromBackend();
+  } else {
+    setLoadingBackendProperty(false);
+  }
+
+  return () => {
+    isMounted = false;
+  };
+}, [id]);
 
   const matchedProperties =
     pick(snapshot, ["matchedProperties"]) ||
@@ -1020,45 +870,7 @@ export default function PropertyDetail() {
     );
   }, [matchedProperties, id]);
 
-  const property = useMemo(() => {
-    if (backendProperty && propertyFromSnapshot) {
-      return {
-        ...backendProperty,
-        ...propertyFromSnapshot,
-
-        googleMapsUrl:
-          propertyFromSnapshot.googleMapsUrl ||
-          propertyFromSnapshot.mapUrl ||
-          backendProperty.googleMapsUrl ||
-          backendProperty.mapUrl ||
-          "",
-
-        lat:
-          propertyFromSnapshot.lat ??
-          propertyFromSnapshot.latitude ??
-          backendProperty.lat ??
-          backendProperty.latitude ??
-          null,
-
-        lng:
-          propertyFromSnapshot.lng ??
-          propertyFromSnapshot.lon ??
-          propertyFromSnapshot.longitude ??
-          backendProperty.lng ??
-          backendProperty.lon ??
-          backendProperty.longitude ??
-          null,
-
-        direccionReferencial:
-          propertyFromSnapshot.direccionReferencial ||
-          backendProperty.direccionReferencial ||
-          backendProperty.direccion ||
-          "",
-      };
-    }
-
-    return propertyFromSnapshot || backendProperty;
-  }, [backendProperty, propertyFromSnapshot]);
+  const property = propertyFromSnapshot || backendProperty;
 
   if (!property && loadingBackendProperty) {
     return (
@@ -1109,13 +921,8 @@ export default function PropertyDetail() {
     ) ?? 0;
 
   const area =
-    maybeNum(
-      firstValue(
-        property,
-        ["m2", "area", "metros", "metros2", "m2Construccion"],
-        null
-      )
-    ) ?? null;
+    maybeNum(firstValue(property, ["m2", "area", "metros", "metros2"], null)) ??
+    null;
 
   const dormitorios =
     maybeNum(
@@ -1149,13 +956,19 @@ export default function PropertyDetail() {
     pick(snapshot, ["precioMaxPerfil"]) ??
     pick(snapshot, ["precioMax"]) ??
     snapshot?.financialCapacity?.estimatedMaxPropertyValue ??
-    snapshot?.homeRecommendation
-      ?.profileProgramsThatCouldWorkIfRangeAdjusted?.[0]?.priceMax ??
+    snapshot?.homeRecommendation?.profileProgramsThatCouldWorkIfRangeAdjusted?.[0]
+      ?.priceMax ??
     property?.evaluacionHipotecaHoy?.precioMaxVivienda ??
     property?.evaluacionHipotecaFutura?.precioMaxVivienda ??
     null;
 
   const precioMaxVivienda = maybeNum(precioMaxViviendaRaw);
+
+  const productoElegido =
+    pick(snapshot, ["productoElegido", "productoSugerido"]) ||
+    property?.evaluacionHipotecaHoy?.productoSugerido ||
+    property?.evaluacionHipotecaFutura?.productoSugerido ||
+    null;
 
   const bancosTop3 =
     pick(snapshot, ["bancosTop3"]) ||
@@ -1206,6 +1019,16 @@ export default function PropertyDetail() {
     maybeNum(detailEntryAlternative?.alternativePrice) ??
     null;
 
+  const entradaFuturaMontoDetalle =
+    maybeNum(detailPlannedEntry?.futureEntry) ??
+    maybeNum(detailEntryAlternative?.futureEntry) ??
+    null;
+
+  const mesesEntradaDetalle =
+    maybeNum(detailPlannedEntry?.months) ??
+    maybeNum(detailEntryAlternative?.months) ??
+    null;
+
   const rutaPreparacionDetalle =
     maybeNum(property?.routeFit?.targetPrice) ??
     maybeNum(property?.routeFit?.preparationRange) ??
@@ -1253,8 +1076,7 @@ export default function PropertyDetail() {
     hasEntradaDisponible &&
     (hasEvaluacionEntrada || hasHipotecaData);
 
-  let toneEstado = "amber";
-
+  let toneEstado = "neutral";
   if (hasAnalisisCompletoMinimo) {
     toneEstado =
       estadoCompra === "top_match" ||
@@ -1264,6 +1086,8 @@ export default function PropertyDetail() {
           estadoCompra === "ruta_cercana"
         ? "amber"
         : "red";
+  } else {
+    toneEstado = "amber";
   }
 
   const isPositiveMatch =
@@ -1372,20 +1196,19 @@ export default function PropertyDetail() {
     property.zona ||
     property.ciudadZona ||
     property.ciudad ||
-    "";
+    "Quito";
 
   const projectName =
-    property.proyecto || property.nombreProyecto || property.projectName || "";
+    property.proyecto ||
+    property.nombreProyecto ||
+    property.projectName ||
+    heroTitle;
 
   const projectStatus =
     property.estadoProyecto ||
     property.estado ||
     property.statusProyecto ||
-    (property.proyectoNuevo === true
-      ? "Proyecto nuevo"
-      : property.proyectoNuevo === false
-      ? "Entrega inmediata"
-      : "");
+    (property.proyectoNuevo ? "Proyecto nuevo" : "Entrega inmediata");
 
   const deliveryDate =
     property.fechaEntrega ||
@@ -1399,10 +1222,13 @@ export default function PropertyDetail() {
     property.constructora ||
     property.desarrollador ||
     property.developer ||
-    "";
+    "Por confirmar";
 
   const propertyType =
-    property.tipo || property.tipoPropiedad || property.propertyType || "";
+    property.tipo ||
+    property.tipoPropiedad ||
+    property.propertyType ||
+    (Number(dormitorios) === 0 ? "Estudio" : "Departamento");
 
   const amenities = normalizeArray(property?.amenities).length
     ? normalizeArray(property?.amenities)
@@ -1410,10 +1236,7 @@ export default function PropertyDetail() {
 
   const descripcionReal =
     property.descripcion ||
-    property.description ||
-    property.descripcionComercial ||
-    property.resumen ||
-    "";
+    `${heroTitle} es una propiedad ubicada en ${heroLocation}. Esta opción se muestra porque parece alinearse con tu perfil actual y con una ruta referencial de compra dentro de HabitaLibre.`;
 
   const mainBadgeLabel = hasAnalisisCompletoMinimo
     ? property?.matchBadgeCalculado ||
@@ -1425,14 +1248,15 @@ export default function PropertyDetail() {
     ? formatEstadoCompra(estadoCompra)
     : "Análisis parcial";
 
+  const nextStepCopy = isPositiveMatch
+    ? "Siguiente paso sugerido: puedes usar esta propiedad como referencia para revisar tu ruta, comparar opciones hipotecarias y avanzar con mayor claridad."
+    : "Qué podrías hacer: aumentar entrada disponible, reducir un poco más tus deudas mensuales o comparar una unidad de menor precio.";
+
   const galleryImages = getGalleryImages(property);
   const floorPlan = getFloorPlan(property);
   const nearbyItems = getNearbyItems(property);
   const latLng = getLatLng(property);
-  const mapUrl = getPropertyMapUrl(property);
-  const mapEmbedSrc = getMapEmbedSrc(property);
-  const propertyAddress = getPropertyAddress(property);
-  const mapLocationText = propertyAddress || heroLocation || projectName || heroTitle;
+  const mapLocationText = `${heroLocation}${heroLocation.toLowerCase().includes("quito") ? "" : ", Quito"}`;
 
   const planCards = [
     {
@@ -1452,8 +1276,7 @@ export default function PropertyDetail() {
     },
     {
       label: "Cuota referencial",
-      value:
-        cuotaReferencial != null ? formatMonthly(cuotaReferencial) : "Por confirmar",
+      value: cuotaReferencial != null ? formatMonthly(cuotaReferencial) : "Por confirmar",
       show: true,
     },
     {
@@ -1473,22 +1296,10 @@ export default function PropertyDetail() {
     },
   ].filter((item) => item.show);
 
-  const projectInfoItems = [
-    projectName ? { label: "Proyecto", value: projectName } : null,
-    propertyType ? { label: "Tipo", value: propertyType } : null,
-    projectStatus ? { label: "Estado", value: projectStatus } : null,
-    developerName ? { label: "Promotor", value: developerName } : null,
-  ].filter(Boolean);
-
   function openMap() {
-    if (mapUrl) {
-      window.open(mapUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
     const query = latLng
       ? `${latLng.lat},${latLng.lng}`
-      : mapLocationText || heroTitle;
+      : `${heroTitle}, ${mapLocationText}`;
 
     const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
       query
@@ -1552,7 +1363,7 @@ export default function PropertyDetail() {
 
       titulo: propertyTitle,
       nombre: propertyTitle,
-      proyecto: property?.proyecto || "",
+      proyecto: propertyTitle,
       title: propertyTitle,
       name: propertyTitle,
 
@@ -1566,11 +1377,6 @@ export default function PropertyDetail() {
 
       imagen: propertyImage,
       image: propertyImage,
-
-      googleMapsUrl: mapUrl || "",
-      direccionReferencial: propertyAddress || "",
-      lat: latLng?.lat ?? null,
-      lng: latLng?.lng ?? null,
 
       status: selectedPropertyStatus,
       selectedPropertyStatus,
@@ -1605,7 +1411,9 @@ export default function PropertyDetail() {
         property?.evaluacionEntrada?.entradaRequerida ??
         null,
 
-      descripcion: descripcionReal || "",
+      descripcion:
+        property?.descripcion ||
+        `${propertyTitle} es una propiedad que hoy parece alinearse con tu ruta referencial dentro de HabitaLibre.`,
 
       source: "property_detail",
       selectedAt: new Date().toISOString(),
@@ -1654,7 +1462,7 @@ export default function PropertyDetail() {
         background: UI.bg,
         color: "white",
         fontFamily: "system-ui",
-        paddingBottom: "calc(150px + env(safe-area-inset-bottom))",
+        paddingBottom: 150,
       }}
     >
       <div
@@ -1668,7 +1476,6 @@ export default function PropertyDetail() {
         }}
       >
         <button
-          type="button"
           onClick={() => {
             if (window.history.length > 1) {
               navigate(-1);
@@ -1715,40 +1522,39 @@ export default function PropertyDetail() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Pill tone={toneEstado}>{mainBadgeLabel}</Pill>
 
-            {projectStatus ? <Pill>{projectStatus}</Pill> : null}
+            {property.proyectoNuevo ? (
+              <Pill>Proyecto nuevo</Pill>
+            ) : (
+              <Pill>{projectStatus}</Pill>
+            )}
 
-            {property.matchReason ? (
-              <Pill>{formatMatchReason(property.matchReason)}</Pill>
-            ) : null}
+            <Pill>{formatMatchReason(property.matchReason)}</Pill>
           </div>
 
           <div
             style={{
               marginTop: 14,
-              fontSize: "clamp(28px, 8.5vw, 42px)",
+              fontSize: 30,
               fontWeight: 980,
               lineHeight: 1.02,
-              letterSpacing: -1.2,
             }}
           >
             {heroTitle}
           </div>
 
-          {heroLocation ? (
-            <div
-              style={{
-                marginTop: 10,
-                fontSize: 15,
-                color: "rgba(255,255,255,0.78)",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <MapPin size={14} />
-              {heroLocation}
-            </div>
-          ) : null}
+          <div
+            style={{
+              marginTop: 10,
+              fontSize: 15,
+              color: "rgba(255,255,255,0.78)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <MapPin size={14} />
+            {heroLocation}
+          </div>
 
           <div
             style={{
@@ -1767,10 +1573,9 @@ export default function PropertyDetail() {
               <div
                 style={{
                   marginTop: 4,
-                  fontSize: "clamp(36px, 12vw, 48px)",
+                  fontSize: 40,
                   fontWeight: 980,
                   lineHeight: 1,
-                  letterSpacing: -1.4,
                 }}
               >
                 {moneyUSD(precio)}
@@ -1787,7 +1592,9 @@ export default function PropertyDetail() {
           <div
             style={{
               marginTop: 16,
-              ...autoGrid(135),
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 10,
             }}
           >
             <StatCard label="Área" value={area != null ? `${area} m²` : "—"} />
@@ -1867,31 +1674,30 @@ export default function PropertyDetail() {
           title="Plan referencial"
           subtitle="Un resumen simple para entender precio, entrada, saldo y posible esfuerzo mensual."
         >
-          <div style={autoGrid(135)}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 10,
+            }}
+          >
             {planCards.map((card) => (
-              <StatCard
-                key={card.label}
-                label={card.label}
-                value={card.value}
-                accent={card.label === "Cuota referencial"}
-              />
+              <StatCard key={card.label} label={card.label} value={card.value} />
             ))}
           </div>
 
           {(deliveryDate || mesesConstruccion != null || projectStatus) && (
-            <div style={{ marginTop: 10 }}>
-              <ToneBox>
-                <strong>Entrega / estado:</strong>{" "}
-                {deliveryDate || projectStatus || "Por confirmar"}.
-                {mesesConstruccion != null && mesesConstruccion > 0 ? (
-                  <>
-                    {" "}
-                    Plazo de construcción estimado:{" "}
-                    <strong>{formatMonths(mesesConstruccion)}</strong>.
-                  </>
-                ) : null}
-              </ToneBox>
-            </div>
+            <ToneBox>
+              <strong>Entrega / estado:</strong>{" "}
+              {deliveryDate || projectStatus || "Por confirmar"}.
+              {mesesConstruccion != null && mesesConstruccion > 0 ? (
+                <>
+                  {" "}
+                  Plazo de construcción estimado:{" "}
+                  <strong>{formatMonths(mesesConstruccion)}</strong>.
+                </>
+              ) : null}
+            </ToneBox>
           )}
 
           <FinancialDisclaimer compact />
@@ -1902,7 +1708,13 @@ export default function PropertyDetail() {
           subtitle="Te mostramos si tu entrada disponible cubre lo que pide este proyecto."
         >
           <div style={{ display: "grid", gap: 10 }}>
-            <div style={autoGrid(135)}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 10,
+              }}
+            >
               <StatCard
                 label="Entrada requerida"
                 value={formatMoney(entradaRequerida)}
@@ -1914,10 +1726,9 @@ export default function PropertyDetail() {
                   faltanteEntrada == null
                     ? "—"
                     : faltanteEntrada === 0
-                    ? "$0 completo"
+                    ? "$0 (completo)"
                     : formatMoney(faltanteEntrada)
                 }
-                accent={faltanteEntrada === 0}
               />
 
               <StatCard
@@ -1968,49 +1779,51 @@ export default function PropertyDetail() {
           </div>
         </InfoCard>
 
-        {mapEmbedSrc || mapUrl || latLng || propertyAddress ? (
-          <InfoCard
-            title="Ubicación en mapa"
-            subtitle="Referencia cargada para ubicar mejor la propiedad."
+        <InfoCard
+          title="Ubicación referencial"
+          subtitle="La zona importa tanto como el precio. Aquí puedes ubicar el proyecto antes de avanzar."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <MapPreview locationText={mapLocationText} />
+
+            <ToneBox>
+              La ubicación se muestra de forma referencial para ayudarte a
+              entender la zona. La dirección exacta y disponibilidad se
+              confirman al avanzar con el promotor.
+            </ToneBox>
+
+            <SecondaryButton onClick={openMap}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <Navigation size={16} />
+                Ver zona en mapa
+              </span>
+            </SecondaryButton>
+          </div>
+        </InfoCard>
+
+        <InfoCard
+          title="Entorno cercano"
+          subtitle="Puntos de referencia que ayudan a entender la vida diaria alrededor del proyecto."
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 9,
+            }}
           >
-            <div style={{ display: "grid", gap: 12 }}>
-              <MapPreview embedSrc={mapEmbedSrc} locationText={mapLocationText} />
-
-              {propertyAddress ? (
-                <ToneBox>
-                  <strong>Dirección / referencia:</strong> {propertyAddress}
-                </ToneBox>
-              ) : null}
-
-              <SecondaryButton onClick={openMap}>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                  }}
-                >
-                  <Navigation size={16} />
-                  Abrir en Google Maps
-                </span>
-              </SecondaryButton>
-            </div>
-          </InfoCard>
-        ) : null}
-
-        {nearbyItems.length ? (
-          <InfoCard
-            title="Entorno cercano"
-            subtitle="Puntos de referencia cargados para entender la vida diaria alrededor del proyecto."
-          >
-            <div style={autoGrid(145)}>
-              {nearbyItems.map((item) => (
-                <NearbyChip key={item}>{item}</NearbyChip>
-              ))}
-            </div>
-          </InfoCard>
-        ) : null}
+            {nearbyItems.map((item) => (
+              <NearbyChip key={item}>{item}</NearbyChip>
+            ))}
+          </div>
+        </InfoCard>
 
         <InfoCard
           title="Galería y distribución"
@@ -2102,53 +1915,50 @@ export default function PropertyDetail() {
           )}
         </InfoCard>
 
-        {projectInfoItems.length || amenities.length ? (
-          <InfoCard
-            title="Sobre el proyecto"
-            subtitle="Información cargada para ayudarte a decidir si vale la pena avanzar con esta unidad."
+        <InfoCard
+          title="Sobre el proyecto"
+          subtitle="Información base para decidir si vale la pena avanzar con esta unidad."
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 10,
+            }}
           >
-            {projectInfoItems.length ? (
-              <div style={autoGrid(145)}>
-                {projectInfoItems.map((item) => (
-                  <StatCard
-                    key={item.label}
-                    label={item.label}
-                    value={item.value}
-                  />
+            <StatCard label="Proyecto" value={projectName} />
+            <StatCard label="Tipo" value={propertyType} />
+            <StatCard label="Estado" value={projectStatus} />
+            <StatCard label="Promotor" value={developerName} />
+          </div>
+
+          {amenities.length ? (
+            <div style={{ marginTop: 12 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 900,
+                  color: UI.textDim,
+                  marginBottom: 8,
+                }}
+              >
+                Amenidades
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {amenities.slice(0, 8).map((amenity) => (
+                  <Pill key={amenity}>{amenity}</Pill>
                 ))}
               </div>
-            ) : null}
-
-            {amenities.length ? (
-              <div style={{ marginTop: 12 }}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 900,
-                    color: UI.textDim,
-                    marginBottom: 8,
-                  }}
-                >
-                  Amenidades
-                </div>
-
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {amenities.slice(0, 8).map((amenity) => (
-                    <Pill key={amenity}>{amenity}</Pill>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </InfoCard>
-        ) : null}
-
-        {descripcionReal ? (
-          <InfoCard title="Descripción" subtitle="Resumen cargado de la propiedad.">
-            <div style={{ fontSize: 14, color: UI.textDim, lineHeight: 1.5 }}>
-              {descripcionReal}
             </div>
-          </InfoCard>
-        ) : null}
+          ) : null}
+        </InfoCard>
+
+        <InfoCard title="Descripción" subtitle="Resumen de la propiedad.">
+          <div style={{ fontSize: 14, color: UI.textDim, lineHeight: 1.5 }}>
+            {descripcionReal}
+          </div>
+        </InfoCard>
 
         <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
           <PrimaryButton
