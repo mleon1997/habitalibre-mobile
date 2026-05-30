@@ -3466,7 +3466,9 @@ const nextJourney = {
   capacidadActualCompraHoy,
   capacidadObjetivoCompra,
 selectedPropertyMatchStatus: selectedMatchPayload?.estadoMatch || null,
-updatedAt: new Date().toISOString(),
+capacidadActualCompraHoy,
+capacidadObjetivoCompra,
+  updatedAt: new Date().toISOString(),
 };
 
   saveOwnedData(LS_JOURNEY, nextJourney);

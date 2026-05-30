@@ -2330,82 +2330,80 @@ const isFutureRoute =
         </div>
       ) : null}
 
-      {!(hasEntryProjection || hasDebtReductionRoute) ? (
-        <div style={visibleInViewStyle}>
-          <Card style={{ marginTop: 18 }}>
+      <div style={visibleInViewStyle}>
+        <Card style={{ marginTop: 18 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
             <div
               style={{
+                fontSize: 12,
+                color: "rgba(148,163,184,0.95)",
+                fontWeight: 950,
                 display: "flex",
-                justifyContent: "space-between",
                 alignItems: "center",
-                gap: 12,
+                gap: 6,
               }}
             >
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "rgba(148,163,184,0.95)",
-                  fontWeight: 950,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Compass
-                  size={13}
-                  strokeWidth={2.3}
-                  style={{ opacity: 0.95, flexShrink: 0 }}
-                />
-                Tu guía
-              </div>
+              <Compass
+                size={13}
+                strokeWidth={2.3}
+                style={{ opacity: 0.95, flexShrink: 0 }}
+              />
+              Tu guía
+            </div>
 
-              <Chip
-                tone={
-                  hasSubmittedCase
-                    ? "good"
-                    : isFutureRoute
-                    ? "brand"
-                    : "neutral"
-                }
-              >
-                {hasSubmittedCase
-                  ? "Caso activo"
+            <Chip
+              tone={
+                hasSubmittedCase
+                  ? "good"
                   : isFutureRoute
-                  ? "Ruta creada"
-                  : "Orientación"}
-              </Chip>
-            </div>
-
-            <div
-              style={{
-                marginTop: 10,
-                fontWeight: 980,
-                fontSize: 18,
-                lineHeight: 1.2,
-              }}
+                  ? "brand"
+                  : "neutral"
+              }
             >
-              {bestNext.title}
-            </div>
+              {hasSubmittedCase
+                ? "Caso activo"
+                : isFutureRoute
+                ? "Ruta creada"
+                : "Orientación"}
+            </Chip>
+          </div>
 
-            <div
-              style={{
-                marginTop: 8,
-                color: "rgba(226,232,240,0.90)",
-                lineHeight: 1.35,
-                fontSize: 13,
-              }}
-            >
-              {bestNext.subtitle}
-            </div>
+          <div
+            style={{
+              marginTop: 10,
+              fontWeight: 980,
+              fontSize: 18,
+              lineHeight: 1.2,
+            }}
+          >
+            {bestNext.title}
+          </div>
 
-            <div style={{ marginTop: 12 }}>
-              <PrimaryButton onClick={() => go(bestNext.to)}>
-                {bestNext.cta}
-              </PrimaryButton>
-            </div>
-          </Card>
-        </div>
-      ) : null}
+          <div
+            style={{
+              marginTop: 8,
+              color: "rgba(226,232,240,0.90)",
+              lineHeight: 1.35,
+              fontSize: 13,
+            }}
+          >
+            {bestNext.subtitle}
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <PrimaryButton onClick={() => go(bestNext.to)}>
+              {bestNext.cta}
+            </PrimaryButton>
+          </div>
+        </Card>
+      </div>
 
       {!hasCreditBlocker &&
       !hasSubmittedCase &&

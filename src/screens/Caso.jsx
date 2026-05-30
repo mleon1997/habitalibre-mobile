@@ -9,6 +9,7 @@ import {
   User,
   Sparkles,
   Landmark,
+  Calculator,
 } from "lucide-react";
 import {
   Screen,
@@ -24,6 +25,7 @@ import { getCustomer, getCustomerToken } from "../lib/customerSession.js";
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
+const LS_SELECTED_MORTGAGE_ROUTE = "hl_selected_mortgage_route_v1";
 const LS_DOCS_CHECKLIST = "hl_docs_checklist_v1";
 
 const RAW_API_BASE =
@@ -79,6 +81,21 @@ function saveOwnedData(key, data) {
   } catch {}
 }
 
+function toNumberOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatMoney(value) {
+  const n = toNumberOrNull(value);
+  return n != null ? moneyUSD(n) : "—";
+}
+
+function formatMonthly(value) {
+  const n = toNumberOrNull(value);
+  return n != null && n > 0 ? `${moneyUSD(n)}/mes` : "—";
+}
+
 function normalizeProperty(raw) {
   if (!raw || typeof raw !== "object") return null;
 
@@ -112,7 +129,7 @@ function normalizeProperty(raw) {
     raw?._normalizedPrice ??
     null;
 
-  const price = Number.isFinite(Number(priceRaw)) ? Number(priceRaw) : null;
+  const price = toNumberOrNull(priceRaw);
 
   return {
     id,
@@ -124,6 +141,111 @@ function normalizeProperty(raw) {
   };
 }
 
+function normalizeMortgageRoute(raw, property = null) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const id =
+    raw.id ||
+    raw._id ||
+    raw.key ||
+    raw.mortgageId ||
+    raw.productId ||
+    raw.tipoProducto ||
+    raw.productLabel ||
+    raw.label ||
+    null;
+
+  const productLabel =
+    raw.productLabel ||
+    raw.tipoProducto ||
+    raw.label ||
+    raw.nombre ||
+    raw.name ||
+    raw.mortgageId ||
+    id ||
+    "Ruta referencial";
+
+  const providerLabel =
+    raw.providerLabel ||
+    raw.provider ||
+    raw.banco ||
+    raw.bank ||
+    raw.entity ||
+    raw.entidad ||
+    raw.via ||
+    "Vía entidad financiera";
+
+  const annualRate = toNumberOrNull(
+    raw.annualRate ?? raw.tasaAnual ?? raw.rate ?? raw.interestRate
+  );
+
+  const termYears = toNumberOrNull(
+    raw.termYears ?? raw.plazoAnios ?? raw.plazoAños
+  );
+
+  const termMonths = toNumberOrNull(
+    raw.termMonths ??
+      raw.plazoMeses ??
+      raw.months ??
+      (termYears ? termYears * 12 : null)
+  );
+
+  const monthlyPayment = toNumberOrNull(
+    raw.monthlyPayment ??
+      raw.cuotaMensual ??
+      raw.cuota ??
+      raw.estimatedMonthlyPayment
+  );
+
+  const loanAmount = toNumberOrNull(
+    raw.loanAmount ??
+      raw.montoPrestamo ??
+      raw.montoFinanciar ??
+      raw.montoFinanciado ??
+      raw.amount
+  );
+
+  const propertyPrice = toNumberOrNull(
+    raw.propertyPrice ?? raw.precioPropiedad ?? property?.price
+  );
+
+  return {
+    id: id ? String(id) : null,
+    key: id ? String(id) : null,
+    mortgageId: id ? String(id) : null,
+    productLabel,
+    providerLabel,
+    annualRate,
+    termYears,
+    termMonths,
+    monthlyPayment,
+    loanAmount,
+    propertyId: raw.propertyId || property?.id || null,
+    propertyTitle: raw.propertyTitle || property?.title || null,
+    propertyPrice,
+    status: raw.status || "selected",
+    confirmed:
+      raw.confirmed === true ||
+      raw.isSelected === true ||
+      raw.status === "selected" ||
+      raw.status === "confirmed",
+    raw,
+  };
+}
+
+function findMortgageRoute({ remoteCase, journey, selectedMortgageRouteLS, property }) {
+  return (
+    normalizeMortgageRoute(remoteCase?.selectedMortgageRoute, property) ||
+    normalizeMortgageRoute(remoteCase?.mortgageRoute, property) ||
+    normalizeMortgageRoute(remoteCase?.rutaHipotecaria, property) ||
+    normalizeMortgageRoute(journey?.selectedMortgageRoute, property) ||
+    normalizeMortgageRoute(journey?.mortgageRoute, property) ||
+    normalizeMortgageRoute(journey?.rutaHipotecaria, property) ||
+    normalizeMortgageRoute(selectedMortgageRouteLS, property) ||
+    null
+  );
+}
+
 const styles = {
   content: {
     width: "100%",
@@ -132,7 +254,7 @@ const styles = {
     paddingLeft: 20,
     paddingRight: 20,
     paddingTop: "calc(env(safe-area-inset-top, 0px) + 18px)",
-    paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 148px)",
+    paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 198px)",
     display: "grid",
     gap: 18,
     boxSizing: "border-box",
@@ -169,15 +291,15 @@ const styles = {
   },
 
   title: {
-    fontSize: "clamp(34px, 9.3vw, 44px)",
-    lineHeight: 0.98,
+    fontSize: "clamp(38px, 10.2vw, 52px)",
+    lineHeight: 0.96,
     fontWeight: 980,
-    letterSpacing: -1.25,
+    letterSpacing: -1.45,
     color: "rgba(226,232,240,0.98)",
   },
 
   subtitle: {
-    marginTop: 12,
+    marginTop: 14,
     fontSize: 16,
     lineHeight: 1.5,
     color: "rgba(148,163,184,0.96)",
@@ -190,6 +312,15 @@ const styles = {
     background:
       "linear-gradient(180deg, rgba(15,23,42,0.82), rgba(15,23,42,0.62))",
     boxShadow: "0 18px 55px rgba(0,0,0,0.16)",
+  },
+
+  highlightCard: {
+    padding: 18,
+    borderRadius: 30,
+    border: "1px solid rgba(45,212,191,0.28)",
+    background:
+      "linear-gradient(145deg, rgba(20,184,166,0.15), rgba(15,23,42,0.74))",
+    boxShadow: "0 22px 60px rgba(20,184,166,0.075)",
   },
 
   sectionTitle: {
@@ -213,11 +344,18 @@ const styles = {
     border: "1px solid rgba(148,163,184,0.11)",
     background: "rgba(255,255,255,0.035)",
   },
+
+  positiveSurface: {
+    padding: 15,
+    borderRadius: 20,
+    border: "1px solid rgba(45,212,191,0.18)",
+    background: "rgba(20,184,166,0.08)",
+  },
 };
 
-function InfoCard({ title, subtitle, children }) {
+function InfoCard({ title, subtitle, children, highlighted = false }) {
   return (
-    <Card style={styles.softCard}>
+    <Card style={highlighted ? styles.highlightCard : styles.softCard}>
       <div style={styles.sectionTitle}>{title}</div>
 
       {subtitle ? <div style={styles.sectionSubtitle}>{subtitle}</div> : null}
@@ -227,9 +365,9 @@ function InfoCard({ title, subtitle, children }) {
   );
 }
 
-function MiniStat({ label, value }) {
+function MiniStat({ label, value, highlighted = false }) {
   return (
-    <div style={styles.innerSurface}>
+    <div style={highlighted ? styles.positiveSurface : styles.innerSurface}>
       <div
         style={{
           fontSize: 11.5,
@@ -247,6 +385,7 @@ function MiniStat({ label, value }) {
           color: "rgba(226,232,240,0.98)",
           fontWeight: 950,
           letterSpacing: -0.25,
+          lineHeight: 1.12,
         }}
       >
         {value}
@@ -350,6 +489,7 @@ function FinancialDisclaimer({ compact = false }) {
 
 function getSimpleCaseDefinition({
   hasChosenProperty,
+  hasMortgageRoute,
   docsReady,
   activationRequestedAt,
   statusGeneral,
@@ -362,6 +502,9 @@ function getSimpleCaseDefinition({
 
   const wasSent =
     statusGeneral === "enviado" ||
+    statusGeneral === "enviado_a_promotor" ||
+    statusGeneral === "enviado_a_banco" ||
+    statusGeneral === "enviado_a_ambos" ||
     projectStatus === "enviado" ||
     bankStatus === "enviado";
 
@@ -369,9 +512,9 @@ function getSimpleCaseDefinition({
     return {
       statusLabel: "Compartido por HabitaLibre",
       statusTone: "good",
-      heroTitle: "Tu caso ya fue compartido",
+      heroTitle: "Caso compartido",
       heroBody:
-        "HabitaLibre ya compartió información de tu caso con los actores correspondientes, únicamente para orientación y contacto. Esto no representa aprobación, oferta ni promesa de financiamiento.",
+        "HabitaLibre ya movió tu caso al siguiente frente de revisión. Esto no representa aprobación, oferta ni promesa de financiamiento.",
       nextActorLabel: "Caso compartido",
       nextActorText:
         "Tu caso ya salió de la revisión interna de HabitaLibre hacia el frente que corresponde según tu situación.",
@@ -408,9 +551,9 @@ function getSimpleCaseDefinition({
     return {
       statusLabel: "En revisión interna",
       statusTone: "good",
-      heroTitle: "Tu caso fue recibido por HabitaLibre",
+      heroTitle: "Caso recibido",
       heroBody:
-        "Ya recibimos tu caso. Ahora HabitaLibre lo revisará internamente para definir cuál podría ser el siguiente paso más adecuado.",
+        "HabitaLibre ya recibió tu propiedad, tu ruta referencial y tu información. Ahora revisaremos internamente cuál podría ser el siguiente paso.",
       nextActorLabel: "Revisión interna",
       nextActorText:
         "Tu caso ya fue recibido por HabitaLibre y está en revisión operativa interna.",
@@ -437,7 +580,7 @@ function getSimpleCaseDefinition({
     return {
       statusLabel: "Esperando propiedad base",
       statusTone: "neutral",
-      heroTitle: "Antes de avanzar, falta elegir una propiedad base",
+      heroTitle: "Falta elegir una propiedad",
       heroBody:
         "Tu caso todavía no está listo porque falta definir la propiedad que va a guiar tu ruta referencial.",
       nextActorLabel: "Primero propiedad",
@@ -462,13 +605,42 @@ function getSimpleCaseDefinition({
     };
   }
 
+  if (!hasMortgageRoute) {
+    return {
+      statusLabel: "Financiamiento pendiente",
+      statusTone: "neutral",
+      heroTitle: "Falta guardar una ruta",
+      heroBody:
+        "Ya tienes una propiedad base. Ahora falta guardar una ruta referencial de financiamiento para esa propiedad.",
+      nextActorLabel: "Primero financiamiento",
+      nextActorText:
+        "Antes de compartir tu caso, conviene guardar una ruta referencial para la propiedad elegida.",
+      userAction:
+        "Revisar opciones de financiamiento y guardar una ruta referencial.",
+      habitalibreAction:
+        "Usar esa ruta para entender mejor el caso y su siguiente paso.",
+      nextExternalStep:
+        "Después podrás compartir tu caso con HabitaLibre para revisión interna.",
+      ctaLabel: "Ver financiamiento",
+      ctaPath: "/financiamiento-propiedad",
+      projectStatusLabel: "Pendiente",
+      bankStatusLabel: "Pendiente",
+      timelineProjectTitle: "Frente proyecto pendiente",
+      timelineProjectBody:
+        "Todavía no conviene avanzar mientras falta una ruta de financiamiento guardada.",
+      timelineBankTitle: "Frente financiero pendiente",
+      timelineBankBody:
+        "Todavía no conviene avanzar mientras falta una ruta de financiamiento guardada.",
+    };
+  }
+
   if (!docsReady) {
     return {
       statusLabel: "Esperando preparación",
       statusTone: "neutral",
-      heroTitle: "Tu caso va bien, pero todavía falta preparación",
+      heroTitle: "Falta preparación documental",
       heroBody:
-        "Ya tienes una propiedad base. Antes de compartir tu caso con HabitaLibre, conviene completar mejor tu checklist documental.",
+        "Ya tienes propiedad y ruta referencial. Antes de compartir tu caso con HabitaLibre, conviene completar mejor tu checklist documental.",
       nextActorLabel: "Primero preparación",
       nextActorText:
         "Antes de compartir tu caso, conviene fortalecer tu base documental.",
@@ -494,7 +666,7 @@ function getSimpleCaseDefinition({
   return {
     statusLabel: "Caso en preparación",
     statusTone: "neutral",
-    heroTitle: "Tu caso todavía no está listo para compartirse",
+    heroTitle: "Caso en preparación",
     heroBody:
       "Primero conviene revisar qué te falta antes de pasar a revisión interna.",
     nextActorLabel: "Preparación",
@@ -523,6 +695,10 @@ export default function Caso() {
   const journey = useMemo(() => loadOwnedData(LS_JOURNEY) || {}, []);
   const selectedPropertyRef = useMemo(
     () => loadOwnedData(LS_SELECTED_PROPERTY),
+    []
+  );
+  const selectedMortgageRouteLS = useMemo(
+    () => loadOwnedData(LS_SELECTED_MORTGAGE_ROUTE),
     []
   );
   const docsChecklist = useMemo(
@@ -571,7 +747,10 @@ export default function Caso() {
             activationRequestLabel:
               caso?.statusGeneral === "pendiente_revision_habitalibre"
                 ? "Caso recibido por HabitaLibre"
-                : caso?.statusGeneral === "enviado"
+                : caso?.statusGeneral === "enviado" ||
+                  caso?.statusGeneral === "enviado_a_promotor" ||
+                  caso?.statusGeneral === "enviado_a_banco" ||
+                  caso?.statusGeneral === "enviado_a_ambos"
                 ? "Compartido por HabitaLibre"
                 : journey?.activationRequestLabel || null,
             statusGeneral: caso?.statusGeneral || null,
@@ -588,6 +767,12 @@ export default function Caso() {
                 ? "Compartido con entidad financiera"
                 : "Pendiente de revisión",
           };
+
+          if (caso?.selectedMortgageRoute) {
+            nextJourney.selectedMortgageRoute = caso.selectedMortgageRoute;
+            nextJourney.mortgageRoute = caso.selectedMortgageRoute;
+            nextJourney.mortgageRouteConfirmed = true;
+          }
 
           saveOwnedData(LS_JOURNEY, nextJourney);
         }
@@ -611,7 +796,15 @@ export default function Caso() {
     normalizeProperty(journey?.property) ||
     null;
 
+  const mortgageRoute = findMortgageRoute({
+    remoteCase,
+    journey,
+    selectedMortgageRouteLS,
+    property,
+  });
+
   const hasChosenProperty = Boolean(property?.id);
+  const hasMortgageRoute = Boolean(mortgageRoute);
 
   const remoteDocsChecklist = remoteCase?.docsChecklist || null;
   const effectiveDocsChecklist = remoteDocsChecklist || docsChecklist;
@@ -626,7 +819,7 @@ export default function Caso() {
 
   const effectiveSnapshot = remoteCase?.snapshot || snapshot;
 
-  const cuota =
+  const cuotaGeneral =
     remoteCase?.estimatedQuota ??
     effectiveSnapshot?.cuotaMensual ??
     effectiveSnapshot?.kpis?.cuotaMensual ??
@@ -658,12 +851,23 @@ export default function Caso() {
 
   const caseDef = getSimpleCaseDefinition({
     hasChosenProperty,
+    hasMortgageRoute,
     docsReady,
     activationRequestedAt,
     statusGeneral,
     projectStatus,
     bankStatus,
   });
+
+  const submittedAtLabel = activationRequestedAt
+    ? new Date(activationRequestedAt).toLocaleString()
+    : null;
+
+  const propertyPrice = property?.price ?? mortgageRoute?.propertyPrice ?? null;
+  const loanAmount = mortgageRoute?.loanAmount ?? null;
+  const monthlyPayment = mortgageRoute?.monthlyPayment ?? cuotaGeneral ?? null;
+  const routeLabel = mortgageRoute?.productLabel || "Ruta por definir";
+  const providerLabel = mortgageRoute?.providerLabel || "Entidad por definir";
 
   return (
     <Screen>
@@ -716,6 +920,10 @@ export default function Caso() {
               {hasChosenProperty ? "Propiedad base lista" : "Sin propiedad base"}
             </Chip>
 
+            <Chip tone={hasMortgageRoute ? "good" : "neutral"}>
+              {hasMortgageRoute ? "Ruta guardada" : "Ruta pendiente"}
+            </Chip>
+
             <Chip tone={docsReady ? "good" : "neutral"}>
               {docsDone}/{docsTotal} ítems listos
             </Chip>
@@ -729,17 +937,29 @@ export default function Caso() {
             }}
           >
             <MiniStat
-              label="Rango estimado"
-              value={maxCompra ? moneyUSD(maxCompra) : "—"}
+              label="Propiedad"
+              value={property ? property.title : "—"}
+            />
+
+            <MiniStat
+              label="Precio propiedad"
+              value={formatMoney(propertyPrice)}
+            />
+
+            <MiniStat
+              label="Ruta guardada"
+              value={routeLabel}
+              highlighted={hasMortgageRoute}
             />
 
             <MiniStat
               label="Cuota ref."
-              value={cuota ? moneyUSD(cuota) : "—"}
+              value={formatMonthly(monthlyPayment)}
+              highlighted={hasMortgageRoute}
             />
           </div>
 
-          {activationRequestedAt ? (
+          {submittedAtLabel ? (
             <div
               style={{
                 marginTop: 14,
@@ -752,9 +972,137 @@ export default function Caso() {
                 color: "rgba(148,163,184,0.92)",
               }}
             >
-              Caso recibido: {new Date(activationRequestedAt).toLocaleString()}
+              Caso recibido: {submittedAtLabel}
             </div>
           ) : null}
+        </InfoCard>
+
+        <InfoCard
+          highlighted
+          title="Resumen enviado"
+          subtitle="Esta es la base que HabitaLibre recibió para revisión interna."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={styles.innerSurface}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontWeight: 900,
+                  color: "rgba(226,232,240,0.98)",
+                  marginBottom: 8,
+                }}
+              >
+                <Home size={15} />
+                Propiedad elegida
+              </div>
+
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 950,
+                  color: "rgba(226,232,240,0.98)",
+                  lineHeight: 1.25,
+                }}
+              >
+                {property ? property.title : "Aún no definida"}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 7,
+                  fontSize: 13.5,
+                  color: "rgba(148,163,184,0.95)",
+                  lineHeight: 1.45,
+                }}
+              >
+                {property
+                  ? `${property.city}${
+                      propertyPrice != null ? ` · ${moneyUSD(propertyPrice)}` : ""
+                    }`
+                  : "Primero debes elegir una propiedad."}
+              </div>
+            </div>
+
+            <div style={styles.innerSurface}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontWeight: 900,
+                  color: "rgba(226,232,240,0.98)",
+                  marginBottom: 8,
+                }}
+              >
+                <Calculator size={15} />
+                Ruta referencial guardada
+              </div>
+
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 950,
+                  color: "rgba(226,232,240,0.98)",
+                  lineHeight: 1.25,
+                }}
+              >
+                {hasMortgageRoute ? routeLabel : "Ruta pendiente"}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 7,
+                  fontSize: 13.5,
+                  color: "rgba(148,163,184,0.95)",
+                  lineHeight: 1.45,
+                }}
+              >
+                {hasMortgageRoute
+                  ? `${providerLabel}${
+                      mortgageRoute?.termYears
+                        ? ` · ${mortgageRoute.termYears} años`
+                        : ""
+                    }${
+                      mortgageRoute?.annualRate
+                        ? ` · ${(mortgageRoute.annualRate * 100).toFixed(2)}% ref.`
+                        : ""
+                    }`
+                  : "Guarda una ruta referencial para esta propiedad."}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+              }}
+            >
+              <MiniStat
+                label="Monto financiado"
+                value={formatMoney(loanAmount)}
+                highlighted={hasMortgageRoute}
+              />
+
+              <MiniStat
+                label="Cuota referencial"
+                value={formatMonthly(monthlyPayment)}
+                highlighted={hasMortgageRoute}
+              />
+
+              <MiniStat
+                label="Rango general"
+                value={formatMoney(maxCompra)}
+              />
+
+              <MiniStat
+                label="Checklist"
+                value={`${docsDone}/${docsTotal} ítems`}
+              />
+            </div>
+          </div>
         </InfoCard>
 
         <InfoCard title="Qué pasa ahora" subtitle={caseDef.nextActorText}>
@@ -816,80 +1164,36 @@ export default function Caso() {
         </InfoCard>
 
         <InfoCard
-          title="Resumen de tu base"
+          title="Preparación documental"
           subtitle="Lo que hoy está sosteniendo tu caso."
         >
-          <div style={{ display: "grid", gap: 12 }}>
-            <div style={styles.innerSurface}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontWeight: 900,
-                  color: "rgba(226,232,240,0.98)",
-                  marginBottom: 8,
-                }}
-              >
-                <Home size={15} />
-                Propiedad base
-              </div>
-
-              <div
-                style={{
-                  fontSize: 15,
-                  fontWeight: 900,
-                  color: "rgba(226,232,240,0.98)",
-                  lineHeight: 1.3,
-                }}
-              >
-                {property ? property.title : "Aún no definida"}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 13.5,
-                  color: "rgba(148,163,184,0.95)",
-                  lineHeight: 1.45,
-                }}
-              >
-                {property
-                  ? `${property.city}${
-                      property.price != null ? ` · ${moneyUSD(property.price)}` : ""
-                    }`
-                  : "Primero debes elegir una propiedad."}
-              </div>
+          <div style={styles.innerSurface}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 900,
+                color: "rgba(226,232,240,0.98)",
+                marginBottom: 10,
+              }}
+            >
+              <FileText size={15} />
+              Checklist
             </div>
 
-            <div style={styles.innerSurface}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontWeight: 900,
-                  color: "rgba(226,232,240,0.98)",
-                  marginBottom: 10,
-                }}
-              >
-                <FileText size={15} />
-                Preparación documental
-              </div>
+            <div style={{ marginBottom: 10 }}>
+              <ProgressBar value={docsProgress} />
+            </div>
 
-              <div style={{ marginBottom: 10 }}>
-                <ProgressBar value={docsProgress} />
-              </div>
-
-              <div
-                style={{
-                  fontSize: 13.5,
-                  color: "rgba(148,163,184,0.95)",
-                  lineHeight: 1.45,
-                }}
-              >
-                Tienes {docsDone} de {docsTotal} ítems marcados en tu checklist.
-              </div>
+            <div
+              style={{
+                fontSize: 13.5,
+                color: "rgba(148,163,184,0.95)",
+                lineHeight: 1.45,
+              }}
+            >
+              Tienes {docsDone} de {docsTotal} ítems marcados en tu checklist.
             </div>
           </div>
         </InfoCard>
@@ -910,6 +1214,16 @@ export default function Caso() {
                   : "Todavía falta definir una propiedad base."
               }
               done={hasChosenProperty}
+            />
+
+            <TimelineItem
+              title="Ruta referencial"
+              body={
+                hasMortgageRoute
+                  ? "Ya tienes una ruta de financiamiento guardada para esta propiedad."
+                  : "Todavía falta guardar una ruta de financiamiento para esta propiedad."
+              }
+              done={hasMortgageRoute}
             />
 
             <TimelineItem
@@ -959,6 +1273,16 @@ export default function Caso() {
               <PrimaryButton onClick={() => navigate("/marketplace")}>
                 Elegir propiedad
               </PrimaryButton>
+            )}
+
+            {hasMortgageRoute ? (
+              <SecondaryButton onClick={() => navigate("/financiamiento-propiedad")}>
+                Ver financiamiento guardado
+              </SecondaryButton>
+            ) : (
+              <SecondaryButton onClick={() => navigate("/financiamiento-propiedad")}>
+                Guardar financiamiento
+              </SecondaryButton>
             )}
 
             <SecondaryButton onClick={() => navigate("/checklist-documentos")}>

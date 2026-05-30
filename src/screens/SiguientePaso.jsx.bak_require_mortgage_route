@@ -23,21 +23,7 @@ import { getCustomer, getCustomerToken } from "../lib/customerSession.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
-function buildApiUrl(path) {
-  const base = String(API_BASE || "").replace(/\/+$/, "");
-  const normalizedPath = String(path || "").startsWith("/")
-    ? String(path || "")
-    : `/${path || ""}`;
-
-  if (base.endsWith("/api")) {
-    return `${base}${normalizedPath}`;
-  }
-
-  return `${base}/api${normalizedPath}`;
-}
-
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
-const LS_SELECTED_MORTGAGE_ROUTE = "hl_selected_mortgage_route_v1";
 const LS_DOCS_CHECKLIST = "hl_docs_checklist_v1";
 
 function safeParseLS(key) {
@@ -373,108 +359,6 @@ function FinancialDisclaimer({ compact = false }) {
   );
 }
 
-
-function normalizeSelectedMortgageRoute(raw = null, selectedProperty = null) {
-  if (!raw || typeof raw !== "object") return null;
-
-  const id =
-    raw.id ||
-    raw._id ||
-    raw.key ||
-    raw.mortgageId ||
-    raw.productId ||
-    raw.tipoProducto ||
-    raw.productLabel ||
-    raw.label ||
-    null;
-
-  const productLabel =
-    raw.productLabel ||
-    raw.tipoProducto ||
-    raw.label ||
-    raw.nombre ||
-    raw.name ||
-    raw.mortgageId ||
-    id ||
-    "Ruta referencial";
-
-  const providerLabel =
-    raw.providerLabel ||
-    raw.provider ||
-    raw.banco ||
-    raw.bank ||
-    raw.entity ||
-    raw.entidad ||
-    "Vía entidad financiera";
-
-  const annualRate =
-    raw.annualRate ??
-    raw.tasaAnual ??
-    raw.rate ??
-    raw.interestRate ??
-    null;
-
-  const termMonths =
-    raw.termMonths ??
-    raw.plazoMeses ??
-    raw.months ??
-    (raw.termYears || raw.plazoAnios || raw.plazoAños
-      ? Number(raw.termYears || raw.plazoAnios || raw.plazoAños) * 12
-      : null);
-
-  const termYears =
-    raw.termYears ??
-    raw.plazoAnios ??
-    raw.plazoAños ??
-    (termMonths ? Math.round(Number(termMonths) / 12) : null);
-
-  const monthlyPayment =
-    raw.monthlyPayment ??
-    raw.cuotaMensual ??
-    raw.cuota ??
-    raw.estimatedMonthlyPayment ??
-    null;
-
-  const loanAmount =
-    raw.loanAmount ??
-    raw.montoPrestamo ??
-    raw.montoFinanciar ??
-    raw.montoFinanciado ??
-    raw.amount ??
-    null;
-
-  return {
-    id: id ? String(id) : null,
-    key: id ? String(id) : null,
-    mortgageId: id ? String(id) : null,
-    productLabel,
-    tipoProducto: productLabel,
-    providerLabel,
-    provider: providerLabel,
-    annualRate,
-    tasaAnual: annualRate,
-    termMonths,
-    plazoMeses: termMonths,
-    termYears,
-    plazoAnios: termYears,
-    monthlyPayment,
-    cuota: monthlyPayment,
-    cuotaMensual: monthlyPayment,
-    loanAmount,
-    montoFinanciar: loanAmount,
-    montoFinanciado: loanAmount,
-    propertyId: selectedProperty?.id || null,
-    propertyTitle: selectedProperty?.title || null,
-    propertyPrice: selectedProperty?.price ?? null,
-    status: "selected",
-    confirmed: true,
-    selectedAt: raw.selectedAt || new Date().toISOString(),
-    source: raw.source || "frontend_selected_route",
-    raw,
-  };
-}
-
-
 function getStatusMeta(selectedPropertyStatus, hasChosenProperty) {
   if (!hasChosenProperty) {
     return {
@@ -520,25 +404,13 @@ function getStatusMeta(selectedPropertyStatus, hasChosenProperty) {
 function getCaseReadinessStatus({
   hasChosenProperty,
   selectedPropertyStatus,
-  hasConfirmedMortgageRoute,
   docsReady,
 }) {
   if (!hasChosenProperty) return "no_listo";
-
-  if (selectedPropertyStatus === "selected_no_longer_viable") {
+  if (selectedPropertyStatus === "selected_no_longer_viable")
     return "revisar_ruta";
-  }
-
-  if (selectedPropertyStatus === "selected_near_route") {
+  if (selectedPropertyStatus === "selected_near_route")
     return "comparar_propiedades";
-  }
-
-  // No debemos permitir compartir el caso si todavía no se guardó
-  // una ruta de financiamiento para la propiedad elegida.
-  if (!hasConfirmedMortgageRoute) {
-    return "confirmar_hipoteca";
-  }
-
   if (!docsReady) return "no_listo";
 
   return "listo_para_promotor_y_banco";
@@ -567,24 +439,6 @@ function getReadinessMeta({ caseReadinessStatus, hasChosenProperty }) {
       nextActionBody: hasChosenProperty
         ? "Eso le da a HabitaLibre una mejor base para revisar si tu caso ya puede pasar a la siguiente etapa."
         : "Eso define el proyecto correcto y ayuda a ordenar mejor tu ruta.",
-    };
-  }
-
-  if (caseReadinessStatus === "confirmar_hipoteca") {
-    return {
-      heroTitle: "Antes de compartir tu caso, falta guardar tu ruta de financiamiento",
-      heroBody:
-        "Ya tienes una propiedad base, pero todavía falta elegir una propiedad base, pero todavía falta elegir y guardar una opción de financiamiento referencial para esa propiedad. Esto ayuda a que HabitaLibre reciba un caso más claro y ordenado.",
-      cardTitle: "Falta guardar una ruta de financiamiento",
-      cardBody:
-        "Para pasar a revisión interna, primero guarda una lectura de financiamiento para la propiedad elegida.",
-      cta: "Ver financiamiento de esta propiedad",
-      path: "/financiamiento-propiedad",
-      chip: "Financiamiento pendiente",
-      tone: "neutral",
-      nextActionTitle: "Guardar una ruta de financiamiento",
-      nextActionBody:
-        "Elige una opción referencial de financiamiento para que el caso tenga propiedad, entrada, monto a financiar y ruta hipotecaria base.",
     };
   }
 
@@ -654,11 +508,6 @@ const [backendSelectedProperty, setBackendSelectedProperty] = useState(null);
   []
 );
 
-const selectedMortgageRoute = useMemo(
-  () => loadOwnedData(LS_SELECTED_MORTGAGE_ROUTE),
-  []
-);
-
 const selectedPropertyIdCandidate = useMemo(() => {
   return (
     selectedPropertyRef?.id ||
@@ -682,18 +531,15 @@ useEffect(() => {
     if (!selectedPropertyIdCandidate) return;
 
     try {
-      const propertyUrl = buildApiUrl(
-        `/properties/${encodeURIComponent(selectedPropertyIdCandidate)}`
+      const res = await fetch(
+        `${API_BASE}/properties/${encodeURIComponent(selectedPropertyIdCandidate)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
       );
-
-      console.log("[SiguientePaso] URL propiedad seleccionada:", propertyUrl);
-
-      const res = await fetch(propertyUrl, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      });
 
       const data = await res.json().catch(() => null);
 
@@ -811,31 +657,11 @@ const normalizedSelectedProperty = useMemo(() => {
     normalizedSelectedProperty?.status ||
     null;
 
-  const selectedMortgageRouteCandidate = normalizeSelectedMortgageRoute(
-    selectedMortgageRoute ||
-      journey?.selectedMortgageRoute ||
-      journey?.mortgageRoute ||
-      journey?.rutaHipotecaria ||
-      snapshot?.selectedMortgageRoute ||
-      snapshot?.mortgageRoute ||
-      snapshot?.bestMortgage ||
-      null,
-    normalizedSelectedProperty
-  );
-
-  const hasConfirmedMortgageRoute = Boolean(
-    selectedMortgageRouteCandidate ||
-      journey?.mortgageRouteConfirmed === true ||
-      journey?.rutaHipotecariaGuardada === true
-  );
-
-  
   const statusMeta = getStatusMeta(selectedPropertyStatus, hasChosenProperty);
 
   const caseReadinessStatus = getCaseReadinessStatus({
     hasChosenProperty,
     selectedPropertyStatus,
-    hasConfirmedMortgageRoute,
     docsReady,
   });
 
@@ -843,20 +669,6 @@ const normalizedSelectedProperty = useMemo(() => {
     caseReadinessStatus,
     hasChosenProperty,
   });
-
-  useEffect(() => {
-    if (!hasConfirmedMortgageRoute) return;
-    if (!submitError) return;
-
-    const isStaleMortgageRouteError =
-      /falta guardar una ruta|ruta no encontrada|route not found/i.test(
-        String(submitError)
-      );
-
-    if (isStaleMortgageRouteError) {
-      setSubmitError("");
-    }
-  }, [hasConfirmedMortgageRoute, submitError]);
 
   const alreadyRequested = Boolean(
     journey?.activationRequestId ||
@@ -928,30 +740,10 @@ const normalizedSelectedProperty = useMemo(() => {
       probabilityLabel,
       estimatedQuota: cuota,
       estimatedMaxPurchase: maxCompra,
-      selectedMortgageRoute: selectedMortgageRouteCandidate,
-      selectedMortgageRouteId:
-        selectedMortgageRouteCandidate?.id ||
-        selectedMortgageRouteCandidate?._id ||
-        selectedMortgageRouteCandidate?.key ||
-        selectedMortgageRouteCandidate?.mortgageId ||
-        null,
-      mortgageRouteConfirmed: hasConfirmedMortgageRoute,
       readinessStatus: caseReadinessStatus,
     };
 
-    console.log("[SiguientePaso] Payload activación:", {
-      hasSelectedProperty: !!payload.selectedProperty,
-      selectedPropertyId: payload.selectedProperty?.id || null,
-      hasSelectedMortgageRoute: !!payload.selectedMortgageRoute,
-      selectedMortgageRouteId: payload.selectedMortgageRouteId,
-      readinessStatus: payload.readinessStatus,
-    });
-
-    const activationUrl = buildApiUrl("/casos-activacion");
-
-    console.log("[SiguientePaso] URL activación:", activationUrl);
-
-    const res = await fetch(activationUrl, {
+    const res = await fetch(`${API_BASE}/casos-activacion`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -961,12 +753,6 @@ const normalizedSelectedProperty = useMemo(() => {
     });
 
     const data = await res.json().catch(() => ({}));
-
-    console.log("[SiguientePaso] Respuesta activación:", {
-      status: res.status,
-      ok: res.ok,
-      data,
-    });
 
     if (!res.ok) {
       throw new Error(
@@ -1006,11 +792,6 @@ const normalizedSelectedProperty = useMemo(() => {
         activationRequestLabel: "Caso recibido por HabitaLibre",
         caseSubmittedAt: now,
 
-        mortgageRouteConfirmed: hasConfirmedMortgageRoute,
-        selectedMortgageRoute: selectedMortgageRouteCandidate,
-        mortgageRoute: selectedMortgageRouteCandidate,
-        rutaHipotecaria: selectedMortgageRouteCandidate,
-
         statusGeneral: data?.statusGeneral || "pendiente_revision_habitalibre",
         projectStatus: data?.projectStatus || "por_revisar",
         bankStatus: data?.bankStatus || "por_revisar",
@@ -1029,18 +810,9 @@ const normalizedSelectedProperty = useMemo(() => {
       saveOwnedData(LS_JOURNEY, nextJourney);
       navigate("/caso");
     } catch (error) {
-      const rawMessage =
-        error?.message || "No se pudo compartir tu caso con HabitaLibre.";
-
-      const friendlyMessage = /ruta no encontrada|route not found/i.test(
-        rawMessage
-      )
-        ? hasConfirmedMortgageRoute
-          ? "No pudimos compartir tu caso en este momento. La ruta está guardada, pero el servidor no la reconoció todavía. Intenta nuevamente."
-          : "Falta guardar una ruta de financiamiento para esta propiedad antes de compartir tu caso."
-        : rawMessage;
-
-      setSubmitError(friendlyMessage);
+      setSubmitError(
+        error?.message || "No se pudo compartir tu caso con HabitaLibre."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1095,12 +867,6 @@ const normalizedSelectedProperty = useMemo(() => {
             </Chip>
 
             <Chip tone={statusMeta.tone}>{statusMeta.chip}</Chip>
-
-            <Chip tone={hasConfirmedMortgageRoute ? "good" : "neutral"}>
-              {hasConfirmedMortgageRoute
-                ? "Financiamiento guardado"
-                : "Financiamiento pendiente"}
-            </Chip>
 
             <Chip tone={docsReady ? "good" : "neutral"}>
               {docsDone} de {docsTotal} ítems listos

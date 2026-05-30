@@ -1033,7 +1033,8 @@ export default function Ruta() {
   const hasConfirmedMortgageRoute = Boolean(
     selectedMortgageRoute?.status === "confirmed" ||
       selectedMortgageRoute?.status === "selected" ||
-      journey?.mortgageRouteConfirmed === true
+      journey?.mortgageRouteConfirmed === true ||
+      hasPropertyFinancingContext
   );
 
   const mortgageRouteLabel = selectedMortgageRoute
@@ -1306,39 +1307,374 @@ const flags = {
             background:
               "linear-gradient(180deg, rgba(37,211,166,0.10), rgba(255,255,255,0.045))",
             border: "1px solid rgba(37,211,166,0.24)",
+            boxShadow: "0 14px 36px rgba(0,0,0,0.22)",
           }}
         >
-          <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)", fontWeight: 900 }}>
-            Propiedad elegida
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "flex-start",
+            }}
+          >
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "rgba(148,163,184,0.95)",
+                  fontWeight: 900,
+                }}
+              >
+                Financiamiento para esta propiedad
+              </div>
+
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 20,
+                  fontWeight: 980,
+                  lineHeight: 1.15,
+                  color: "rgba(226,232,240,0.98)",
+                }}
+              >
+                {selectedPropertyName}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 13.5,
+                  color: "rgba(203,213,225,0.92)",
+                  lineHeight: 1.4,
+                }}
+              >
+                Esta lectura combina tu perfil con la propiedad que elegiste.
+                La ruta final dependerá de la entidad financiera.
+              </div>
+            </div>
+
+            <Chip tone={selectedPropertyRouteGap > 0 ? "neutral" : "good"}>
+              {selectedPropertyRouteGap > 0 ? "Requiere preparación" : "Alineada"}
+            </Chip>
           </div>
 
           <div
             style={{
-              marginTop: 8,
-              fontSize: 20,
-              fontWeight: 980,
-              lineHeight: 1.15,
-              color: "rgba(226,232,240,0.98)",
+              marginTop: 16,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
             }}
           >
-            {selectedPropertyName}
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Precio propiedad
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyPrice ? moneyUSD(selectedPropertyPrice) : "—"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Ruta objetivo
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyRouteObjective
+                  ? moneyUSD(selectedPropertyRouteObjective)
+                  : maxCompra
+                  ? moneyUSD(maxCompra)
+                  : "—"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Entrada disponible
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyEntryAvailable
+                  ? moneyUSD(selectedPropertyEntryAvailable)
+                  : "—"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Monto a financiar
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyLoanAmount
+                  ? moneyUSD(selectedPropertyLoanAmount)
+                  : "Por definir"}
+              </div>
+            </div>
           </div>
 
           <div
             style={{
-              marginTop: 8,
-              fontSize: 13.5,
-              color: "rgba(203,213,225,0.92)",
-              lineHeight: 1.4,
+              marginTop: 14,
+              padding: 14,
+              borderRadius: 18,
+              background:
+                selectedPropertyRouteGap > 0
+                  ? "rgba(245,158,11,0.08)"
+                  : "rgba(34,197,94,0.08)",
+              border:
+                selectedPropertyRouteGap > 0
+                  ? "1px solid rgba(245,158,11,0.22)"
+                  : "1px solid rgba(34,197,94,0.18)",
+              color: "rgba(226,232,240,0.94)",
+              fontSize: 13,
+              lineHeight: 1.42,
             }}
           >
-            Ya elegiste una propiedad como referencia. Revisa su financiamiento
-            en una pantalla separada para no mezclarlo con tu camino general.
+            {selectedPropertyRouteGap > 0 ? (
+              <>
+                Esta propiedad está aproximadamente{" "}
+                <b>{moneyUSD(selectedPropertyRouteGap)}</b> sobre tu ruta objetivo.
+                Te conviene fortalecer perfil, reducir deudas o comparar una unidad
+                de menor precio.
+              </>
+            ) : (
+              <>
+                Esta propiedad se ve alineada de forma referencial con tu ruta actual.
+                El siguiente paso es preparar documentos y validar condiciones finales.
+              </>
+            )}
           </div>
+
+          {hasPropertyMortgageOptions ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 18,
+                background: "rgba(15,23,42,0.36)",
+                border: "1px solid rgba(148,163,184,0.14)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "rgba(148,163,184,0.95)",
+                  fontWeight: 900,
+                }}
+              >
+                Rutas referenciales para esta propiedad
+              </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                {propertyMortgageOptions.map((route, index) => (
+                  <div
+                    key={`${route.id}-${index}`}
+                    style={{
+                      padding: 13,
+                      borderRadius: 16,
+                      background:
+                        index === 0
+                          ? "rgba(37,211,166,0.10)"
+                          : "rgba(255,255,255,0.045)",
+                      border:
+                        index === 0
+                          ? "1px solid rgba(37,211,166,0.24)"
+                          : "1px solid rgba(148,163,184,0.14)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "rgba(148,163,184,0.92)",
+                            fontWeight: 900,
+                          }}
+                        >
+                          {index === 0 ? "Ruta más cercana" : `Alternativa ${index + 1}`}
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: 16,
+                            fontWeight: 980,
+                            color: "rgba(226,232,240,0.98)",
+                            lineHeight: 1.15,
+                          }}
+                        >
+                          {route.producto}
+                        </div>
+
+                        {route.provider ? (
+                          <div
+                            style={{
+                              marginTop: 3,
+                              fontSize: 12,
+                              color: "rgba(148,163,184,0.9)",
+                            }}
+                          >
+                            {route.provider}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <Chip tone={index === 0 ? "good" : "neutral"}>
+                        {index === 0 ? "Top" : "Ref."}
+                      </Chip>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 12,
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 8,
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 10.5,
+                            color: "rgba(148,163,184,0.92)",
+                            fontWeight: 850,
+                          }}
+                        >
+                          Tasa ref.
+                        </div>
+                        <div style={{ marginTop: 3, fontSize: 14, fontWeight: 900 }}>
+                          {formatRate(route.tasaAnual)}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 10.5,
+                            color: "rgba(148,163,184,0.92)",
+                            fontWeight: 850,
+                          }}
+                        >
+                          Plazo
+                        </div>
+                        <div style={{ marginTop: 3, fontSize: 14, fontWeight: 900 }}>
+                          {formatTerm(route.plazoMeses)}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 10.5,
+                            color: "rgba(148,163,184,0.92)",
+                            fontWeight: 850,
+                          }}
+                        >
+                          Cuota ref.
+                        </div>
+                        <div style={{ marginTop: 3, fontSize: 14, fontWeight: 900 }}>
+                          {route.cuota ? `${moneyUSD(route.cuota)}/mes` : "Por definir"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 10.5,
+                            color: "rgba(148,163,184,0.92)",
+                            fontWeight: 850,
+                          }}
+                        >
+                          Monto estimado
+                        </div>
+                        <div style={{ marginTop: 3, fontSize: 14, fontWeight: 900 }}>
+                          {route.montoPrestamo ? moneyUSD(route.montoPrestamo) : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  fontSize: 11.5,
+                  lineHeight: 1.38,
+                  color: "rgba(148,163,184,0.92)",
+                }}
+              >
+                Estas rutas son referenciales. La aprobación, tasa, plazo y cuota
+                final dependen de la entidad financiera.
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 18,
+                background: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.18)",
+                color: "rgba(254,243,199,0.95)",
+                fontSize: 13,
+                lineHeight: 1.4,
+              }}
+            >
+              Todavía no tenemos rutas hipotecarias referenciales suficientes
+              para esta propiedad. Puedes comparar otra unidad o actualizar tu
+              información para afinar la lectura.
+            </div>
+          )}
 
           <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-            <PrimaryButton onClick={() => nav("/financiamiento-propiedad")}>
-              Ver financiamiento de esta propiedad
+            <PrimaryButton
+              onClick={() =>
+                nav(selectedPropertyId ? `/property/${selectedPropertyId}` : "/marketplace")
+              }
+            >
+              Ver detalle de la propiedad
             </PrimaryButton>
 
             <SecondaryButton onClick={() => nav("/marketplace")}>
@@ -1347,27 +1683,21 @@ const flags = {
           </div>
         </Card>
       ) : (
-        <Card style={{ marginTop: 18, padding: "18px" }}>
+        <Card
+          style={{
+            marginTop: 18,
+            padding: "18px",
+          }}
+        >
           <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)", fontWeight: 900 }}>
-            Propiedad
+            Financiamiento
           </div>
-
           <div style={{ marginTop: 8, fontSize: 20, fontWeight: 980, lineHeight: 1.15 }}>
             Elige una propiedad para aterrizar tu ruta
           </div>
-
-          <div
-            style={{
-              marginTop: 8,
-              fontSize: 13.5,
-              color: "rgba(148,163,184,0.95)",
-              lineHeight: 1.4,
-            }}
-          >
-            El financiamiento depende de tu perfil y del inmueble específico
-            que elijas.
+          <div style={{ marginTop: 8, fontSize: 13.5, color: "rgba(148,163,184,0.95)", lineHeight: 1.4 }}>
+            La lectura de financiamiento depende de tu perfil y del inmueble específico que elijas.
           </div>
-
           <div style={{ marginTop: 14 }}>
             <PrimaryButton onClick={() => nav("/marketplace")}>
               Explorar propiedades

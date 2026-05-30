@@ -1,7 +1,13 @@
 // src/screens/PropertyDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MapPin } from "lucide-react";
+import {
+  ArrowLeft,
+  MapPin,
+  Navigation,
+  CheckCircle2,
+  Image as ImageIcon,
+} from "lucide-react";
 import { moneyUSD } from "../lib/money";
 import { API_BASE } from "../lib/api";
 import { getCustomer } from "../lib/customerSession.js";
@@ -15,6 +21,7 @@ const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 
 /* ---------------- storage ---------------- */
+
 function loadJSON(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -53,9 +60,7 @@ function loadOwnedData(key) {
       return envelope.data ?? null;
     }
 
-    if (!ownerEmail) {
-      return envelope.data ?? null;
-    }
+    if (!ownerEmail) return envelope.data ?? null;
 
     return null;
   }
@@ -68,18 +73,28 @@ function saveOwnedData(key, data) {
   saveJSON(key, { ownerEmail, data });
 }
 
+/* ---------------- helpers ---------------- */
+
 function pick(snapshot, keys) {
   if (!snapshot) return null;
+
   for (const k of keys) {
     if (snapshot?.[k] != null) return snapshot[k];
     if (snapshot?.output?.[k] != null) return snapshot.output[k];
   }
+
   return null;
 }
 
 function n(v, def = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : def;
+}
+
+function maybeNum(v) {
+  if (v == null || v === "") return null;
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
 }
 
 function getPropertyId(property) {
@@ -92,10 +107,17 @@ function getPropertyId(property) {
   );
 }
 
-function maybeNum(v) {
-  if (v == null || v === "") return null;
-  const x = Number(v);
-  return Number.isFinite(x) ? x : null;
+function firstValue(obj, keys, fallback = null) {
+  if (!obj) return fallback;
+
+  for (const key of keys) {
+    const value = obj?.[key];
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+
+  return fallback;
 }
 
 function formatMoney(v) {
@@ -105,18 +127,19 @@ function formatMoney(v) {
 
 function formatPct(v, digits = 1) {
   const x = Number(v);
-  if (!Number.isFinite(x)) return "—";
+  if (!Number.isFinite(x) || x <= 0) return "Por confirmar";
   return `${x.toFixed(digits)}%`;
 }
 
 function formatMonthly(v) {
   const x = Number(v);
-  return Number.isFinite(x) ? `${moneyUSD(x)}/mes` : "—";
+  return Number.isFinite(x) ? `${moneyUSD(x)}/mes` : "Por confirmar";
 }
 
-function formatCompatibility(value) {
-  if (!value) return "—";
-  return String(value);
+function formatMonths(v) {
+  const x = Number(v);
+  if (!Number.isFinite(x) || x <= 0) return "Por confirmar";
+  return x === 1 ? "1 mes" : `${x} meses`;
 }
 
 function formatMatchReason(reason) {
@@ -127,22 +150,271 @@ function formatMatchReason(reason) {
     cuota: "Cuota referencial",
     programa: "Categoría",
   };
-  return map[reason] || reason || "Precio";
+
+  return map[reason] || reason || "";
 }
 
 function formatEstadoCompra(estado) {
   const map = {
-    top_match: "Más alineada",
-    entrada_viable_hipoteca_futura_viable:
-      "Entrada alineada + ruta futura referencial",
-    entrada_viable_hipoteca_futura_debil:
-      "Entrada alineada, ruta por fortalecer",
+    top_match: "Top match",
+    entrada_viable_hipoteca_futura_viable: "Ruta futura con entrada",
+    entrada_viable_hipoteca_futura_debil: "Cerca de tu ruta objetivo",
+    ruta_preparacion: "Ruta con preparación",
+    ruta_cercana: "Cerca de tu ruta objetivo",
+    fuera_de_rango: "Por encima de tu ruta",
     entrada_no_viable: "Entrada por fortalecer",
-    ruta_cercana: "Ruta cercana",
     fuera_de_reglas: "Por revisar",
   };
+
   return map[estado] || "Pendiente de análisis";
 }
+
+function normalizeArray(value) {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/[,;\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function getGalleryImages(property) {
+  const candidates = [
+    ...normalizeArray(property?.galeria),
+    ...normalizeArray(property?.gallery),
+    ...normalizeArray(property?.imagenes),
+    ...normalizeArray(property?.images),
+    ...normalizeArray(property?.fotos),
+    property?.imagen,
+    property?.image,
+    property?.imageUrl,
+    property?.foto,
+    property?.cover,
+  ];
+
+  const unique = [];
+
+  for (const img of candidates) {
+    const src =
+      typeof img === "string"
+        ? img
+        : img?.url || img?.src || img?.image || img?.secure_url || null;
+
+    if (src && !unique.includes(src)) {
+      unique.push(src);
+    }
+  }
+
+  return unique;
+}
+
+function getFloorPlan(property) {
+  return (
+    property?.plano ||
+    property?.planoUrl ||
+    property?.floorPlan ||
+    property?.floorPlanUrl ||
+    property?.distribucion ||
+    null
+  );
+}
+
+function getNearbyItems(property) {
+  return [
+    ...normalizeArray(property?.nearby),
+    ...normalizeArray(property?.cercaDe),
+    ...normalizeArray(property?.entorno),
+    ...normalizeArray(property?.puntosCercanos),
+  ].slice(0, 8);
+}
+
+function getPropertyMapUrl(property = {}) {
+  return (
+    property?.googleMapsUrl ||
+    property?.googleMapUrl ||
+    property?.mapsUrl ||
+    property?.mapUrl ||
+    property?.ubicacionGoogleMaps ||
+    property?.urlGoogleMaps ||
+    property?.linkMaps ||
+    property?.linkGoogleMaps ||
+    property?.linkUbicacion ||
+    property?.urlUbicacion ||
+    property?.ubicacionUrl ||
+    property?.urlMapa ||
+    property?.mapaUrl ||
+    property?.maps ||
+    property?.googleMaps ||
+    property?.locationUrl ||
+    property?.raw?.googleMapsUrl ||
+    property?.raw?.googleMapUrl ||
+    property?.raw?.mapsUrl ||
+    property?.raw?.mapUrl ||
+    property?.raw?.ubicacionGoogleMaps ||
+    property?.raw?.urlGoogleMaps ||
+    property?.raw?.linkMaps ||
+    property?.raw?.linkGoogleMaps ||
+    property?.raw?.linkUbicacion ||
+    property?.raw?.urlUbicacion ||
+    property?.raw?.ubicacionUrl ||
+    property?.raw?.urlMapa ||
+    property?.raw?.mapaUrl ||
+    ""
+  );
+}
+
+function getPropertyAddress(property = {}) {
+  return (
+    property?.direccion ||
+    property?.direccionReferencial ||
+    property?.address ||
+    property?.ubicacionTexto ||
+    property?.locationText ||
+    property?.mapAddress ||
+    property?.referenciaUbicacion ||
+    property?.raw?.direccion ||
+    property?.raw?.direccionReferencial ||
+    property?.raw?.address ||
+    property?.raw?.ubicacionTexto ||
+    property?.raw?.locationText ||
+    property?.raw?.mapAddress ||
+    ""
+  );
+}
+
+function normalizeCoordinate(value, type = "lat") {
+  const x = Number(value);
+
+  if (!Number.isFinite(x)) return null;
+
+  const max = type === "lat" ? 90 : 180;
+
+  if (Math.abs(x) <= max) return x;
+
+  const dividedBy1000 = x / 1000;
+  if (Math.abs(dividedBy1000) <= max) return dividedBy1000;
+
+  const dividedBy10000 = x / 10000;
+  if (Math.abs(dividedBy10000) <= max) return dividedBy10000;
+
+  const dividedBy100000 = x / 100000;
+  if (Math.abs(dividedBy100000) <= max) return dividedBy100000;
+
+  return null;
+}
+
+function getLatLng(property) {
+  const rawLat =
+    property?.lat ??
+    property?.latitude ??
+    property?.ubicacion?.lat ??
+    property?.location?.lat ??
+    property?.geo?.lat ??
+    property?.raw?.lat ??
+    property?.raw?.latitude ??
+    property?.raw?.ubicacion?.lat ??
+    property?.raw?.location?.lat ??
+    null;
+
+  const rawLng =
+    property?.lng ??
+    property?.lon ??
+    property?.longitude ??
+    property?.ubicacion?.lng ??
+    property?.ubicacion?.lon ??
+    property?.location?.lng ??
+    property?.location?.lon ??
+    property?.geo?.lng ??
+    property?.raw?.lng ??
+    property?.raw?.lon ??
+    property?.raw?.longitude ??
+    property?.raw?.ubicacion?.lng ??
+    property?.raw?.location?.lng ??
+    null;
+
+  const lat = normalizeCoordinate(rawLat, "lat");
+  const lng = normalizeCoordinate(rawLng, "lng");
+
+  if (lat == null || lng == null) return null;
+
+  return { lat, lng };
+}
+
+function extractCoordsFromGoogleMapsUrl(url = "") {
+  const text = String(url || "");
+
+  const atMatch = text.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (atMatch) {
+    return {
+      lat: normalizeCoordinate(atMatch[1], "lat"),
+      lng: normalizeCoordinate(atMatch[2], "lng"),
+    };
+  }
+
+  const bangMatch = text.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (bangMatch) {
+    return {
+      lat: normalizeCoordinate(bangMatch[1], "lat"),
+      lng: normalizeCoordinate(bangMatch[2], "lng"),
+    };
+  }
+
+  const queryMatch = text.match(/[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (queryMatch) {
+    return {
+      lat: normalizeCoordinate(queryMatch[1], "lat"),
+      lng: normalizeCoordinate(queryMatch[2], "lng"),
+    };
+  }
+
+  return null;
+}
+
+function getMapEmbedSrc(property) {
+  const mapUrl = getPropertyMapUrl(property);
+  const coordsFromUrl = extractCoordsFromGoogleMapsUrl(mapUrl);
+  const coords =
+    getLatLng(property) ||
+    (coordsFromUrl?.lat != null && coordsFromUrl?.lng != null
+      ? coordsFromUrl
+      : null);
+  const address = getPropertyAddress(property);
+
+  if (mapUrl && String(mapUrl).includes("/maps/embed")) {
+    return mapUrl;
+  }
+
+  if (coords) {
+    return `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=15&output=embed`;
+  }
+
+  if (address) {
+    return `https://www.google.com/maps?q=${encodeURIComponent(
+      address
+    )}&z=15&output=embed`;
+  }
+
+  return "";
+}
+
+function normalizeComparable(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/* ---------------- UI ---------------- */
 
 const UI = {
   bg: "linear-gradient(180deg, #071024 0%, #0b1a35 100%)",
@@ -151,6 +423,7 @@ const UI = {
   border: "rgba(255,255,255,0.10)",
   borderSoft: "rgba(255,255,255,0.08)",
   textDim: "rgba(255,255,255,0.72)",
+  textMuted: "rgba(255,255,255,0.58)",
   green: "#25d3a6",
   greenBg: "rgba(37,211,166,0.10)",
   greenBorder: "rgba(37,211,166,0.26)",
@@ -161,6 +434,14 @@ const UI = {
   shadow: "0 10px 30px rgba(0,0,0,0.22)",
   shadowSoft: "0 10px 24px rgba(0,0,0,0.18)",
 };
+
+function autoGrid(min = 145) {
+  return {
+    display: "grid",
+    gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`,
+    gap: 10,
+  };
+}
 
 function Pill({ children, tone = "neutral" }) {
   let bg = "rgba(255,255,255,0.08)";
@@ -190,6 +471,9 @@ function Pill({ children, tone = "neutral" }) {
         background: bg,
         border: `1px solid ${br}`,
         fontWeight: 900,
+        lineHeight: 1,
+        display: "inline-flex",
+        alignItems: "center",
       }}
     >
       {children}
@@ -200,6 +484,7 @@ function Pill({ children, tone = "neutral" }) {
 function PrimaryButton({ children, onClick, style, disabled = false }) {
   return (
     <button
+      type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       style={{
@@ -223,6 +508,7 @@ function PrimaryButton({ children, onClick, style, disabled = false }) {
 function SecondaryButton({ children, onClick, style }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       style={{
         width: "100%",
@@ -241,20 +527,43 @@ function SecondaryButton({ children, onClick, style }) {
   );
 }
 
-function StatCard({ label, value }) {
+function StatCard({ label, value, accent = false }) {
   return (
     <div
       style={{
         padding: 14,
         borderRadius: 18,
-        background: UI.cardSoft,
-        border: `1px solid ${UI.borderSoft}`,
+        background: accent ? UI.greenBg : UI.cardSoft,
+        border: accent
+          ? `1px solid ${UI.greenBorder}`
+          : `1px solid ${UI.borderSoft}`,
+        minHeight: 76,
+        minWidth: 0,
       }}
     >
-      <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
+      <div
+        style={{
+          fontSize: 11,
+          opacity: 0.72,
+          fontWeight: 800,
+          lineHeight: 1.25,
+        }}
+      >
         {label}
       </div>
-      <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>
+
+      <div
+        style={{
+          marginTop: 6,
+          fontSize: "clamp(16px, 4.8vw, 22px)",
+          fontWeight: 950,
+          lineHeight: 1.12,
+          letterSpacing: -0.4,
+          wordBreak: "normal",
+          overflowWrap: "normal",
+          whiteSpace: "normal",
+        }}
+      >
         {value}
       </div>
     </div>
@@ -273,7 +582,10 @@ function InfoCard({ title, subtitle, children }) {
         boxShadow: UI.shadowSoft,
       }}
     >
-      <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
+      <div style={{ fontWeight: 900, fontSize: 18, lineHeight: 1.15 }}>
+        {title}
+      </div>
+
       {subtitle ? (
         <div
           style={{
@@ -286,6 +598,7 @@ function InfoCard({ title, subtitle, children }) {
           {subtitle}
         </div>
       ) : null}
+
       <div style={{ marginTop: 12 }}>{children}</div>
     </div>
   );
@@ -344,6 +657,128 @@ function FinancialDisclaimer({ compact = false }) {
   );
 }
 
+function NearbyChip({ children }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "10px 11px",
+        borderRadius: 16,
+        background: UI.cardSoft,
+        border: `1px solid ${UI.borderSoft}`,
+        minHeight: 46,
+        minWidth: 0,
+      }}
+    >
+      <CheckCircle2 size={16} color={UI.green} style={{ flexShrink: 0 }} />
+      <div
+        style={{
+          fontSize: 12.5,
+          fontWeight: 850,
+          lineHeight: 1.2,
+          color: "rgba(255,255,255,0.88)",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MapPreview({ embedSrc, locationText }) {
+  if (embedSrc) {
+    return (
+      <div
+        style={{
+          borderRadius: 22,
+          overflow: "hidden",
+          border: `1px solid ${UI.borderSoft}`,
+          background: UI.cardSoft,
+        }}
+      >
+        <iframe
+          title={`Mapa de ${locationText || "propiedad"}`}
+          src={embedSrc}
+          width="100%"
+          height="260"
+          style={{
+            border: 0,
+            display: "block",
+            filter: "grayscale(0.04) contrast(0.96)",
+          }}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        minHeight: 160,
+        borderRadius: 22,
+        overflow: "hidden",
+        border: `1px solid ${UI.borderSoft}`,
+        background:
+          "linear-gradient(135deg, rgba(37,211,166,0.16), rgba(255,255,255,0.05))",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.45,
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px)",
+          backgroundSize: "34px 34px",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: 28,
+          left: 26,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 14px",
+          borderRadius: 999,
+          background: "rgba(7,16,36,0.82)",
+          border: `1px solid ${UI.borderSoft}`,
+          fontWeight: 900,
+        }}
+      >
+        <MapPin size={18} color={UI.green} />
+        Zona referencial
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          left: 22,
+          right: 22,
+          bottom: 24,
+          padding: "16px 18px",
+          borderRadius: 20,
+          background: "rgba(7,16,36,0.86)",
+          border: `1px solid ${UI.borderSoft}`,
+          fontSize: 18,
+          fontWeight: 950,
+          lineHeight: 1.2,
+        }}
+      >
+        {locationText}
+      </div>
+    </div>
+  );
+}
+
 function NotFound({ onBack }) {
   return (
     <div
@@ -387,72 +822,185 @@ function NotFound({ onBack }) {
   );
 }
 
+/* ---------------- page ---------------- */
+
 export default function PropertyDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
- const [savingSelection, setSavingSelection] = useState(false);
-const [backendProperty, setBackendProperty] = useState(null);
-const [loadingBackendProperty, setLoadingBackendProperty] = useState(true);
+
+  const [savingSelection, setSavingSelection] = useState(false);
+  const [backendProperty, setBackendProperty] = useState(null);
+  const [loadingBackendProperty, setLoadingBackendProperty] = useState(true);
 
   const snapshot = useMemo(() => loadOwnedData(LS_SNAPSHOT), []);
   const journey = useMemo(() => loadOwnedData(LS_JOURNEY), []);
-useEffect(() => {
-  let isMounted = true;
 
-  async function loadPropertyFromBackend() {
-    try {
-      setLoadingBackendProperty(true);
+  useEffect(() => {
+    let isMounted = true;
 
-      const res = await fetch(
-        `${API_BASE}/properties/${encodeURIComponent(id)}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
+    function getToken() {
+      try {
+        return localStorage.getItem("hl_customer_token") || "";
+      } catch {
+        return "";
+      }
+    }
+
+    async function fetchJson(url) {
+      const token = getToken();
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
 
       const data = await res.json().catch(() => null);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(
-          data?.message || "No se pudo cargar la propiedad desde backend."
-        );
+        throw new Error(data?.message || `Endpoint respondió ${res.status}`);
       }
 
-      if (!isMounted) return;
+      return data;
+    }
 
-      setBackendProperty(data?.property || null);
+    function extractProperties(data) {
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.properties)) return data.properties;
+      if (Array.isArray(data?.data?.properties)) return data.data.properties;
+      if (Array.isArray(data?.items)) return data.items;
+      if (Array.isArray(data?.data?.items)) return data.data.items;
+      if (Array.isArray(data?.results)) return data.results;
+      if (Array.isArray(data?.data?.results)) return data.data.results;
 
-      console.log("[PropertyDetail] Propiedad real cargada:", {
-        id,
-        found: !!data?.property,
-      });
-    } catch (error) {
-      console.warn(
-        "[PropertyDetail] Error cargando propiedad real:",
-        error?.message || error
+      return [];
+    }
+
+    function findPropertyInList(properties, currentId) {
+      const target = String(currentId || "").trim();
+      const targetNormalized = normalizeComparable(target);
+
+      if (!Array.isArray(properties) || !target) return null;
+
+      return (
+        properties.find((p) => {
+          const candidates = [
+            p?.id,
+            p?._id,
+            p?.propertyId,
+            p?._normalizedId,
+            p?.slug,
+            p?.titulo,
+            p?.nombre,
+            p?.title,
+            p?.name,
+          ];
+
+          return candidates.some((candidate) => {
+            const raw = String(candidate || "").trim();
+            if (!raw) return false;
+
+            return raw === target || normalizeComparable(raw) === targetNormalized;
+          });
+        }) || null
       );
+    }
 
-      if (!isMounted) return;
-      setBackendProperty(null);
-    } finally {
-      if (!isMounted) return;
+    async function loadPropertyFromBackend() {
+      try {
+        setLoadingBackendProperty(true);
+
+        const encodedId = encodeURIComponent(id);
+
+        const detailPaths = [
+          `/api/properties/${encodedId}`,
+          `/properties/${encodedId}`,
+          `/api/propiedades/${encodedId}`,
+          `/propiedades/${encodedId}`,
+        ];
+
+        for (const path of detailPaths) {
+          try {
+            const url = `${API_BASE}${path}`;
+            const data = await fetchJson(url);
+
+            const property =
+              data?.property ||
+              data?.data?.property ||
+              data?.item ||
+              data?.result ||
+              null;
+
+            if (property) {
+              if (!isMounted) return;
+              setBackendProperty(property);
+              return;
+            }
+          } catch (error) {
+            console.warn("[PropertyDetail] Falló endpoint detalle:", {
+              path,
+              routeId: id,
+              error: error?.message || error,
+            });
+          }
+        }
+
+        const listPaths = [
+          "/api/properties",
+          "/properties",
+          "/api/propiedades",
+          "/propiedades",
+          "/api/inventory/properties",
+          "/api/marketplace/properties",
+        ];
+
+        for (const path of listPaths) {
+          try {
+            const url = `${API_BASE}${path}`;
+            const data = await fetchJson(url);
+            const properties = extractProperties(data);
+            const found = findPropertyInList(properties, id);
+
+            if (found) {
+              if (!isMounted) return;
+              setBackendProperty(found);
+              return;
+            }
+          } catch (error) {
+            console.warn("[PropertyDetail] Falló endpoint listado:", {
+              path,
+              routeId: id,
+              error: error?.message || error,
+            });
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "[PropertyDetail] Error cargando propiedad real:",
+          error?.message || error
+        );
+
+        if (!isMounted) return;
+        setBackendProperty(null);
+      } finally {
+        if (!isMounted) return;
+        setLoadingBackendProperty(false);
+      }
+    }
+
+    if (id) {
+      loadPropertyFromBackend();
+    } else {
       setLoadingBackendProperty(false);
     }
-  }
 
-  if (id) {
-    loadPropertyFromBackend();
-  } else {
-    setLoadingBackendProperty(false);
-  }
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
-  return () => {
-    isMounted = false;
-  };
-}, [id]);
   const matchedProperties =
     pick(snapshot, ["matchedProperties"]) ||
     snapshot?.plan?.routeSignals?.matchedProperties ||
@@ -463,63 +1011,126 @@ useEffect(() => {
     pick(snapshot, ["propiedades"]) ||
     [];
 
-const propertyFromSnapshot = useMemo(() => {
-  if (!Array.isArray(matchedProperties)) return null;
+  const propertyFromSnapshot = useMemo(() => {
+    if (!Array.isArray(matchedProperties)) return null;
 
-  return (
-    matchedProperties.find((p) => String(getPropertyId(p)) === String(id)) ||
-    null
-  );
-}, [matchedProperties, id]);
+    return (
+      matchedProperties.find((p) => String(getPropertyId(p)) === String(id)) ||
+      null
+    );
+  }, [matchedProperties, id]);
 
+  const property = useMemo(() => {
+    if (backendProperty && propertyFromSnapshot) {
+      return {
+        ...backendProperty,
+        ...propertyFromSnapshot,
 
+        googleMapsUrl:
+          propertyFromSnapshot.googleMapsUrl ||
+          propertyFromSnapshot.mapUrl ||
+          backendProperty.googleMapsUrl ||
+          backendProperty.mapUrl ||
+          "",
 
-const property = propertyFromSnapshot || backendProperty;
+        lat:
+          propertyFromSnapshot.lat ??
+          propertyFromSnapshot.latitude ??
+          backendProperty.lat ??
+          backendProperty.latitude ??
+          null,
 
-if (!property && loadingBackendProperty) {
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: UI.bg,
-        color: "white",
-        padding: 22,
-        fontFamily: "system-ui",
-      }}
-    >
+        lng:
+          propertyFromSnapshot.lng ??
+          propertyFromSnapshot.lon ??
+          propertyFromSnapshot.longitude ??
+          backendProperty.lng ??
+          backendProperty.lon ??
+          backendProperty.longitude ??
+          null,
+
+        direccionReferencial:
+          propertyFromSnapshot.direccionReferencial ||
+          backendProperty.direccionReferencial ||
+          backendProperty.direccion ||
+          "",
+      };
+    }
+
+    return propertyFromSnapshot || backendProperty;
+  }, [backendProperty, propertyFromSnapshot]);
+
+  if (!property && loadingBackendProperty) {
+    return (
       <div
         style={{
-          marginTop: 80,
-          padding: 20,
-          borderRadius: 24,
-          background: UI.card,
-          border: `1px solid ${UI.border}`,
+          minHeight: "100vh",
+          background: UI.bg,
+          color: "white",
+          padding: 22,
+          fontFamily: "system-ui",
         }}
       >
-        <div style={{ fontSize: 14, opacity: 0.8 }}>Propiedad</div>
-        <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900 }}>
-          Cargando propiedad...
-        </div>
         <div
           style={{
-            marginTop: 8,
-            fontSize: 13,
-            opacity: 0.78,
-            lineHeight: 1.45,
+            marginTop: 80,
+            padding: 20,
+            borderRadius: 24,
+            background: UI.card,
+            border: `1px solid ${UI.border}`,
           }}
         >
-          Estamos consultando el inventario real de HabitaLibre.
+          <div style={{ fontSize: 14, opacity: 0.8 }}>Propiedad</div>
+          <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900 }}>
+            Cargando propiedad...
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 13,
+              opacity: 0.78,
+              lineHeight: 1.45,
+            }}
+          >
+            Estamos consultando el inventario real de HabitaLibre.
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-if (!property) {
-  return <NotFound onBack={() => navigate("/marketplace")} />;
-}
+  if (!property) {
+    return <NotFound onBack={() => navigate("/marketplace")} />;
+  }
 
-  const precio = n(property?.precio);
+  const precio =
+    maybeNum(
+      firstValue(property, ["precio", "price", "valor", "listPrice"], null)
+    ) ?? 0;
+
+  const area =
+    maybeNum(
+      firstValue(
+        property,
+        ["m2", "area", "metros", "metros2", "m2Construccion"],
+        null
+      )
+    ) ?? null;
+
+  const dormitorios =
+    maybeNum(
+      firstValue(property, ["dormitorios", "bedrooms", "habitaciones"], null)
+    ) ?? null;
+
+  const banos =
+    maybeNum(
+      firstValue(property, ["banos", "baños", "bathrooms", "baths"], null)
+    ) ?? null;
+
+  const parqueaderos =
+    maybeNum(
+      firstValue(property, ["parqueaderos", "parking", "garajes"], null)
+    ) ?? null;
 
   const entradaDisponibleRaw =
     pick(snapshot, ["entradaDisponible"]) ??
@@ -538,19 +1149,13 @@ if (!property) {
     pick(snapshot, ["precioMaxPerfil"]) ??
     pick(snapshot, ["precioMax"]) ??
     snapshot?.financialCapacity?.estimatedMaxPropertyValue ??
-    snapshot?.homeRecommendation?.profileProgramsThatCouldWorkIfRangeAdjusted?.[0]
-      ?.priceMax ??
+    snapshot?.homeRecommendation
+      ?.profileProgramsThatCouldWorkIfRangeAdjusted?.[0]?.priceMax ??
     property?.evaluacionHipotecaHoy?.precioMaxVivienda ??
     property?.evaluacionHipotecaFutura?.precioMaxVivienda ??
     null;
 
   const precioMaxVivienda = maybeNum(precioMaxViviendaRaw);
-
-  const productoElegido =
-    pick(snapshot, ["productoElegido", "productoSugerido"]) ||
-    property?.evaluacionHipotecaHoy?.productoSugerido ||
-    property?.evaluacionHipotecaFutura?.productoSugerido ||
-    null;
 
   const bancosTop3 =
     pick(snapshot, ["bancosTop3"]) ||
@@ -573,35 +1178,83 @@ if (!property) {
   const hasHipotecaData =
     !!evaluacionHipotecaHoy || !!evaluacionHipotecaFutura || !!bankSuggested;
 
-  const calzaPrecio = hasPrecioMax ? precio <= precioMaxVivienda : null;
-  const gapPrecio = hasPrecioMax ? Math.max(0, precio - precioMaxVivienda) : null;
-  const entradaPct =
-    hasEntradaDisponible && precio > 0 ? (entradaDisponible / precio) * 100 : null;
+  const detailHomeRecommendation =
+    snapshot?.homeRecommendation ?? snapshot?.output?.homeRecommendation ?? null;
 
-  const entradaRequerida =
-    evaluacionEntrada?.entradaRequerida == null
-      ? null
-      : maybeNum(evaluacionEntrada?.entradaRequerida);
+  const detailFinancialCapacity =
+    snapshot?.financialCapacity ?? snapshot?.output?.financialCapacity ?? null;
 
-  const faltanteEntrada =
-    evaluacionEntrada?.faltanteEntrada == null
-      ? null
-      : maybeNum(evaluacionEntrada?.faltanteEntrada);
+  const detailAlternatives = Array.isArray(detailHomeRecommendation?.alternatives)
+    ? detailHomeRecommendation.alternatives
+    : [];
 
-  const cuotaEntradaMensual =
-    evaluacionEntrada?.cuotaEntradaMensual == null
-      ? null
-      : maybeNum(evaluacionEntrada?.cuotaEntradaMensual);
+  const detailEntryAlternative =
+    detailAlternatives.find((a) => a?.kind === "entry_installments") || null;
 
-  const mesesConstruccion =
-    evaluacionEntrada?.mesesConstruccionRestantes == null
-      ? null
-      : maybeNum(evaluacionEntrada?.mesesConstruccionRestantes);
+  const detailDebtAlternative =
+    detailAlternatives.find((a) => a?.kind === "debt_reduction_route") || null;
+
+  const detailPlannedEntry = detailFinancialCapacity?.plannedEntry || null;
+
+  const capacidadHoyDetalle =
+    maybeNum(detailFinancialCapacity?.estimatedMaxPropertyValue) ??
+    precioMaxVivienda ??
+    null;
+
+  const entradaFuturaDetalle =
+    maybeNum(detailPlannedEntry?.estimatedMaxPropertyValue) ??
+    maybeNum(detailEntryAlternative?.alternativePrice) ??
+    null;
+
+  const rutaPreparacionDetalle =
+    maybeNum(property?.routeFit?.targetPrice) ??
+    maybeNum(property?.routeFit?.preparationRange) ??
+    maybeNum(detailDebtAlternative?.alternativePrice) ??
+    null;
+
+  const nearRutaPreparacionDetalle =
+    rutaPreparacionDetalle != null && rutaPreparacionDetalle > 0
+      ? rutaPreparacionDetalle * 1.1
+      : null;
+
+  const diferenciaVsRutaDetalle =
+    maybeNum(property?.routeDifferenceVsRoute) ??
+    maybeNum(property?.routeFit?.differenceVsRoute) ??
+    (rutaPreparacionDetalle != null && precio != null
+      ? Math.max(0, precio - rutaPreparacionDetalle)
+      : null);
+
+  const hasRutaPreparacionDetalle =
+    rutaPreparacionDetalle != null && rutaPreparacionDetalle > 0;
+
+  const propertyRouteKind =
+    precio != null &&
+    capacidadHoyDetalle != null &&
+    precio <= capacidadHoyDetalle
+      ? "compatible_today"
+      : precio != null &&
+        entradaFuturaDetalle != null &&
+        entradaFuturaDetalle > 0 &&
+        precio <= entradaFuturaDetalle
+      ? "entry_route"
+      : precio != null &&
+        rutaPreparacionDetalle != null &&
+        rutaPreparacionDetalle > 0 &&
+        precio <= rutaPreparacionDetalle
+      ? "preparation_route"
+      : precio != null &&
+        nearRutaPreparacionDetalle != null &&
+        precio <= nearRutaPreparacionDetalle
+      ? "near_route"
+      : "above_route";
 
   const hasAnalisisCompletoMinimo =
-    hasPrecioMax && hasEntradaDisponible && (hasEvaluacionEntrada || hasHipotecaData);
+    hasPrecioMax &&
+    hasEntradaDisponible &&
+    (hasEvaluacionEntrada || hasHipotecaData);
 
-  let toneEstado = "neutral";
+  let toneEstado = "amber";
+
   if (hasAnalisisCompletoMinimo) {
     toneEstado =
       estadoCompra === "top_match" ||
@@ -611,38 +1264,238 @@ if (!property) {
           estadoCompra === "ruta_cercana"
         ? "amber"
         : "red";
-  } else {
-    toneEstado = "amber";
   }
 
+  const isPositiveMatch =
+    estadoCompra === "top_match" ||
+    propertyRouteKind === "compatible_today" ||
+    propertyRouteKind === "entry_route" ||
+    propertyRouteKind === "preparation_route";
+
+  const routeAwareEstadoLabel =
+    property?.matchBadgeCalculado ||
+    property?.routeFit?.badge ||
+    (isPositiveMatch && estadoCompra === "top_match"
+      ? "Top match"
+      : propertyRouteKind === "compatible_today"
+      ? "Compatible hoy"
+      : propertyRouteKind === "entry_route"
+      ? "Ruta futura con entrada"
+      : propertyRouteKind === "preparation_route"
+      ? "Ruta con preparación"
+      : propertyRouteKind === "near_route"
+      ? "Cerca de tu ruta objetivo"
+      : "Por encima de tu ruta");
+
+  const routeAwareTone = isPositiveMatch ? "green" : "amber";
+
+  const routeAwareMainMessage =
+    property?.matchReasonCalculado ||
+    property?.routeFit?.reason ||
+    (estadoCompra === "top_match"
+      ? "Proyecto compatible con tu perfil y tu ruta estimada."
+      : propertyRouteKind === "compatible_today"
+      ? "Esta propiedad entra dentro de tu capacidad prudente actual."
+      : propertyRouteKind === "entry_route"
+      ? "Podría acercarse si completas tu entrada durante el plazo proyectado."
+      : propertyRouteKind === "preparation_route"
+      ? "No calza como compra inmediata, pero sí entra dentro de tu ruta con preparación."
+      : propertyRouteKind === "near_route"
+      ? "Está ligeramente por encima de tu ruta estimada. Podría acercarse si aumentas entrada, reduces deuda o eliges una unidad de menor precio."
+      : "Está por encima de tu ruta estimada actual. Podrías necesitar más entrada, menor deuda o mayor ingreso.");
+
+  const entradaRequerida =
+    maybeNum(evaluacionEntrada?.entradaRequerida) ??
+    maybeNum(property?.entradaMinima) ??
+    maybeNum(property?.entradaRequerida) ??
+    (precio > 0 ? precio * 0.1 : null);
+
+  const faltanteEntrada =
+    maybeNum(evaluacionEntrada?.faltanteEntrada) ??
+    (entradaRequerida != null && entradaDisponible != null
+      ? Math.max(0, entradaRequerida - entradaDisponible)
+      : null);
+
+  const cuotaEntradaMensual =
+    maybeNum(evaluacionEntrada?.cuotaEntradaMensual) ?? null;
+
+  const mesesConstruccion =
+    maybeNum(evaluacionEntrada?.mesesConstruccionRestantes) ??
+    maybeNum(property?.mesesConstruccion) ??
+    maybeNum(property?.mesesEntrega) ??
+    null;
+
+  const cuotaReferencial =
+    maybeNum(property?.cuotaEstimada) ??
+    maybeNum(property?.cuota) ??
+    maybeNum(property?.evaluacionHipotecaFutura?.cuotaReferencia) ??
+    maybeNum(property?.evaluacionHipotecaHoy?.cuotaReferencia) ??
+    maybeNum(snapshot?.cuotaEstimada) ??
+    maybeNum(snapshot?.cuotaMensual) ??
+    maybeNum(snapshot?.bestMortgage?.cuota) ??
+    null;
+
+  const tasaReferencia =
+    maybeNum(property?.tasaReferencial) ??
+    maybeNum(property?.tasa) ??
+    maybeNum(property?.evaluacionHipotecaFutura?.tasa) ??
+    maybeNum(property?.evaluacionHipotecaHoy?.tasa) ??
+    maybeNum(snapshot?.tasa) ??
+    maybeNum(snapshot?.bestMortgage?.tasa) ??
+    null;
+
+  const plazoReferencia =
+    maybeNum(property?.plazo) ??
+    maybeNum(property?.plazoAnios) ??
+    maybeNum(property?.plazoAños) ??
+    maybeNum(property?.evaluacionHipotecaFutura?.plazo) ??
+    maybeNum(property?.evaluacionHipotecaHoy?.plazo) ??
+    maybeNum(snapshot?.plazo) ??
+    maybeNum(snapshot?.bestMortgage?.plazo) ??
+    null;
+
+  const saldoAFinanciar =
+    precio > 0 && entradaRequerida != null
+      ? Math.max(0, precio - entradaRequerida)
+      : null;
+
   const heroTitle =
-    property.titulo || property.nombre || property.proyecto || "Propiedad";
+    property.titulo ||
+    property.nombre ||
+    property.title ||
+    property.name ||
+    property.proyecto ||
+    "Propiedad";
+
   const heroLocation =
     property.sector ||
     property.zona ||
     property.ciudadZona ||
     property.ciudad ||
-    "Quito";
+    "";
+
+  const projectName =
+    property.proyecto || property.nombreProyecto || property.projectName || "";
+
+  const projectStatus =
+    property.estadoProyecto ||
+    property.estado ||
+    property.statusProyecto ||
+    (property.proyectoNuevo === true
+      ? "Proyecto nuevo"
+      : property.proyectoNuevo === false
+      ? "Entrega inmediata"
+      : "");
+
+  const deliveryDate =
+    property.fechaEntrega ||
+    property.entrega ||
+    property.deliveryDate ||
+    property.fechaEstimadaEntrega ||
+    null;
+
+  const developerName =
+    property.promotor ||
+    property.constructora ||
+    property.desarrollador ||
+    property.developer ||
+    "";
+
+  const propertyType =
+    property.tipo || property.tipoPropiedad || property.propertyType || "";
+
+  const amenities = normalizeArray(property?.amenities).length
+    ? normalizeArray(property?.amenities)
+    : normalizeArray(property?.amenidades);
 
   const descripcionReal =
     property.descripcion ||
-    `${heroTitle} es una propiedad orientada a primera vivienda, ubicada en ${heroLocation}. Esta opción se muestra porque parece alinearse con tu perfil actual y con una ruta referencial de compra dentro de la app.`;
+    property.description ||
+    property.descripcionComercial ||
+    property.resumen ||
+    "";
 
   const mainBadgeLabel = hasAnalisisCompletoMinimo
     ? property?.matchBadgeCalculado ||
       property?.matchBadge ||
       formatEstadoCompra(estadoCompra)
-    : "Pendiente de análisis";
+    : property?.matchBadgeCalculado || property?.matchBadge || "Top match";
 
   const estadoLabel = hasAnalisisCompletoMinimo
     ? formatEstadoCompra(estadoCompra)
     : "Análisis parcial";
 
-  const futureReasonText = evaluacionHipotecaFutura?.viable
-    ? faltanteEntrada === 0
-      ? "Con la entrada requerida ya cubierta, esta propiedad podría alinearse con una ruta futura al momento de la entrega."
-      : evaluacionHipotecaFutura?.razon || "No disponible"
-    : evaluacionHipotecaFutura?.razon || "No disponible";
+  const galleryImages = getGalleryImages(property);
+  const floorPlan = getFloorPlan(property);
+  const nearbyItems = getNearbyItems(property);
+  const latLng = getLatLng(property);
+  const mapUrl = getPropertyMapUrl(property);
+  const mapEmbedSrc = getMapEmbedSrc(property);
+  const propertyAddress = getPropertyAddress(property);
+  const mapLocationText = propertyAddress || heroLocation || projectName || heroTitle;
+
+  const planCards = [
+    {
+      label: "Precio",
+      value: formatMoney(precio),
+      show: precio > 0,
+    },
+    {
+      label: "Entrada estimada",
+      value: formatMoney(entradaRequerida),
+      show: entradaRequerida != null,
+    },
+    {
+      label: "Saldo a financiar",
+      value: formatMoney(saldoAFinanciar),
+      show: saldoAFinanciar != null,
+    },
+    {
+      label: "Cuota referencial",
+      value:
+        cuotaReferencial != null ? formatMonthly(cuotaReferencial) : "Por confirmar",
+      show: true,
+    },
+    {
+      label: "Tasa referencial",
+      value: formatPct(tasaReferencia),
+      show: tasaReferencia != null && tasaReferencia > 0,
+    },
+    {
+      label: "Plazo",
+      value:
+        plazoReferencia != null && plazoReferencia > 0
+          ? plazoReferencia === 1
+            ? "1 año"
+            : `${plazoReferencia} años`
+          : "Por confirmar",
+      show: plazoReferencia != null && plazoReferencia > 0,
+    },
+  ].filter((item) => item.show);
+
+  const projectInfoItems = [
+    projectName ? { label: "Proyecto", value: projectName } : null,
+    propertyType ? { label: "Tipo", value: propertyType } : null,
+    projectStatus ? { label: "Estado", value: projectStatus } : null,
+    developerName ? { label: "Promotor", value: developerName } : null,
+  ].filter(Boolean);
+
+  function openMap() {
+    if (mapUrl) {
+      window.open(mapUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const query = latLng
+      ? `${latLng.lat},${latLng.lng}`
+      : mapLocationText || heroTitle;
+
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      query
+    )}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 
   async function handleSelectProperty() {
     if (savingSelection) return;
@@ -699,7 +1552,7 @@ if (!property) {
 
       titulo: propertyTitle,
       nombre: propertyTitle,
-      proyecto: propertyTitle,
+      proyecto: property?.proyecto || "",
       title: propertyTitle,
       name: propertyTitle,
 
@@ -713,6 +1566,11 @@ if (!property) {
 
       imagen: propertyImage,
       image: propertyImage,
+
+      googleMapsUrl: mapUrl || "",
+      direccionReferencial: propertyAddress || "",
+      lat: latLng?.lat ?? null,
+      lng: latLng?.lng ?? null,
 
       status: selectedPropertyStatus,
       selectedPropertyStatus,
@@ -747,9 +1605,7 @@ if (!property) {
         property?.evaluacionEntrada?.entradaRequerida ??
         null,
 
-      descripcion:
-        property?.descripcion ||
-        `${propertyTitle} es una propiedad que hoy parece alinearse con tu ruta referencial dentro de HabitaLibre.`,
+      descripcion: descripcionReal || "",
 
       source: "property_detail",
       selectedAt: new Date().toISOString(),
@@ -798,7 +1654,7 @@ if (!property) {
         background: UI.bg,
         color: "white",
         fontFamily: "system-ui",
-        paddingBottom: 150,
+        paddingBottom: "calc(150px + env(safe-area-inset-bottom))",
       }}
     >
       <div
@@ -812,6 +1668,7 @@ if (!property) {
         }}
       >
         <button
+          type="button"
           onClick={() => {
             if (window.history.length > 1) {
               navigate(-1);
@@ -821,7 +1678,7 @@ if (!property) {
           }}
           aria-label="Volver"
           style={{
-            position: "fixed",
+            position: "absolute",
             top: "calc(env(safe-area-inset-top, 0px) + 18px)",
             left: 16,
             width: 56,
@@ -834,7 +1691,7 @@ if (!property) {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 999,
+            zIndex: 20,
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
             boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
@@ -858,39 +1715,40 @@ if (!property) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Pill tone={toneEstado}>{mainBadgeLabel}</Pill>
 
-            {property.proyectoNuevo ? (
-              <Pill>Proyecto nuevo</Pill>
-            ) : (
-              <Pill>Entrega inmediata</Pill>
-            )}
+            {projectStatus ? <Pill>{projectStatus}</Pill> : null}
 
-            <Pill>{formatMatchReason(property.matchReason)}</Pill>
+            {property.matchReason ? (
+              <Pill>{formatMatchReason(property.matchReason)}</Pill>
+            ) : null}
           </div>
 
           <div
             style={{
               marginTop: 14,
-              fontSize: 30,
+              fontSize: "clamp(28px, 8.5vw, 42px)",
               fontWeight: 980,
               lineHeight: 1.02,
+              letterSpacing: -1.2,
             }}
           >
             {heroTitle}
           </div>
 
-          <div
-            style={{
-              marginTop: 10,
-              fontSize: 15,
-              color: "rgba(255,255,255,0.78)",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <MapPin size={14} />
-            {heroLocation}
-          </div>
+          {heroLocation ? (
+            <div
+              style={{
+                marginTop: 10,
+                fontSize: 15,
+                color: "rgba(255,255,255,0.78)",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <MapPin size={14} />
+              {heroLocation}
+            </div>
+          ) : null}
 
           <div
             style={{
@@ -909,16 +1767,19 @@ if (!property) {
               <div
                 style={{
                   marginTop: 4,
-                  fontSize: 40,
+                  fontSize: "clamp(36px, 12vw, 48px)",
                   fontWeight: 980,
                   lineHeight: 1,
+                  letterSpacing: -1.4,
                 }}
               >
                 {moneyUSD(precio)}
               </div>
             </div>
 
-            <Pill tone={toneEstado}>{estadoLabel}</Pill>
+            <Pill tone={routeAwareTone || toneEstado}>
+              {routeAwareEstadoLabel || estadoLabel}
+            </Pill>
           </div>
 
           <FinancialDisclaimer compact />
@@ -926,98 +1787,122 @@ if (!property) {
           <div
             style={{
               marginTop: 16,
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 10,
+              ...autoGrid(135),
             }}
           >
-            <StatCard
-              label="Área"
-              value={property.m2 != null ? `${property.m2} m²` : "—"}
-            />
+            <StatCard label="Área" value={area != null ? `${area} m²` : "—"} />
             <StatCard
               label="Dormitorios"
-              value={property.dormitorios != null ? String(property.dormitorios) : "—"}
+              value={dormitorios != null ? String(dormitorios) : "—"}
             />
             <StatCard
               label="Baños"
-              value={property.banos != null ? String(property.banos) : "—"}
+              value={banos != null ? String(banos) : "—"}
             />
             <StatCard
               label="Parqueaderos"
-              value={property.parqueaderos != null ? String(property.parqueaderos) : "—"}
+              value={parqueaderos != null ? String(parqueaderos) : "—"}
             />
           </div>
         </div>
 
         <InfoCard
-          title="Cómo se alinea con tu perfil"
-          subtitle="Aquí resumimos cómo esta propiedad se compara con tu rango estimado actual y qué podrías ajustar."
+          title="Tu lectura HabitaLibre"
+          subtitle="Una lectura simple para saber si esta propiedad calza con tu camino de compra."
         >
           <div style={{ display: "grid", gap: 10 }}>
-            <ToneBox tone={toneEstado}>
-              <strong>{estadoLabel}</strong>
-              <div style={{ marginTop: 6 }}>
-                {hasAnalisisCompletoMinimo
-                  ? property?.matchReasonCalculado ||
-                    "Analizamos esta propiedad con base en tus datos declarados y en el esquema referencial del proyecto."
-                  : "Todavía no tenemos suficiente información para mostrar un encaje completo de esta propiedad con tu perfil."}
-              </div>
+            <ToneBox tone={routeAwareTone}>
+              <strong>{routeAwareEstadoLabel}</strong>
+              <div style={{ marginTop: 6 }}>{routeAwareMainMessage}</div>
             </ToneBox>
 
             <ToneBox>
-              Esta propiedad se alinea principalmente por{" "}
-              <strong>{formatMatchReason(property.matchReason)}</strong>.
-            </ToneBox>
-
-            <ToneBox>
-              {hasPrecioMax ? (
+              Esta propiedad cuesta <strong>{formatMoney(precio)}</strong>.
+              {hasRutaPreparacionDetalle ? (
                 <>
-                  Tu rango estimado de compra hoy es{" "}
-                  <strong>{moneyUSD(precioMaxVivienda)}</strong>.
-                  {calzaPrecio ? (
-                    <> Esta propiedad está dentro de ese rango estimado.</>
-                  ) : (
-                    <>
-                      {" "}
-                      Esta propiedad queda{" "}
-                      <strong>{moneyUSD(gapPrecio)}</strong> por encima de tu
-                      rango estimado actual.
-                    </>
-                  )}
+                  {" "}
+                  Tu ruta con preparación llega aproximadamente a{" "}
+                  <strong>{formatMoney(rutaPreparacionDetalle)}</strong>.
                 </>
-              ) : (
-                <>Aún no tenemos tu rango estimado de compra.</>
-              )}
+              ) : capacidadHoyDetalle != null ? (
+                <>
+                  {" "}
+                  Tu capacidad prudente hoy es{" "}
+                  <strong>{formatMoney(capacidadHoyDetalle)}</strong>.
+                </>
+              ) : null}
+              {!isPositiveMatch &&
+              diferenciaVsRutaDetalle != null &&
+              diferenciaVsRutaDetalle > 0 ? (
+                <>
+                  {" "}
+                  Diferencia estimada vs tu ruta:{" "}
+                  <strong>{formatMoney(diferenciaVsRutaDetalle)}</strong>.
+                </>
+              ) : null}
             </ToneBox>
 
-            <ToneBox>
-              {hasEntradaDisponible ? (
-                <>
-                  Tu entrada registrada es{" "}
-                  <strong>{moneyUSD(entradaDisponible)}</strong>, equivalente a{" "}
-                  <strong>{formatPct(entradaPct)}</strong> del valor de esta
-                  propiedad.
-                </>
-              ) : (
-                <>Aún no tenemos una entrada registrada para esta propiedad.</>
-              )}
+            <ToneBox tone={isPositiveMatch ? "green" : "amber"}>
+              <strong>
+                {isPositiveMatch ? "Siguiente paso sugerido:" : "Qué podrías hacer:"}
+              </strong>{" "}
+              {isPositiveMatch
+                ? "puedes usar esta propiedad como referencia para revisar tu ruta, comparar opciones hipotecarias y avanzar con mayor claridad."
+                : "aumentar entrada disponible, reducir un poco más tus deudas mensuales o comparar una unidad de menor precio."}
             </ToneBox>
+
+            <PrimaryButton
+              onClick={handleSelectProperty}
+              disabled={savingSelection}
+              style={{ marginTop: 2 }}
+            >
+              {savingSelection
+                ? "Guardando propiedad..."
+                : "Evaluar mi ruta con esta propiedad"}
+            </PrimaryButton>
           </div>
         </InfoCard>
 
         <InfoCard
+          title="Plan referencial"
+          subtitle="Un resumen simple para entender precio, entrada, saldo y posible esfuerzo mensual."
+        >
+          <div style={autoGrid(135)}>
+            {planCards.map((card) => (
+              <StatCard
+                key={card.label}
+                label={card.label}
+                value={card.value}
+                accent={card.label === "Cuota referencial"}
+              />
+            ))}
+          </div>
+
+          {(deliveryDate || mesesConstruccion != null || projectStatus) && (
+            <div style={{ marginTop: 10 }}>
+              <ToneBox>
+                <strong>Entrega / estado:</strong>{" "}
+                {deliveryDate || projectStatus || "Por confirmar"}.
+                {mesesConstruccion != null && mesesConstruccion > 0 ? (
+                  <>
+                    {" "}
+                    Plazo de construcción estimado:{" "}
+                    <strong>{formatMonths(mesesConstruccion)}</strong>.
+                  </>
+                ) : null}
+              </ToneBox>
+            </div>
+          )}
+
+          <FinancialDisclaimer compact />
+        </InfoCard>
+
+        <InfoCard
           title="Entrada al proyecto"
-          subtitle="Te mostramos cuánto pide el proyecto, cuánto te faltaría y cómo se ve esa entrada para tu situación."
+          subtitle="Te mostramos si tu entrada disponible cubre lo que pide este proyecto."
         >
           <div style={{ display: "grid", gap: 10 }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 10,
-              }}
-            >
+            <div style={autoGrid(135)}>
               <StatCard
                 label="Entrada requerida"
                 value={formatMoney(entradaRequerida)}
@@ -1029,16 +1914,17 @@ if (!property) {
                   faltanteEntrada == null
                     ? "—"
                     : faltanteEntrada === 0
-                    ? "$0 (completo)"
+                    ? "$0 completo"
                     : formatMoney(faltanteEntrada)
                 }
+                accent={faltanteEntrada === 0}
               />
 
               <StatCard
                 label="Cuota mensual de entrada"
                 value={
                   cuotaEntradaMensual == null
-                    ? "No disponible"
+                    ? "No requerida"
                     : cuotaEntradaMensual === 0
                     ? "No requerida"
                     : formatMonthly(cuotaEntradaMensual)
@@ -1047,11 +1933,7 @@ if (!property) {
 
               <StatCard
                 label="Meses de construcción"
-                value={
-                  mesesConstruccion != null && mesesConstruccion > 0
-                    ? `${mesesConstruccion} meses`
-                    : "—"
-                }
+                value={formatMonths(mesesConstruccion)}
               />
             </div>
 
@@ -1076,136 +1958,197 @@ if (!property) {
               </ToneBox>
             ) : (
               <ToneBox tone="amber">
-                <strong>Entrada pendiente de análisis</strong>
+                <strong>Entrada estimada</strong>
                 <div style={{ marginTop: 6 }}>
-                  Todavía no tenemos suficiente información para estimar la
-                  entrada de esta propiedad.
+                  Esta lectura usa una referencia inicial. La entrada final puede
+                  cambiar según el proyecto, el promotor y la entidad financiera.
                 </div>
               </ToneBox>
             )}
           </div>
         </InfoCard>
 
-        <InfoCard
-          title="Ruta referencial"
-          subtitle="Aquí ves si esta propiedad se alinea con una ruta actual, una ruta futura o una referencia general según tu perfil."
-        >
-          <div style={{ display: "grid", gap: 10 }}>
-            {evaluacionHipotecaHoy ? (
-              <ToneBox tone={evaluacionHipotecaHoy?.viable ? "green" : "amber"}>
-                <strong>Ruta referencial en escenario actual</strong>
-                <div style={{ marginTop: 6 }}>
-                  {evaluacionHipotecaHoy?.razon || "No disponible"}
-                </div>
-                <div
+        {mapEmbedSrc || mapUrl || latLng || propertyAddress ? (
+          <InfoCard
+            title="Ubicación en mapa"
+            subtitle="Referencia cargada para ubicar mejor la propiedad."
+          >
+            <div style={{ display: "grid", gap: 12 }}>
+              <MapPreview embedSrc={mapEmbedSrc} locationText={mapLocationText} />
+
+              {propertyAddress ? (
+                <ToneBox>
+                  <strong>Dirección / referencia:</strong> {propertyAddress}
+                </ToneBox>
+              ) : null}
+
+              <SecondaryButton onClick={openMap}>
+                <span
                   style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    opacity: 0.82,
-                    lineHeight: 1.45,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
                   }}
                 >
-                  Categoría:{" "}
-                  <strong>{evaluacionHipotecaHoy?.productoSugerido || "—"}</strong>
-                  {" • "}Compatibilidad:{" "}
-                  <strong>
-                    {formatCompatibility(evaluacionHipotecaHoy?.probabilidad)}
-                  </strong>
-                  {" • "}Score: <strong>{n(evaluacionHipotecaHoy?.score)}</strong>
-                </div>
-              </ToneBox>
-            ) : null}
+                  <Navigation size={16} />
+                  Abrir en Google Maps
+                </span>
+              </SecondaryButton>
+            </div>
+          </InfoCard>
+        ) : null}
 
-            {evaluacionHipotecaFutura ? (
-              <ToneBox tone={evaluacionHipotecaFutura?.viable ? "green" : "amber"}>
-                <strong>Ruta futura referencial al momento de entrega</strong>
-                <div style={{ marginTop: 6 }}>{futureReasonText}</div>
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    opacity: 0.82,
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Monto estimado a financiar:{" "}
-                  <strong>
-                    {formatMoney(evaluacionHipotecaFutura?.montoHipotecaProyectado)}
-                  </strong>
-                  {" • "}Categoría:{" "}
-                  <strong>{evaluacionHipotecaFutura?.productoSugerido || "—"}</strong>
-                  {" • "}Compatibilidad:{" "}
-                  <strong>
-                    {formatCompatibility(evaluacionHipotecaFutura?.probabilidad)}
-                  </strong>
-                  {" • "}Score:{" "}
-                  <strong>{n(evaluacionHipotecaFutura?.score)}</strong>
-                </div>
-              </ToneBox>
-            ) : null}
-
-            {!evaluacionHipotecaHoy &&
-            !evaluacionHipotecaFutura &&
-            bankSuggested ? (
-              <ToneBox tone="amber">
-                <strong>Ruta referencial destacada</strong>
-                <div style={{ marginTop: 6 }}>
-                  {bankSuggested.banco || "Ruta referencial sugerida"}
-                </div>
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    opacity: 0.82,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {bankSuggested.tasaAnual != null
-                    ? `Tasa ref. ${(Number(bankSuggested.tasaAnual) * 100).toFixed(
-                        2
-                      )}%`
-                    : "Tasa ref. —"}
-                  {" • "}
-                  {bankSuggested.cuota != null
-                    ? `Cuota ref. ${moneyUSD(bankSuggested.cuota)}`
-                    : "Cuota ref. —"}
-                  {" • "}
-                  {bankSuggested.montoPrestamo != null
-                    ? `Monto estimado ${moneyUSD(bankSuggested.montoPrestamo)}`
-                    : "Monto estimado —"}
-                </div>
-              </ToneBox>
-            ) : null}
-
-            {!hasHipotecaData ? (
-              <ToneBox tone="amber">
-                <strong>Ruta referencial pendiente</strong>
-                <div style={{ marginTop: 6 }}>
-                  Todavía no hay una ruta referencial calculada para esta
-                  propiedad.
-                </div>
-              </ToneBox>
-            ) : null}
-
-            {productoElegido ? (
-              <ToneBox>
-                Tu categoría referencial general actual es{" "}
-                <strong>{String(productoElegido)}</strong>.
-              </ToneBox>
-            ) : null}
-
-            <FinancialDisclaimer />
-          </div>
-        </InfoCard>
+        {nearbyItems.length ? (
+          <InfoCard
+            title="Entorno cercano"
+            subtitle="Puntos de referencia cargados para entender la vida diaria alrededor del proyecto."
+          >
+            <div style={autoGrid(145)}>
+              {nearbyItems.map((item) => (
+                <NearbyChip key={item}>{item}</NearbyChip>
+              ))}
+            </div>
+          </InfoCard>
+        ) : null}
 
         <InfoCard
-          title="Descripción"
-          subtitle="Resumen de la propiedad y de su encaje estimado dentro de tu escenario actual."
+          title="Galería y distribución"
+          subtitle="Fotos, renders y plano para entender mejor cómo se vive el espacio."
         >
-          <div style={{ fontSize: 14, color: UI.textDim, lineHeight: 1.5 }}>
-            {descripcionReal}
-          </div>
+          {galleryImages.length ? (
+            <div style={{ display: "grid", gap: 10 }}>
+              <img
+                src={galleryImages[0]}
+                alt={heroTitle}
+                style={{
+                  width: "100%",
+                  height: 170,
+                  objectFit: "cover",
+                  borderRadius: 18,
+                  border: `1px solid ${UI.borderSoft}`,
+                }}
+              />
+
+              {galleryImages.length > 1 && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 8,
+                  }}
+                >
+                  {galleryImages.slice(1, 4).map((image, index) => (
+                    <img
+                      key={image}
+                      src={image}
+                      alt={`${heroTitle} ${index + 2}`}
+                      style={{
+                        width: "100%",
+                        height: 78,
+                        objectFit: "cover",
+                        borderRadius: 14,
+                        border: `1px solid ${UI.borderSoft}`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {floorPlan ? (
+                <div style={{ marginTop: 4 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 900,
+                      color: UI.textDim,
+                      marginBottom: 8,
+                    }}
+                  >
+                    Plano referencial
+                  </div>
+                  <img
+                    src={floorPlan}
+                    alt="Plano de la propiedad"
+                    style={{
+                      width: "100%",
+                      borderRadius: 18,
+                      border: `1px solid ${UI.borderSoft}`,
+                      background: "rgba(255,255,255,0.05)",
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <ToneBox>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <ImageIcon size={18} color={UI.green} />
+                <div>
+                  <strong>Galería pendiente</strong>
+                  <div style={{ marginTop: 4, color: UI.textDim }}>
+                    Aún no hay imágenes adicionales o plano cargado para esta
+                    unidad.
+                  </div>
+                </div>
+              </div>
+            </ToneBox>
+          )}
         </InfoCard>
+
+        {projectInfoItems.length || amenities.length ? (
+          <InfoCard
+            title="Sobre el proyecto"
+            subtitle="Información cargada para ayudarte a decidir si vale la pena avanzar con esta unidad."
+          >
+            {projectInfoItems.length ? (
+              <div style={autoGrid(145)}>
+                {projectInfoItems.map((item) => (
+                  <StatCard
+                    key={item.label}
+                    label={item.label}
+                    value={item.value}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {amenities.length ? (
+              <div style={{ marginTop: 12 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 900,
+                    color: UI.textDim,
+                    marginBottom: 8,
+                  }}
+                >
+                  Amenidades
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {amenities.slice(0, 8).map((amenity) => (
+                    <Pill key={amenity}>{amenity}</Pill>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </InfoCard>
+        ) : null}
+
+        {descripcionReal ? (
+          <InfoCard title="Descripción" subtitle="Resumen cargado de la propiedad.">
+            <div style={{ fontSize: 14, color: UI.textDim, lineHeight: 1.5 }}>
+              {descripcionReal}
+            </div>
+          </InfoCard>
+        ) : null}
 
         <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
           <PrimaryButton
@@ -1214,7 +2157,7 @@ if (!property) {
           >
             {savingSelection
               ? "Guardando propiedad..."
-              : "Usar esta propiedad como referencia"}
+              : "Guardar esta propiedad y continuar"}
           </PrimaryButton>
 
           <SecondaryButton onClick={() => navigate("/marketplace")}>

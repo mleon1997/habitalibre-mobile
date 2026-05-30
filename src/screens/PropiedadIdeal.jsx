@@ -9,7 +9,10 @@ import {
   UI,
 } from "../ui/kit.jsx";
 import { getCustomer } from "../lib/customerSession.js";
-
+import {
+  getPropertyMatchStatus,
+  PROPERTY_MATCH_STATUS,
+} from "../utils/propertyMatch";
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
@@ -154,6 +157,57 @@ function normalizeProperty(raw, fallbackCity = "Quito") {
     entradaMinima,
     imagen,
     descripcion,
+
+        capacidadActual:
+      raw?.capacidadActual ??
+      raw?.capacidadActualCompraHoy ??
+      raw?.currentCapacity ??
+      null,
+
+    capacidadObjetivo:
+      raw?.capacidadObjetivo ??
+      raw?.capacidadObjetivoCompra ??
+      raw?.targetCapacity ??
+      null,
+
+    estadoMatch:
+      raw?.estadoMatch ??
+      raw?.matchStatus ??
+      raw?.selectedPropertyMatchStatus ??
+      null,
+
+    matchLabel:
+      raw?.matchLabel ??
+      raw?.matchBadge ??
+      null,
+
+    matchDescription:
+      raw?.matchDescription ??
+      raw?.matchReason ??
+      null,
+
+    matchCta:
+      raw?.matchCta ??
+      null,
+
+    brecha:
+      raw?.brecha ??
+      raw?.matchGap ??
+      raw?.brechaContraCapacidadActual ??
+      raw?.matchGapAgainstCurrent ??
+      null,
+
+    puedeAplicarHoy:
+      raw?.puedeAplicarHoy === true ||
+      raw?.isReadyNow === true,
+
+    alcanzableConPlan:
+      raw?.alcanzableConPlan === true ||
+      raw?.isReachableWithPlan === true,
+
+    fueraDeRango:
+      raw?.fueraDeRango === true ||
+      raw?.isOutOfRange === true,
     raw,
   };
 }
@@ -310,6 +364,117 @@ export default function PropiedadIdeal() {
     journey?.ciudadCompra ||
     "Ubicación por definir";
 
+      const capacidadActual =
+    property?.capacidadActual ??
+    selectedPropertyRaw?.capacidadActual ??
+    selectedPropertyRaw?.capacidadActualCompraHoy ??
+    journey?.capacidadActualCompraHoy ??
+    viviendaPosible ??
+    null;
+
+  const capacidadObjetivo =
+    property?.capacidadObjetivo ??
+    selectedPropertyRaw?.capacidadObjetivo ??
+    selectedPropertyRaw?.capacidadObjetivoCompra ??
+    journey?.capacidadObjetivoCompra ??
+    valorViviendaPropiedad ??
+    capacidadActual ??
+    null;
+
+  const calculatedMatch =
+    valorViviendaPropiedad != null
+      ? getPropertyMatchStatus({
+          propertyPrice: valorViviendaPropiedad,
+          capacidadActual,
+          capacidadObjetivo,
+        })
+      : null;
+
+  const estadoMatch =
+    property?.estadoMatch ||
+    selectedPropertyRaw?.estadoMatch ||
+    selectedPropertyRaw?.matchStatus ||
+    journey?.selectedPropertyMatchStatus ||
+    calculatedMatch?.status ||
+    null;
+
+  const isAptoHoy = estadoMatch === PROPERTY_MATCH_STATUS.APTO_HOY;
+
+  const isMetaAlcanzable =
+    estadoMatch === PROPERTY_MATCH_STATUS.META_ALCANZABLE;
+
+  const isFueraDeRango =
+    estadoMatch === PROPERTY_MATCH_STATUS.FUERA_DE_RANGO;
+
+  const brechaActual =
+    property?.brecha ??
+    selectedPropertyRaw?.brecha ??
+    selectedPropertyRaw?.brechaContraCapacidadActual ??
+    calculatedMatch?.gap ??
+    (valorViviendaPropiedad != null && capacidadActual != null
+      ? Math.max(0, valorViviendaPropiedad - capacidadActual)
+      : null);
+
+  const matchChipLabel = isMetaAlcanzable
+    ? "Alcanzable con plan"
+    : isAptoHoy
+    ? "Puedes aplicar hoy"
+    : isFueraDeRango
+    ? "Fuera de rango"
+    : `Probabilidad ${String(probabilidadRaw)}`;
+
+  const headerTitle = isMetaAlcanzable
+    ? "Tu propiedad objetivo"
+    : isAptoHoy
+    ? "Una opción lista para explorar"
+    : "Una opción alineada contigo";
+
+  const headerSubtitle = isMetaAlcanzable
+    ? `${nombreUsuario}, esta propiedad supera tu capacidad actual, pero puede servir como meta si completas tu plan de preparación.`
+    : isAptoHoy
+    ? `${nombreUsuario}, esta propiedad está dentro de tu capacidad estimada actual.`
+    : isUserSelected
+    ? `${nombreUsuario}, esta propiedad puede servir como base para seguir avanzando dentro de tu ruta.`
+    : `${nombreUsuario}, esta es una opción que sí encaja con tu capacidad actual de compra.`;
+
+  const mainPropertyChip = isMetaAlcanzable
+    ? "Meta de tu ruta"
+    : isAptoHoy
+    ? "Lista para ruta"
+    : isUserSelected
+    ? "Base de tu ruta"
+    : "Alineada contigo";
+
+  const capacityCardLabel = isMetaAlcanzable
+    ? "Capacidad actual"
+    : "Vivienda que podrías comprar";
+
+  const positiveBoxTitle = isMetaAlcanzable
+    ? "Guardamos esta propiedad como meta"
+    : isAptoHoy
+    ? "Esta opción está dentro de tu rango actual"
+    : isUserSelected
+    ? "Elegiste una opción alineada contigo"
+    : "Esta opción va bien con tu perfil";
+
+  const positiveBoxBody = isMetaAlcanzable
+    ? "Hoy todavía no está lista para aplicar, pero HabitaLibre puede usarla como objetivo para mostrarte qué debes mejorar y cómo acercarte."
+    : property?.descripcion ||
+      "Por precio, cuota y capacidad de compra, esta es una de las opciones más alineadas contigo.";
+
+  const primaryCtaLabel = isMetaAlcanzable
+    ? "Ver plan para esta propiedad"
+    : "Quiero avanzar con esta propiedad";
+
+  const nextStepCopy = isMetaAlcanzable
+    ? "Como esta propiedad es una meta alcanzable, el siguiente paso no es aplicar todavía, sino ver qué brecha debes cerrar para acercarte a ella."
+    : "Si esta opción te interesa, HabitaLibre la puede tomar como base para seguir guiando tu caso y mostrarte el siguiente paso más conveniente.";
+
+  const nextStepButtonLabel = isMetaAlcanzable
+    ? "Ir a mi plan"
+    : "Volver a mi ruta";
+
+
   return (
     <Screen
       style={{
@@ -351,7 +516,7 @@ export default function PropiedadIdeal() {
                 color: UI.text,
               }}
             >
-              Una opción alineada contigo
+              {headerTitle}
             </h1>
 
             <div
@@ -363,14 +528,12 @@ export default function PropiedadIdeal() {
                 maxWidth: 420,
               }}
             >
-              {isUserSelected
-                ? `${nombreUsuario}, esta propiedad puede servir como base para seguir avanzando dentro de tu ruta.`
-                : `${nombreUsuario}, esta es una opción que sí encaja con tu capacidad actual de compra.`}
+             {headerSubtitle}
             </div>
           </div>
 
           <div style={{ marginTop: 4, flexShrink: 0 }}>
-            <Chip tone="good">Probabilidad {String(probabilidadRaw)}</Chip>
+<Chip tone="good">{matchChipLabel}</Chip>
           </div>
         </div>
 
@@ -424,9 +587,7 @@ export default function PropiedadIdeal() {
                 </div>
               </div>
 
-              <Chip tone="good">
-                {isUserSelected ? "Base de tu ruta" : "Alineada contigo"}
-              </Chip>
+       <Chip tone="good">{mainPropertyChip}</Chip>
             </div>
 
             <div
@@ -494,14 +655,43 @@ export default function PropiedadIdeal() {
                   border: "1px solid rgba(45,212,191,0.18)",
                 }}
               >
-                <div style={{ fontSize: 13, color: UI.subtext, marginBottom: 8 }}>
-                  Vivienda que podrías comprar
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 950 }}>
-                  {money(viviendaPosible)}
-                </div>
+             <div style={{ fontSize: 13, color: UI.subtext, marginBottom: 8 }}>
+  {capacityCardLabel}
+</div>
+<div style={{ fontSize: 22, fontWeight: 950 }}>
+  {money(capacidadActual)}
+</div>
               </div>
             </div>
+
+            {isMetaAlcanzable ? (
+  <div
+    style={{
+      padding: 14,
+      borderRadius: UI.radiusInner,
+      background: "rgba(245,158,11,0.10)",
+      border: "1px solid rgba(245,158,11,0.24)",
+      marginBottom: 14,
+    }}
+  >
+    <div style={{ fontSize: 14, fontWeight: 950, marginBottom: 6 }}>
+      Esta propiedad es una meta, no una aplicación inmediata
+    </div>
+
+    <div
+      style={{
+        fontSize: 13,
+        color: UI.subtext,
+        lineHeight: 1.45,
+      }}
+    >
+      Hoy tu capacidad estimada es de {money(capacidadActual)}. Esta propiedad
+      cuesta {money(valorViviendaPropiedad)}, por lo que existe una brecha
+      aproximada de {money(brechaActual)}. La usaremos como objetivo para
+      construir tu plan.
+    </div>
+  </div>
+) : null}
 
             <div
               style={{
@@ -523,45 +713,82 @@ export default function PropiedadIdeal() {
                 Cómo se arma tu escenario
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto 1fr auto 1fr",
-                  gap: 8,
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
-                    Pago mensual
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
-                    {money(cuota)}
-                  </div>
-                </div>
+       <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr auto 1fr",
+    gap: 8,
+    alignItems: "center",
+  }}
+>
+  {isMetaAlcanzable ? (
+    <>
+      <div>
+        <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
+          Capacidad hoy
+        </div>
+        <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
+          {money(capacidadActual)}
+        </div>
+      </div>
 
-                <div style={{ fontSize: 18, opacity: 0.55 }}>→</div>
+      <div style={{ fontSize: 18, opacity: 0.55 }}>→</div>
 
-                <div>
-                  <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
-                    Préstamo del banco
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
-                    {money(prestamoBanco)}
-                  </div>
-                </div>
+      <div>
+        <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
+          Brecha actual
+        </div>
+        <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
+          {money(brechaActual)}
+        </div>
+      </div>
 
-                <div style={{ fontSize: 18, opacity: 0.55 }}>→</div>
+      <div style={{ fontSize: 18, opacity: 0.55 }}>→</div>
 
-                <div>
-                  <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
-                    Vivienda que podrías comprar
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
-                    {money(viviendaPosible)}
-                  </div>
-                </div>
-              </div>
+      <div>
+        <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
+          Propiedad objetivo
+        </div>
+        <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
+          {money(valorViviendaPropiedad)}
+        </div>
+      </div>
+    </>
+  ) : (
+    <>
+      <div>
+        <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
+          Pago mensual
+        </div>
+        <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
+          {money(cuota)}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 18, opacity: 0.55 }}>→</div>
+
+      <div>
+        <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
+          Préstamo del banco
+        </div>
+        <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
+          {money(prestamoBanco)}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 18, opacity: 0.55 }}>→</div>
+
+      <div>
+        <div style={{ fontSize: 11, color: "rgba(148,163,184,0.9)" }}>
+          Vivienda que podrías comprar
+        </div>
+        <div style={{ marginTop: 4, fontSize: 18, fontWeight: 950 }}>
+          {money(viviendaPosible)}
+        </div>
+      </div>
+    </>
+  )}
+</div>
 
               <div
                 style={{
@@ -571,8 +798,9 @@ export default function PropiedadIdeal() {
                   lineHeight: 1.35,
                 }}
               >
-                Tu entrada ayuda a convertir el préstamo en el valor total de
-                vivienda que podrías alcanzar.
+{isMetaAlcanzable
+  ? "Esta vista separa tu capacidad actual de tu propiedad objetivo para que sepas exactamente qué estás intentando alcanzar."
+  : "Tu entrada ayuda a convertir el préstamo en el valor total de vivienda que podrías alcanzar."}
               </div>
             </div>
 
@@ -585,12 +813,9 @@ export default function PropiedadIdeal() {
                 marginBottom: 14,
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 6 }}>
-                ✔{" "}
-                {isUserSelected
-                  ? "Elegiste una opción alineada contigo"
-                  : "Esta opción va bien con tu perfil"}
-              </div>
+<div style={{ fontSize: 14, fontWeight: 900, marginBottom: 6 }}>
+  ✔ {positiveBoxTitle}
+</div>
               <div
                 style={{
                   fontSize: 13,
@@ -598,15 +823,14 @@ export default function PropiedadIdeal() {
                   lineHeight: 1.45,
                 }}
               >
-                {property?.descripcion ||
-                  "Por precio, cuota y capacidad de compra, esta es una de las opciones más alineadas contigo."}
+                {positiveBoxBody}
               </div>
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
-              <PrimaryButton onClick={() => navigate("/ruta")}>
-                Quiero avanzar con esta propiedad
-              </PrimaryButton>
+         <PrimaryButton onClick={() => navigate("/ruta")}>
+  {primaryCtaLabel}
+</PrimaryButton>
 
               <SecondaryButton onClick={() => navigate("/marketplace")}>
                 Ver más opciones
@@ -634,14 +858,12 @@ export default function PropiedadIdeal() {
               marginBottom: 12,
             }}
           >
-            Si esta opción te interesa, HabitaLibre la puede tomar como base
-            para seguir guiando tu caso y mostrarte el siguiente paso más
-            conveniente.
+      {nextStepCopy}
           </div>
 
-          <SecondaryButton onClick={() => navigate("/ruta")}>
-            Volver a mi ruta
-          </SecondaryButton>
+<SecondaryButton onClick={() => navigate("/ruta")}>
+  {nextStepButtonLabel}
+</SecondaryButton>
         </Card>
       </div>
     </Screen>

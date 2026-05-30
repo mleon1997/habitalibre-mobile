@@ -13,69 +13,6 @@ import PropertyCard from "../components/PropertyCard.jsx";
 import { resolveHousingRecommendation } from "../lib/recommendationResolver.js";
 import { getCustomer } from "../lib/customerSession.js";
 import HipotecaVisualDetail from "../components/HipotecaVisualDetail.jsx";
-
-function parseHLMoneyValue(value) {
-  if (value === null || value === undefined || value === "") return null;
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) && value > 0 ? value : null;
-  }
-
-  let raw = String(value).trim();
-  if (!raw) return null;
-
-  raw = raw.replace(/\$/g, "").replace(/\s/g, "");
-
-  // Caso Ecuador/LatAm: "52.000" debe ser 52000, no 52.
-  const hasDot = raw.includes(".");
-  const hasComma = raw.includes(",");
-
-  if (hasDot && !hasComma) {
-    const parts = raw.split(".");
-    const last = parts[parts.length - 1];
-
-    if (last.length === 3 && parts.length >= 2) {
-      raw = parts.join("");
-    }
-  }
-
-  if (hasComma && !hasDot) {
-    const parts = raw.split(",");
-    const last = parts[parts.length - 1];
-
-    if (last.length === 3 && parts.length >= 2) {
-      raw = parts.join("");
-    } else {
-      raw = raw.replace(",", ".");
-    }
-  }
-
-  if (hasDot && hasComma) {
-    // "52.000,50" -> 52000.50
-    raw = raw.replace(/\./g, "").replace(",", ".");
-  }
-
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function getPropertyPriceValue(property = {}) {
-  return (
-    parseHLMoneyValue(property?._normalizedPrice) ??
-    parseHLMoneyValue(property?.precio) ??
-    parseHLMoneyValue(property?.price) ??
-    parseHLMoneyValue(property?.precioVenta) ??
-    parseHLMoneyValue(property?.valor) ??
-    parseHLMoneyValue(property?.valorVenta) ??
-    parseHLMoneyValue(property?.listPrice) ??
-    parseHLMoneyValue(property?.propertyPrice) ??
-    parseHLMoneyValue(property?.precioReferencia) ??
-    parseHLMoneyValue(property?.precio_ref) ??
-    null
-  );
-}
-
-
 import {
   saveSelectedPropertyToBackend,
   saveJourneyStateToBackend,
@@ -1016,9 +953,9 @@ function getSelectedPropertyStatusMeta(status, isSelected) {
     return {
       chip: "Tu elegida",
       chipTone: "green",
-      secondaryChip: "Dentro de tu rango",
+      secondaryChip: "Puedes aplicar hoy",
       secondaryTone: "green",
-      ctaLabel: "Ver financiamiento",
+      ctaLabel: "Ver ruta hipotecaria",
       ctaTone: "route",
     };
   }
@@ -1032,7 +969,7 @@ function getSelectedPropertyStatusMeta(status, isSelected) {
       chipTone: "green",
       secondaryChip: "Alcanzable con plan",
       secondaryTone: "amber",
-      ctaLabel: "Ver financiamiento",
+      ctaLabel: "Ver plan para esta propiedad",
       ctaTone: "route",
     };
   }
@@ -1044,10 +981,10 @@ function getSelectedPropertyStatusMeta(status, isSelected) {
     return {
       chip: "Tu elegida",
       chipTone: "amber",
-      secondaryChip: "Sobre tu rango actual",
+      secondaryChip: "Fuera de rango actual",
       secondaryTone: "amber",
-      ctaLabel: "Ver financiamiento de esta propiedad",
-      ctaTone: "route",
+      ctaLabel: "Ver alternativas",
+      ctaTone: "alternatives",
     };
   }
 
@@ -1057,7 +994,7 @@ function getSelectedPropertyStatusMeta(status, isSelected) {
       chipTone: "green",
       secondaryChip: "Sigue alineada",
       secondaryTone: "neutral",
-      ctaLabel: "Ver financiamiento",
+      ctaLabel: "Ver en Ruta",
       ctaTone: "route",
     };
   }
@@ -1068,7 +1005,7 @@ function getSelectedPropertyStatusMeta(status, isSelected) {
       chipTone: "green",
       secondaryChip: "Ruta futura",
       secondaryTone: "neutral",
-      ctaLabel: "Ver financiamiento",
+      ctaLabel: "Ver en Ruta",
       ctaTone: "route",
     };
   }
@@ -1077,10 +1014,10 @@ function getSelectedPropertyStatusMeta(status, isSelected) {
     return {
       chip: "Tu elegida",
       chipTone: "amber",
-      secondaryChip: "Cerca de tu objetivo",
+      secondaryChip: "Revisar encaje",
       secondaryTone: "amber",
-      ctaLabel: "Ver financiamiento",
-      ctaTone: "route",
+      ctaLabel: "Ver alternativas",
+      ctaTone: "alternatives",
     };
   }
 
@@ -1100,7 +1037,7 @@ function getSelectedPropertyStatusMeta(status, isSelected) {
     chipTone: "green",
     secondaryChip: "Seleccionada para tu ruta",
     secondaryTone: "neutral",
-    ctaLabel: "Ver financiamiento",
+    ctaLabel: "Ver en Ruta",
     ctaTone: "route",
   };
 }
@@ -1130,7 +1067,7 @@ function ScreenWrap({ children }) {
           "radial-gradient(1000px 700px at 80% 10%, rgba(59,130,246,0.10), transparent 60%)," +
           "linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(15,23,42,1) 100%)",
         color: "white",
-        padding: "92px 22px calc(190px + env(safe-area-inset-bottom, 0px))",
+        padding: "92px 22px calc(140px + env(safe-area-inset-bottom, 0px))",
         fontFamily: "system-ui",
         boxSizing: "border-box",
       }}
@@ -1275,7 +1212,17 @@ function FinancialDisclaimer({ compact = false, style = {} }) {
   );
 }
 
-function MatchHeader({ subtitle }) {
+function MatchHeader({ subtitle, tab }) {
+  const isBanksTab = tab === "banks";
+
+  const eyebrow = isBanksTab ? "Hipotecas" : "Propiedades";
+
+  const title = isBanksTab
+    ? "Rutas hipotecarias referenciales"
+    : "Propiedades dentro de tu rango estimado";
+
+  const pillLabel = isBanksTab ? "Hipotecas" : "Propiedades";
+
   return (
     <div style={{ marginBottom: 18 }}>
       <div
@@ -1295,7 +1242,7 @@ function MatchHeader({ subtitle }) {
               marginBottom: 10,
             }}
           >
-            Propiedades
+            {eyebrow}
           </div>
 
           <h1
@@ -1309,7 +1256,7 @@ function MatchHeader({ subtitle }) {
               maxWidth: 360,
             }}
           >
-            Propiedades para tu ruta
+            {title}
           </h1>
 
           <div
@@ -1327,8 +1274,8 @@ function MatchHeader({ subtitle }) {
 
         <Pill>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Building2 size={12} />
-            Propiedades
+            {isBanksTab ? <Landmark size={12} /> : <Building2 size={12} />}
+            {pillLabel}
           </span>
         </Pill>
       </div>
@@ -1351,27 +1298,27 @@ function SummaryCard({
   const summaryTitle = hasCreditBlocker
   ? "Ruta condicionada a revisión"
   : isMortgageCurrent
-  ? "Tu punto de partida"
+  ? "Ruta referencial principal"
   : isMortgageAdjusted
-  ? "Tu punto de partida"
+  ? "Ruta hipotecaria referencial cercana"
   : recommendationType === "immediate"
-  ? "Tu punto de partida"
+  ? "Ruta referencial principal"
   : recommendationType === "future_route"
-  ? "Tu punto de partida"
+  ? "Ruta referencial estimada"
   : recommendationType === "inventory_fallback"
-  ? "Referencia inicial"
+  ? "Alternativa referencial cercana"
   : "Tu estado actual";
 
 const summaryBody = hasCreditBlocker
   ? "Tu capacidad puede verse bien, pero antes de avanzar conviene revisar tu historial financiero declarado."
   : isMortgageCurrent
-  ? "Esta es una referencia inicial según tu perfil declarado. La ruta final depende de la propiedad que elijas."
+  ? "Esta ruta parece compatible de forma referencial con tu perfil y con el valor de vivienda que estás explorando."
   : isMortgageAdjusted
-  ? "Tu perfil marca una base de compra. Las propiedades se comparan contra esa base y contra tu ruta de preparación."
+  ? "Todavía no cubre toda tu meta exacta, pero es la referencia más cercana para trabajarla."
   : recommendationType === "immediate"
-  ? "Vemos un punto de partida según tus datos actuales."
+  ? "Vemos una ruta referencial alineada con tus datos actuales."
   : recommendationType === "future_route"
-  ? "Hoy no es compra inmediata, pero sí vemos una ruta de preparación para acercarte."
+  ? "Hoy no es compra inmediata, pero sí vemos una ruta referencial para acercarte."
   : recommendationType === "inventory_fallback"
   ? "Hoy no vemos una ruta referencial ideal, pero sí alternativas concretas cercanas."
   : "Aún no hay una ruta clara, pero puedes explorar referencias útiles.";
@@ -1476,7 +1423,7 @@ const pillTone = hasCreditBlocker
           }}
         >
           <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 800 }}>
-            Ruta base
+            Ruta
           </div>
           <div style={{ marginTop: 4, fontWeight: 900, fontSize: 14 }}>
             {humanMortgageText(productoElegido)}
@@ -1524,7 +1471,7 @@ const pillTone = hasCreditBlocker
 
       <div style={{ marginTop: 14 }}>
         <SecondaryButton onClick={onOpenMortgageDetail}>
-          Ver supuestos de cálculo
+          Ver detalle referencial
         </SecondaryButton>
       </div>
     </div>
@@ -1859,112 +1806,43 @@ function handleOpenMortgageDetail() {
 useEffect(() => {
   let isMounted = true;
 
-  function extractProperties(data) {
-    if (Array.isArray(data)) return data;
-
-    if (Array.isArray(data?.properties)) return data.properties;
-    if (Array.isArray(data?.data?.properties)) return data.data.properties;
-    if (Array.isArray(data?.items)) return data.items;
-    if (Array.isArray(data?.data?.items)) return data.data.items;
-    if (Array.isArray(data?.results)) return data.results;
-    if (Array.isArray(data?.data?.results)) return data.data.results;
-
-    return [];
-  }
-
-  async function tryLoadPropertiesFrom(path) {
-    const token = localStorage.getItem("hl_customer_token") || "";
-
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
-
-    const data = await res.json().catch(() => null);
-
-    console.log("[Marketplace] Probando endpoint propiedades:", {
-      path,
-      status: res.status,
-      ok: res.ok,
-      dataShape: {
-        isArray: Array.isArray(data),
-        hasProperties: Array.isArray(data?.properties),
-        hasDataProperties: Array.isArray(data?.data?.properties),
-        hasItems: Array.isArray(data?.items),
-        hasResults: Array.isArray(data?.results),
-        message: data?.message || null,
-      },
-    });
-
-    if (!res.ok || data?.ok === false) {
-      throw new Error(
-        data?.message ||
-          `Endpoint ${path} respondió ${res.status}`
-      );
-    }
-
-    return extractProperties(data);
-  }
-
   async function loadBackendProperties() {
-    const candidatePaths = [
-      "/api/properties",
-      "/properties",
-      "/api/propiedades",
-      "/propiedades",
-      "/api/inventory/properties",
-      "/api/marketplace/properties",
-    ];
+    try {
+      const res = await fetch(`${API_BASE}/properties`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
 
-    let lastError = null;
+      const data = await res.json().catch(() => null);
 
-    for (const path of candidatePaths) {
-      try {
-        const properties = await tryLoadPropertiesFrom(path);
-
-        if (!isMounted) return;
-
-        setBackendProperties(properties);
-
-        console.log("[Marketplace] Propiedades reales cargadas:", {
-          endpoint: path,
-          count: properties.length,
-          minPrices: properties
-            .map((p) => ({
-              nombre: p?.nombre || p?.title || p?.name || p?.proyecto,
-              precio:
-                p?.precio ??
-                p?.price ??
-                p?.precioVenta ??
-                p?.valor ??
-                p?.listPrice ??
-                null,
-            }))
-            .filter((p) => p.precio != null)
-            .slice(0, 10),
-        });
-
-        return;
-      } catch (error) {
-        lastError = error;
-        console.warn("[Marketplace] Falló endpoint propiedades:", {
-          path,
-          error: error?.message || error,
-        });
+      if (!res.ok || data?.ok === false) {
+        throw new Error(
+          data?.message || "No se pudieron cargar propiedades reales."
+        );
       }
+
+      const properties = Array.isArray(data?.properties)
+        ? data.properties
+        : [];
+
+      if (!isMounted) return;
+
+      setBackendProperties(properties);
+
+      console.log("[Marketplace] Propiedades reales cargadas:", {
+        count: properties.length,
+      });
+    } catch (error) {
+      console.warn(
+        "[Marketplace] Error cargando propiedades reales:",
+        error?.message || error
+      );
+
+      if (!isMounted) return;
+      setBackendProperties([]);
     }
-
-    if (!isMounted) return;
-
-    console.warn(
-      "[Marketplace] Error cargando propiedades reales:",
-      lastError?.message || lastError || "No se pudo cargar ningún endpoint."
-    );
-
-    setBackendProperties([]);
   }
 
   loadBackendProperties();
@@ -2007,7 +1885,7 @@ async function handleConfirmMortgageRoute(route = recommendedBank) {
     );
   }
 
-  navigate("/financiamiento-propiedad");
+  navigate("/ruta");
 }
 
   useEffect(() => {
@@ -2316,7 +2194,7 @@ const creditoRequeridoPropiedad =
     : null;
 
   function classifyPropertyByRoute(property = {}) {
-    const price = getPropertyPriceValue(property);
+    const price = toNum(property?.precio ?? property?.price);
 
     if (price == null || price <= 0) return null;
 
@@ -2412,19 +2290,6 @@ const creditoRequeridoPropiedad =
   }
 
 function enrichPropertyWithRouteFit(property = {}) {
-  if (import.meta?.env?.DEV) {
-    const debugPrice = getPropertyPriceValue(property);
-    if (debugPrice != null && debugPrice <= 60000) {
-      console.log("[HL MARKETPLACE PROPERTY PRICE]", {
-        nombre: property?.nombre || property?.title || property?.name,
-        precio: debugPrice,
-        rawPrecio: property?.precio,
-        rawPrice: property?.price,
-        rawPrecioVenta: property?.precioVenta,
-      });
-    }
-  }
-
   const routeFit = classifyPropertyByRoute(property);
 
   const price =
@@ -2775,7 +2640,7 @@ const selectedGoalSubtitle = hasSelectedPropertyGoal
 const primaryMortgageTitle = useMarketplaceMortgageAsPrimary
   ? useMarketplaceCurrentGoal
     ? "Ruta hipotecaria referencial para esta meta"
-    : "Tu punto de partida"
+    : "Ruta hipotecaria referencial cercana"
     : useImmediateAsPrimary
     ? "Ruta hipotecaria referencial hoy"
     : useFutureAsPrimary
@@ -2806,8 +2671,8 @@ const primaryMortgageTitle = useMarketplaceMortgageAsPrimary
 
 const primaryMortgageSubtitle = useMarketplaceMortgageAsPrimary
   ? useMarketplaceCurrentGoal
-    ? "Esta es una referencia inicial según tu perfil declarado. La ruta final depende de la propiedad que elijas."
-    : "Tu perfil marca una base de compra. Las propiedades se comparan contra esa base y contra tu ruta de preparación."
+    ? "Esta ruta parece compatible de forma referencial con tu perfil y con el valor de vivienda que estás explorando."
+    : "Todavía no cubre toda tu meta exacta, pero es la referencia más cercana para trabajarla."
   : useImmediateAsPrimary
   ? recommendedBank
     ? "Con base en tus datos declarados, esta ruta sirve como referencia para una futura conversación con una entidad financiera."
@@ -2973,67 +2838,15 @@ const primaryReasonsForDisplay = hasCreditBlocker
   const allowedProductIds =
     propertyMode === "strict" ? strictProductIds : recommendedProductIds;
 
-  
-  function getPropertyUniqueKey(p = {}) {
-    return String(
-      p?.id ||
-        p?._id ||
-        p?._normalizedId ||
-        p?.propertyId ||
-        p?.slug ||
-        `${p?.nombre || p?.title || p?.name || "property"}-${getPropertyPriceValue(p) || "no-price"}`
-    ).trim();
-  }
-
-  function mergePropertySources(engineList = [], backendList = []) {
-    const map = new Map();
-
-    const add = (property, source) => {
-      if (!property || typeof property !== "object") return;
-
-      const key = getPropertyUniqueKey(property);
-      const existing = map.get(key) || {};
-
-      const normalizedPrice =
-        getPropertyPriceValue(property) ??
-        getPropertyPriceValue(existing) ??
-        null;
-
-      map.set(key, {
-        ...existing,
-        ...property,
-        _source: existing?._source
-          ? `${existing._source}+${source}`
-          : source,
-        _normalizedPrice: normalizedPrice,
-      });
-    };
-
-    if (Array.isArray(engineList)) {
-      engineList.forEach((p) => add(p, "engine"));
-    }
-
-    if (Array.isArray(backendList)) {
-      backendList.forEach((p) => add(p, "backend"));
-    }
-
-    return Array.from(map.values()).filter((p) => getPropertyPriceValue(p) != null);
-  }
-
-
-function pSafePrice(p) {
-    return n(p?._normalizedPrice ?? getPropertyPriceValue(p), Number.MAX_SAFE_INTEGER);
+  function pSafePrice(p) {
+    return n(p?.precio ?? p?.price, Number.MAX_SAFE_INTEGER);
   }
 
   const enrichedProps = useMemo(() => {
     const matchedFromEngine = normalizeMatchedProperties(snapshot);
-    const allPropertySources = mergePropertySources(
-      matchedFromEngine,
-      backendProperties
-    );
 
-    if (Array.isArray(allPropertySources) && allPropertySources.length) {
-      let list = allPropertySources
+    if (Array.isArray(matchedFromEngine) && matchedFromEngine.length) {
+      let list = matchedFromEngine
         .map((p) =>
           enrichPropertyWithRouteFit({
             ...p,
@@ -3059,16 +2872,16 @@ function pSafePrice(p) {
 
           if (bScore !== aScore) return bScore - aScore;
 
-          return n(a?._normalizedPrice ?? getPropertyPriceValue(a), Number.MAX_SAFE_INTEGER) - n(
-            b?._normalizedPrice ?? getPropertyPriceValue(b),
+          return n(a?.precio ?? a?.price, Number.MAX_SAFE_INTEGER) - n(
+            b?.precio ?? b?.price,
             Number.MAX_SAFE_INTEGER
           );
         });
       } else if (recommendationType === "inventory_fallback") {
         const target = goalValue || 0;
         list = list.sort((a, b) => {
-          const pa = n(a?._normalizedPrice ?? getPropertyPriceValue(a), Number.MAX_SAFE_INTEGER);
-          const pb = n(b?._normalizedPrice ?? getPropertyPriceValue(b), Number.MAX_SAFE_INTEGER);
+          const pa = n(a?.precio ?? a?.price, Number.MAX_SAFE_INTEGER);
+          const pb = n(b?.precio ?? b?.price, Number.MAX_SAFE_INTEGER);
           if (target > 0) {
             const da = Math.abs(pa - target);
             const db = Math.abs(pb - target);
@@ -3119,24 +2932,8 @@ function pSafePrice(p) {
             const estadoA = String(a?.estadoCompra || "");
             const estadoB = String(b?.estadoCompra || "");
 
-            const priceA = getPropertyPriceValue(a);
-            const priceB = getPropertyPriceValue(b);
-            const currentRange = parseHLMoneyValue(capacidadActualCompraHoy);
-
-            const inCurrentA =
-              priceA != null && currentRange != null && priceA <= currentRange;
-            const inCurrentB =
-              priceB != null && currentRange != null && priceB <= currentRange;
-
-            // Lo primero que debe ver el usuario: propiedades que sí puede explorar hoy.
-            if (inCurrentA && !inCurrentB) return -1;
-            if (!inCurrentA && inCurrentB) return 1;
-
             const rank = {
               top_match: 1,
-              apto_hoy: 1,
-              APTO_HOY: 1,
-              dentro_rango_actual: 1,
               entrada_viable_hipoteca_futura_viable: 2,
               entrada_viable_hipoteca_futura_debil: 3,
               ruta_preparacion: 4,
@@ -3197,17 +2994,6 @@ return fallbackProperties
   )
   .filter((p) => {
     if (p.matchedProducts.length > 0) return true;
-    const pPriceForCurrentRange = getPropertyPriceValue(p);
-    const currentRangeForFilter = parseHLMoneyValue(currentPropertyMatchRange);
-
-    if (
-      pPriceForCurrentRange != null &&
-      currentRangeForFilter != null &&
-      pPriceForCurrentRange <= currentRangeForFilter
-    ) {
-      return true;
-    }
-
     if (p?.routeFit?.includeInMatch === true) return true;
     return false;
   })
@@ -3260,7 +3046,15 @@ return fallbackProperties
   : "default";
 
 const subtitle = unlocked
-  ? "Opciones según tu capacidad actual y tu ruta de preparación."
+  ? tab === "banks"
+    ? "Compara rutas hipotecarias referenciales según tu perfil declarado."
+    : recommendationType === "immediate"
+    ? "Propiedades y rutas según tu estimación actual"
+    : recommendationType === "future_route"
+    ? "Propiedades y rutas según tu camino futuro referencial"
+    : recommendationType === "inventory_fallback"
+    ? "Alternativas cercanas según tu escenario actual"
+    : "Aún no hay una ruta referencial clara, pero aquí verás referencias útiles"
   : "Completa el formulario para ver referencias alineadas con tu perfil declarado";
 
 const mortgageDetailRoute =
@@ -3285,6 +3079,36 @@ const mortgageDetailHomeValue =
     property?._normalizedId ||
     property?.propertyId ||
     null;
+
+const selectedMatchPayload = buildSelectedPropertyPayload({
+  property: {
+    ...property,
+    id: propertyId,
+    _id: propertyId,
+    nombre: propertyTitle,
+    title: propertyTitle,
+    name: propertyTitle,
+    proyecto: propertyTitle,
+    precio: propertyPrice,
+    price: propertyPrice,
+    imagen: propertyImage,
+    image: propertyImage,
+  },
+  capacidadActual: capacidadActualCompraHoy,
+  capacidadObjetivo: capacidadObjetivoCompra,
+});
+
+const selectedPropertyStatusForSave =
+  selectedMatchPayload?.estadoMatch ||
+  property?.estadoMatch ||
+  property?.matchStatus ||
+  property?.selectedPropertyStatus ||
+  property?.estadoCompra ||
+  property?.status ||
+  journey?.selectedPropertyStatus ||
+  selectedProperty?.estadoMatch ||
+  selectedProperty?.status ||
+  null;
 
   const propertyTitle =
     property?.titulo ||
@@ -3326,38 +3150,6 @@ const mortgageDetailHomeValue =
     property?.cover ||
     null;
 
-  const selectedMatchPayload = buildSelectedPropertyPayload({
-    property: {
-      ...property,
-      id: propertyId,
-      _id: propertyId,
-      nombre: propertyTitle,
-      title: propertyTitle,
-      name: propertyTitle,
-      proyecto: propertyTitle,
-      precio: propertyPrice,
-      price: propertyPrice,
-      _normalizedPrice: propertyPrice,
-      imagen: propertyImage,
-      image: propertyImage,
-    },
-    capacidadActual: capacidadActualCompraHoy,
-    capacidadObjetivo: capacidadObjetivoCompra,
-  });
-
-  const selectedPropertyStatusForSave =
-    selectedMatchPayload?.estadoMatch ||
-    property?.estadoMatch ||
-    property?.matchStatus ||
-    property?.selectedPropertyStatus ||
-    property?.estadoCompra ||
-    property?.status ||
-    journey?.selectedPropertyStatus ||
-    selectedProperty?.estadoMatch ||
-    selectedProperty?.status ||
-    null;
-
-
 const selectedPropertyStatus =
   journey?.selectedPropertyStatus ||
   selectedProperty?.estadoMatch ||
@@ -3383,7 +3175,6 @@ const selectedPropertyStatus =
 
     precio: propertyPrice,
     price: propertyPrice,
-    _normalizedPrice: propertyPrice,
 
     imagen: propertyImage,
     image: propertyImage,
@@ -3466,7 +3257,9 @@ const nextJourney = {
   capacidadActualCompraHoy,
   capacidadObjetivoCompra,
 selectedPropertyMatchStatus: selectedMatchPayload?.estadoMatch || null,
-updatedAt: new Date().toISOString(),
+capacidadActualCompraHoy,
+capacidadObjetivoCompra,
+  updatedAt: new Date().toISOString(),
 };
 
   saveOwnedData(LS_JOURNEY, nextJourney);
@@ -3494,7 +3287,7 @@ selectedPropertyStatus: selectedPropertyStatusForSave,
 
   return (
     <ScreenWrap>
-      <MatchHeader subtitle={subtitle} />
+      <MatchHeader subtitle={subtitle} tab={tab} />
 
       {!unlocked ? (
         <LockedMarketplace onGoSimular={() => navigate("/journey/full")} />
@@ -3510,86 +3303,9 @@ selectedPropertyStatus: selectedPropertyStatusForSave,
   hasCreditBlocker={hasCreditBlocker}
 />
 
-          {hasSelectedPropertyGoal ? (
-            <div
-              style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: 22,
-                background: UI.greenBg,
-                border: `1px solid ${UI.greenBorder}`,
-                boxShadow: UI.shadowSoft,
-              }}
-            >
-              <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900 }}>
-                Propiedad elegida
-              </div>
+          <SegmentedControl value={tab} onChange={setTab} />
 
-              <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
-                {selectedPropertyName}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 13,
-                  opacity: 0.9,
-                  lineHeight: 1.35,
-                }}
-              >
-                Ahora la lectura de financiamiento debe hacerse sobre esta
-                propiedad específica, no como una hipoteca aislada.
-              </div>
-
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                <PrimaryButton onClick={() => navigate("/financiamiento-propiedad")}>
-                  Ver financiamiento de esta propiedad
-                </PrimaryButton>
-
-                {selectedPropertyId ? (
-                  <SecondaryButton
-                    onClick={() => navigate(`/property/${selectedPropertyId}`)}
-                  >
-                    Ver detalle de la propiedad
-                  </SecondaryButton>
-                ) : null}
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: 22,
-                background: "rgba(255,255,255,0.06)",
-                border: `1px solid ${UI.border}`,
-                boxShadow: UI.shadowSoft,
-              }}
-            >
-              <div style={{ fontSize: 12, opacity: 0.82, fontWeight: 900 }}>
-                Orden recomendado
-              </div>
-
-              <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
-                Primero elige una propiedad
-              </div>
-
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 13,
-                  opacity: 0.85,
-                  lineHeight: 1.35,
-                }}
-              >
-                Luego te mostraremos la ruta de financiamiento para esa
-                propiedad. La hipoteca final depende del perfil y del inmueble
-                elegido.
-              </div>
-            </div>
-          )}
-
-          {true ? (
+          {tab === "props" ? (
             <>
               <FilterCard
                 recommendationType={recommendationType}
@@ -3611,7 +3327,7 @@ selectedPropertyStatus: selectedPropertyStatusForSave,
     }}
   >
     <div style={{ fontSize: 12, opacity: 0.82, fontWeight: 900 }}>
-      Tu ruta en dos etapas
+      Tu rango en dos etapas
     </div>
 
     <div
@@ -3667,8 +3383,9 @@ selectedPropertyStatus: selectedPropertyStatusForSave,
         color: "rgba(203,213,225,0.9)",
       }}
     >
-      Primero ves lo que podrías explorar hoy. Luego ves opciones que podrían
-      acercarse si completas entrada, reduces deudas o ajustas tu plan.
+      Las propiedades dentro de tu capacidad actual pueden avanzar a ruta
+      hipotecaria. Las que superan ese rango, pero entran en tu meta futura,
+      se muestran como propiedades alcanzables con plan.
     </div>
   </div>
 ) : null}
@@ -3915,7 +3632,7 @@ propertyMatchGap > 0 ? (
                                 onClick={() =>
                                   selectedStatusMeta.ctaTone === "alternatives"
                                     ? navigate("/marketplace")
-                                    : navigate("/financiamiento-propiedad")
+                                    : navigate("/ruta")
                                 }
                               >
                                 {selectedStatusMeta.ctaLabel}

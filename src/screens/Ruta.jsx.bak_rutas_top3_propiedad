@@ -436,239 +436,6 @@ function getRequiredEntry(propertyPrice, property) {
   );
 }
 
-
-function firstValue(...values) {
-  for (const value of values) {
-    if (value !== undefined && value !== null && value !== "") return value;
-  }
-  return null;
-}
-
-function toRateNumber(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return n > 1 ? n : n * 100;
-}
-
-function formatRate(value) {
-  const rate = toRateNumber(value);
-  if (rate == null) return "—";
-  return `${rate.toFixed(rate % 1 === 0 ? 0 : 2)}%`;
-}
-
-function formatTerm(value) {
-  const months = Number(value);
-  if (!Number.isFinite(months) || months <= 0) return "—";
-  const years = months >= 24 ? Math.round(months / 12) : months;
-  return months >= 24 ? `${years} años` : `${months} meses`;
-}
-
-function pmtMonthly({ loanAmount, annualRate, termMonths }) {
-  const pv = Number(loanAmount);
-  const annual = Number(annualRate);
-  const months = Number(termMonths);
-
-  if (!Number.isFinite(pv) || pv <= 0) return null;
-  if (!Number.isFinite(annual) || annual <= 0) return null;
-  if (!Number.isFinite(months) || months <= 0) return null;
-
-  const monthlyRate = annual > 1 ? annual / 100 / 12 : annual / 12;
-
-  if (monthlyRate <= 0) return Math.round(pv / months);
-
-  const payment =
-    (pv * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
-
-  return Number.isFinite(payment) && payment > 0 ? Math.round(payment) : null;
-}
-
-function humanMortgageProduct(route = {}) {
-  const raw =
-    firstValue(
-      route?.productLabel,
-      route?.label,
-      route?.name,
-      route?.nombre,
-      route?.producto,
-      route?.productName,
-      route?.segment,
-      route?.id,
-      route?.tipo
-    ) || "Ruta referencial";
-
-  const text = String(raw).toLowerCase();
-
-  if (text.includes("credicasa")) return "BIESS Credicasa";
-  if (text.includes("biess")) return "BIESS";
-  if (text.includes("vip")) return "VIP";
-  if (text.includes("vis")) return "VIS";
-  if (text.includes("privada") || text.includes("banca")) return "Banca privada";
-
-  return String(raw);
-}
-
-function humanMortgageProvider(route = {}) {
-  return (
-    firstValue(
-      route?.provider,
-      route?.bankName,
-      route?.bank,
-      route?.banco,
-      route?.entidad,
-      route?.nombreBanco
-    ) || null
-  );
-}
-
-function normalizeMortgageRouteOption(route = {}, context = {}) {
-  if (!route || typeof route !== "object") return null;
-
-  const mortgage = route?.mortgage || route?.product || route;
-
-  const tasaAnual =
-    toMoneyNumber(route?.annualRate) ??
-    toMoneyNumber(route?.tasaAnual) ??
-    toMoneyNumber(route?.rate) ??
-    toMoneyNumber(route?.interestRate) ??
-    toMoneyNumber(mortgage?.annualRate) ??
-    toMoneyNumber(mortgage?.tasaAnual) ??
-    toMoneyNumber(mortgage?.rate) ??
-    toMoneyNumber(mortgage?.interestRate) ??
-    null;
-
-  const plazoMeses =
-    toMoneyNumber(route?.plazoMeses) ??
-    toMoneyNumber(route?.termMonths) ??
-    toMoneyNumber(route?.term) ??
-    toMoneyNumber(mortgage?.plazoMeses) ??
-    toMoneyNumber(mortgage?.termMonths) ??
-    toMoneyNumber(mortgage?.term) ??
-    null;
-
-  const montoPrestamo =
-    toMoneyNumber(route?.montoPrestamo) ??
-    toMoneyNumber(route?.loanAmount) ??
-    toMoneyNumber(route?.montoFinanciar) ??
-    toMoneyNumber(route?.amount) ??
-    toMoneyNumber(mortgage?.montoPrestamo) ??
-    toMoneyNumber(mortgage?.loanAmount) ??
-    context?.loanAmount ??
-    null;
-
-  const cuotaDirecta =
-    toMoneyNumber(route?.cuota) ??
-    toMoneyNumber(route?.cuotaMensual) ??
-    toMoneyNumber(route?.monthlyPayment) ??
-    toMoneyNumber(route?.estimatedMonthlyPayment) ??
-    toMoneyNumber(mortgage?.cuota) ??
-    toMoneyNumber(mortgage?.cuotaMensual) ??
-    toMoneyNumber(mortgage?.monthlyPayment) ??
-    null;
-
-  const cuotaCalculada =
-    cuotaDirecta ??
-    pmtMonthly({
-      loanAmount: context?.loanAmount ?? montoPrestamo,
-      annualRate: tasaAnual,
-      termMonths: plazoMeses,
-    });
-
-  const producto = humanMortgageProduct(route);
-  const provider = humanMortgageProvider(route);
-
-  const score =
-    toMoneyNumber(route?.score) ??
-    toMoneyNumber(route?.compatibilityScore) ??
-    toMoneyNumber(route?.probabilidadScore) ??
-    null;
-
-  return {
-    id:
-      firstValue(
-        route?.id,
-        route?._id,
-        route?.key,
-        `${producto}-${provider || ""}-${tasaAnual || ""}-${plazoMeses || ""}`
-      ) || crypto?.randomUUID?.() || Math.random().toString(36),
-    producto,
-    provider,
-    tasaAnual,
-    plazoMeses,
-    montoPrestamo: context?.loanAmount ?? montoPrestamo,
-    cuota: cuotaCalculada,
-    score,
-    raw: route,
-  };
-}
-
-function collectMortgageRouteOptions(snapshot, selectedMortgageRoute, property, loanAmount) {
-  const candidates = [];
-
-  const pushOne = (item) => {
-    if (item && typeof item === "object") candidates.push(item);
-  };
-
-  const pushArray = (arr) => {
-    if (Array.isArray(arr)) arr.forEach(pushOne);
-  };
-
-  pushOne(selectedMortgageRoute);
-
-  pushOne(property?.evaluacionHipotecaFutura?.mortgageSelected);
-  pushOne(property?.evaluacionHipotecaHoy?.mortgageSelected);
-  pushOne(property?.evaluacionHipoteca?.mortgageSelected);
-
-  pushOne(snapshot?.bestMortgage);
-  pushOne(snapshot?.output?.bestMortgage);
-  pushOne(snapshot?.rawMatcherResult?.bestMortgage);
-
-  pushArray(snapshot?.rankedMortgages);
-  pushArray(snapshot?.output?.rankedMortgages);
-  pushArray(snapshot?.rawMatcherResult?.rankedMortgages);
-
-  pushArray(snapshot?.bancosTop3);
-  pushArray(snapshot?.output?.bancosTop3);
-  pushArray(snapshot?.rawMatcherResult?.bancosTop3);
-
-  const normalized = candidates
-    .map((item) =>
-      normalizeMortgageRouteOption(item, {
-        loanAmount,
-      })
-    )
-    .filter(Boolean)
-    .filter((item) => item.producto && item.producto !== "Ruta referencial");
-
-  const seen = new Set();
-
-  return normalized
-    .filter((item) => {
-      const key = [
-        item.producto,
-        item.provider || "",
-        item.tasaAnual || "",
-        item.plazoMeses || "",
-      ].join("|");
-
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => {
-      const scoreA = Number(a.score ?? -1);
-      const scoreB = Number(b.score ?? -1);
-
-      if (scoreA !== scoreB) return scoreB - scoreA;
-
-      const cuotaA = Number(a.cuota ?? Infinity);
-      const cuotaB = Number(b.cuota ?? Infinity);
-
-      return cuotaA - cuotaB;
-    })
-    .slice(0, 3);
-}
-
-
 function getRouteObjective(snapshot, property, maxCompra) {
   return (
     toMoneyNumber(property?.rutaObjetivo) ??
@@ -1019,21 +786,13 @@ export default function Ruta() {
       ? Math.max(0, selectedPropertyPrice - selectedPropertyRouteObjective)
       : null;
 
-  const propertyMortgageOptions = collectMortgageRouteOptions(
-    snapshot,
-    selectedMortgageRoute,
-    selectedPropertyRef,
-    selectedPropertyLoanAmount
-  );
-
-  const hasPropertyMortgageOptions = propertyMortgageOptions.length > 0;
-
   const hasPropertyFinancingContext = hasEvaluation && hasChosenProperty;
 
   const hasConfirmedMortgageRoute = Boolean(
     selectedMortgageRoute?.status === "confirmed" ||
       selectedMortgageRoute?.status === "selected" ||
-      journey?.mortgageRouteConfirmed === true
+      journey?.mortgageRouteConfirmed === true ||
+      hasPropertyFinancingContext
   );
 
   const mortgageRouteLabel = selectedMortgageRoute
@@ -1306,39 +1065,179 @@ const flags = {
             background:
               "linear-gradient(180deg, rgba(37,211,166,0.10), rgba(255,255,255,0.045))",
             border: "1px solid rgba(37,211,166,0.24)",
+            boxShadow: "0 14px 36px rgba(0,0,0,0.22)",
           }}
         >
-          <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)", fontWeight: 900 }}>
-            Propiedad elegida
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "flex-start",
+            }}
+          >
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "rgba(148,163,184,0.95)",
+                  fontWeight: 900,
+                }}
+              >
+                Financiamiento para esta propiedad
+              </div>
+
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 20,
+                  fontWeight: 980,
+                  lineHeight: 1.15,
+                  color: "rgba(226,232,240,0.98)",
+                }}
+              >
+                {selectedPropertyName}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 13.5,
+                  color: "rgba(203,213,225,0.92)",
+                  lineHeight: 1.4,
+                }}
+              >
+                Esta lectura combina tu perfil con la propiedad que elegiste.
+                La ruta final dependerá de la entidad financiera.
+              </div>
+            </div>
+
+            <Chip tone={selectedPropertyRouteGap > 0 ? "neutral" : "good"}>
+              {selectedPropertyRouteGap > 0 ? "Requiere preparación" : "Alineada"}
+            </Chip>
           </div>
 
           <div
             style={{
-              marginTop: 8,
-              fontSize: 20,
-              fontWeight: 980,
-              lineHeight: 1.15,
-              color: "rgba(226,232,240,0.98)",
+              marginTop: 16,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
             }}
           >
-            {selectedPropertyName}
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Precio propiedad
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyPrice ? moneyUSD(selectedPropertyPrice) : "—"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Ruta objetivo
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyRouteObjective
+                  ? moneyUSD(selectedPropertyRouteObjective)
+                  : maxCompra
+                  ? moneyUSD(maxCompra)
+                  : "—"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Entrada disponible
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyEntryAvailable
+                  ? moneyUSD(selectedPropertyEntryAvailable)
+                  : "—"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 13,
+                borderRadius: 16,
+                background: "rgba(15,23,42,0.48)",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "rgba(148,163,184,0.92)", fontWeight: 850 }}>
+                Monto a financiar
+              </div>
+              <div style={{ marginTop: 5, fontSize: 18, fontWeight: 980 }}>
+                {selectedPropertyLoanAmount
+                  ? moneyUSD(selectedPropertyLoanAmount)
+                  : "Por definir"}
+              </div>
+            </div>
           </div>
 
           <div
             style={{
-              marginTop: 8,
-              fontSize: 13.5,
-              color: "rgba(203,213,225,0.92)",
-              lineHeight: 1.4,
+              marginTop: 14,
+              padding: 14,
+              borderRadius: 18,
+              background:
+                selectedPropertyRouteGap > 0
+                  ? "rgba(245,158,11,0.08)"
+                  : "rgba(34,197,94,0.08)",
+              border:
+                selectedPropertyRouteGap > 0
+                  ? "1px solid rgba(245,158,11,0.22)"
+                  : "1px solid rgba(34,197,94,0.18)",
+              color: "rgba(226,232,240,0.94)",
+              fontSize: 13,
+              lineHeight: 1.42,
             }}
           >
-            Ya elegiste una propiedad como referencia. Revisa su financiamiento
-            en una pantalla separada para no mezclarlo con tu camino general.
+            {selectedPropertyRouteGap > 0 ? (
+              <>
+                Esta propiedad está aproximadamente{" "}
+                <b>{moneyUSD(selectedPropertyRouteGap)}</b> sobre tu ruta objetivo.
+                Te conviene fortalecer perfil, reducir deudas o comparar una unidad
+                de menor precio.
+              </>
+            ) : (
+              <>
+                Esta propiedad se ve alineada de forma referencial con tu ruta actual.
+                El siguiente paso es preparar documentos y validar condiciones finales.
+              </>
+            )}
           </div>
 
           <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-            <PrimaryButton onClick={() => nav("/financiamiento-propiedad")}>
-              Ver financiamiento de esta propiedad
+            <PrimaryButton
+              onClick={() =>
+                nav(selectedPropertyId ? `/property/${selectedPropertyId}` : "/marketplace")
+              }
+            >
+              Ver detalle de la propiedad
             </PrimaryButton>
 
             <SecondaryButton onClick={() => nav("/marketplace")}>
@@ -1347,27 +1246,21 @@ const flags = {
           </div>
         </Card>
       ) : (
-        <Card style={{ marginTop: 18, padding: "18px" }}>
+        <Card
+          style={{
+            marginTop: 18,
+            padding: "18px",
+          }}
+        >
           <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)", fontWeight: 900 }}>
-            Propiedad
+            Financiamiento
           </div>
-
           <div style={{ marginTop: 8, fontSize: 20, fontWeight: 980, lineHeight: 1.15 }}>
             Elige una propiedad para aterrizar tu ruta
           </div>
-
-          <div
-            style={{
-              marginTop: 8,
-              fontSize: 13.5,
-              color: "rgba(148,163,184,0.95)",
-              lineHeight: 1.4,
-            }}
-          >
-            El financiamiento depende de tu perfil y del inmueble específico
-            que elijas.
+          <div style={{ marginTop: 8, fontSize: 13.5, color: "rgba(148,163,184,0.95)", lineHeight: 1.4 }}>
+            La lectura de financiamiento depende de tu perfil y del inmueble específico que elijas.
           </div>
-
           <div style={{ marginTop: 14 }}>
             <PrimaryButton onClick={() => nav("/marketplace")}>
               Explorar propiedades

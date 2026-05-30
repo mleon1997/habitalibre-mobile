@@ -23,19 +23,6 @@ import { getCustomer, getCustomerToken } from "../lib/customerSession.js";
 
 const LS_SNAPSHOT = "hl_mobile_last_snapshot_v1";
 const LS_JOURNEY = "hl_mobile_journey_v1";
-function buildApiUrl(path) {
-  const base = String(API_BASE || "").replace(/\/+$/, "");
-  const normalizedPath = String(path || "").startsWith("/")
-    ? String(path || "")
-    : `/${path || ""}`;
-
-  if (base.endsWith("/api")) {
-    return `${base}${normalizedPath}`;
-  }
-
-  return `${base}/api${normalizedPath}`;
-}
-
 const LS_SELECTED_PROPERTY = "hl_selected_property_v1";
 const LS_SELECTED_MORTGAGE_ROUTE = "hl_selected_mortgage_route_v1";
 const LS_DOCS_CHECKLIST = "hl_docs_checklist_v1";
@@ -682,18 +669,15 @@ useEffect(() => {
     if (!selectedPropertyIdCandidate) return;
 
     try {
-      const propertyUrl = buildApiUrl(
-        `/properties/${encodeURIComponent(selectedPropertyIdCandidate)}`
+      const res = await fetch(
+        `${API_BASE}/properties/${encodeURIComponent(selectedPropertyIdCandidate)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
       );
-
-      console.log("[SiguientePaso] URL propiedad seleccionada:", propertyUrl);
-
-      const res = await fetch(propertyUrl, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      });
 
       const data = await res.json().catch(() => null);
 
@@ -947,11 +931,7 @@ const normalizedSelectedProperty = useMemo(() => {
       readinessStatus: payload.readinessStatus,
     });
 
-    const activationUrl = buildApiUrl("/casos-activacion");
-
-    console.log("[SiguientePaso] URL activación:", activationUrl);
-
-    const res = await fetch(activationUrl, {
+    const res = await fetch(`${API_BASE}/casos-activacion`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -961,12 +941,6 @@ const normalizedSelectedProperty = useMemo(() => {
     });
 
     const data = await res.json().catch(() => ({}));
-
-    console.log("[SiguientePaso] Respuesta activación:", {
-      status: res.status,
-      ok: res.ok,
-      data,
-    });
 
     if (!res.ok) {
       throw new Error(

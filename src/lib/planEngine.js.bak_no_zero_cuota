@@ -831,15 +831,10 @@ export function buildPropertyPlan({ property, journey, snapshot }) {
     evaluacionHipotecaHoy?.productoSugerido ||
     null;
 
-  const cuotaRutaRaw =
+  const cuotaRutaCalculada =
     toNum(evaluacionHipotecaFutura?.cuotaReferencia) ??
     toNum(evaluacionHipotecaHoy?.cuotaReferencia) ??
     null;
-
-  const cuotaRutaCalculada =
-    Number.isFinite(Number(cuotaRutaRaw)) && Number(cuotaRutaRaw) > 0
-      ? Number(cuotaRutaRaw)
-      : null;
 
   const tasaAnualCalculada =
     toNum(

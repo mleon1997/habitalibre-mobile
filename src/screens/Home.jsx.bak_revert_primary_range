@@ -406,7 +406,7 @@ function getPrimaryRangeLabel({
   if (hasSubmittedCase) return "Rango guardado";
   if (hasCreditBlocker) return "Rango referencial";
   if (hasImmediateViableMortgage) return "Tu rango estimado hoy";
-  if (isFutureRoute) return "Tu capacidad hoy";
+  if (isFutureRoute) return "Ruta con preparación";
   return "Orientación actual";
 }
 
@@ -424,7 +424,7 @@ function getPrimaryRangeDescription({
   }
 
   if (isFutureRoute) {
-    return "Este es tu rango prudente hoy. Tu ruta puede subir si completas entrada y reduces deudas.";
+    return "Rango objetivo si completas entrada y reduces deudas antes de aplicar.";
   }
 
   return "Con los datos actuales, todavía no aparece una ruta hipotecaria referencial clara.";
@@ -789,7 +789,7 @@ function StatusPill({
     tone = "good";
     icon = <CheckCircle2 size={13} strokeWidth={2.4} />;
   } else if (isFutureRoute) {
-    label = "Ruta creada";
+    label = "Ruta futura";
     tone = "brand";
     icon = <Compass size={13} strokeWidth={2.4} />;
   } else if (hasOperationalProgress) {
@@ -1517,24 +1517,26 @@ const isFutureRoute =
     readinessStatus
   );
 
-  const displayPrimaryRange =
-    toNum(estimatedMaxPropertyValue) > 0
-      ? estimatedMaxPropertyValue
-      : isFutureRoute && toNum(plannedEntryMax) > 0
-      ? plannedEntryMax
-      : null;
+const displayPrimaryRange =
+  hasImmediateViableMortgage && toNum(estimatedMaxPropertyValue) > 0
+    ? estimatedMaxPropertyValue
+    : toNum(estimatedMaxPropertyValue) > 0
+    ? estimatedMaxPropertyValue
+    : isFutureRoute && toNum(plannedEntryMax) > 0
+    ? plannedEntryMax
+    : null;
 
   const displayPrimaryPayment =
     hasImmediateViableMortgage && toNum(estimatedMonthlyPayment) > 0
       ? estimatedMonthlyPayment
       : null;
 
-  const primaryRangeLabel = getPrimaryRangeLabel({
-    hasImmediateViableMortgage,
-    isFutureRoute,
-    hasCreditBlocker,
-    hasSubmittedCase: false,
-  });
+const primaryRangeLabel = getPrimaryRangeLabel({
+  hasImmediateViableMortgage,
+  isFutureRoute,
+  hasCreditBlocker,
+  hasSubmittedCase,
+});
 
   const primaryRangeDescription = getPrimaryRangeDescription({
     hasImmediateViableMortgage,
@@ -1668,7 +1670,7 @@ const isFutureRoute =
           : "."
       }`
     : isFutureRoute && toNum(displayPrimaryRange) > 0
-    ? `Con tu perfil actual, hoy podrías apuntar aproximadamente a viviendas de hasta ${moneySafe(
+    ? `Con entrada proyectada y reducción de deudas, podrías construir una ruta hacia viviendas cercanas a ${moneySafe(
         displayPrimaryRange
       )}.`
     : "Con los datos actuales, todavía no aparece una ruta hipotecaria referencial clara. Ajustar ingreso, ahorro inicial o valor de vivienda puede mejorar tu orientación.";
@@ -1997,7 +1999,7 @@ const isFutureRoute =
             : hasCreditBlocker
             ? "Primero revisemos tu historial"
             : isFutureRoute
-            ? "Tu avance para comprar vivienda"
+            ? "Tu ruta futura de compra"
             : hasImmediateViableMortgage
             ? "Tu rango estimado de compra"
             : "Tu orientación de compra"}
@@ -2017,7 +2019,7 @@ const isFutureRoute =
             : hasCreditBlocker
             ? "Tu rango financiero puede existir, pero antes de avanzar conviene aclarar tu historial declarado."
             : isFutureRoute
-            ? "Descubre cuánto podrías comprar hoy y cuál debería ser tu siguiente paso."
+            ? "Tu capacidad actual no es el techo. Si completas entrada y reduces deudas, puedes apuntar más alto."
             : hasImmediateViableMortgage
             ? "Consulta tu estimación referencial de compra y tu siguiente paso."
             : "Ajusta tu escenario para encontrar una ruta hipotecaria más clara."}
@@ -2092,7 +2094,7 @@ const isFutureRoute =
                   : hasImmediateViableMortgage
                   ? COPY.scoreReady
                   : isFutureRoute
-                  ? "Resultado generado"
+                  ? "Futuro"
                   : "En preparación"}
               </span>
             </Chip>
@@ -2144,9 +2146,9 @@ const isFutureRoute =
                 : hasCreditBlocker
                 ? "Historial por revisar"
                 : hasImmediateViableMortgage
-                ? "Resultado generado"
+                ? "Ruta estimada hoy"
                 : isFutureRoute
-                ? "Resultado generado"
+                ? "Ruta futura"
                 : "Perfil en construcción"}
             </Chip>
           </div>
@@ -2162,157 +2164,6 @@ const isFutureRoute =
   }
   hint={heroHint}
 />
-
-          {!hasCreditBlocker && (hasEntryProjection || hasDebtReductionRoute) ? (
-            <div
-              style={{
-                marginTop: 18,
-                padding: 14,
-                borderRadius: 22,
-                background:
-                  "linear-gradient(135deg, rgba(37,211,166,0.10), rgba(59,130,246,0.08))",
-                border: "1px solid rgba(37,211,166,0.18)",
-                display: "grid",
-                gap: 12,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 950,
-                    color: "rgba(226,232,240,0.98)",
-                  }}
-                >
-                  Tu ruta HabitaLibre
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 5,
-                    fontSize: 13,
-                    lineHeight: 1.4,
-                    color: "rgba(203,213,225,0.82)",
-                  }}
-                >
-                  Tu rango actual es el punto de partida. Si completas entrada y
-                  reduces deudas, puedes acercarte a un rango mayor.
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr",
-                  gap: 10,
-                }}
-              >
-                <div
-                  style={{
-                    padding: 12,
-                    borderRadius: 18,
-                    background: "rgba(15,23,42,0.58)",
-                    border: "1px solid rgba(255,255,255,0.09)",
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)" }}>
-                    Rango prudente hoy
-                  </div>
-                  <div style={{ marginTop: 5, fontSize: 24, fontWeight: 980 }}>
-                    {moneySafe(estimatedMaxPropertyValue)}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 5,
-                      fontSize: 12,
-                      lineHeight: 1.35,
-                      color: "rgba(203,213,225,0.76)",
-                    }}
-                  >
-                    Con tus deudas actuales y una cuota sana.
-                  </div>
-                </div>
-
-                {hasEntryProjection ? (
-                  <div
-                    style={{
-                      padding: 12,
-                      borderRadius: 18,
-                      background: "rgba(15,23,42,0.58)",
-                      border: "1px solid rgba(255,255,255,0.09)",
-                    }}
-                  >
-                    <div style={{ fontSize: 12, color: "rgba(148,163,184,0.95)" }}>
-                      Completando entrada
-                    </div>
-                    <div style={{ marginTop: 5, fontSize: 24, fontWeight: 980 }}>
-                      {moneySafe(plannedEntryMax)}
-                    </div>
-                    <div
-                      style={{
-                        marginTop: 5,
-                        fontSize: 12,
-                        lineHeight: 1.35,
-                        color: "rgba(203,213,225,0.76)",
-                      }}
-                    >
-                      Ahorrando durante {Math.round(plannedEntryMonths || 0)} meses
-                      hasta llegar a {moneySafe(plannedFutureEntry)} de entrada.
-                    </div>
-                  </div>
-                ) : null}
-
-                {hasDebtReductionRoute ? (
-                  <div
-                    style={{
-                      padding: 12,
-                      borderRadius: 18,
-                      background: "rgba(37,211,166,0.14)",
-                      border: "1px solid rgba(37,211,166,0.24)",
-                    }}
-                  >
-                    <div style={{ fontSize: 12, color: "rgba(167,243,208,0.95)" }}>
-                      Ruta con preparación
-                    </div>
-                    <div style={{ marginTop: 5, fontSize: 24, fontWeight: 980 }}>
-                      {moneySafe(debtReductionTargetPrice)}
-                    </div>
-                    <div
-                      style={{
-                        marginTop: 5,
-                        fontSize: 12,
-                        lineHeight: 1.35,
-                        color: "rgba(209,250,229,0.84)",
-                      }}
-                    >
-                      Si reduces cerca de {moneySafe(debtReductionNeeded)} de deudas
-                      mensuales, podrías apuntar más alto.
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              {hasDebtReductionRoute ? (
-                <div
-                  style={{
-                    padding: 10,
-                    borderRadius: 16,
-                    background: "rgba(255,255,255,0.055)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    color: "rgba(226,232,240,0.86)",
-                    fontSize: 12,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Tu cuello de botella no es solo la entrada: es la deuda mensual.
-                  Si bajas tus deudas hacia aproximadamente{" "}
-                  <strong>{moneySafe(targetDebtAfterReduction)}</strong> al mes
-                  antes de la hipoteca, tu rango podría acercarse a{" "}
-                  <strong>{moneySafe(debtReductionTargetPrice)}</strong>.
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           <FinancialDisclaimer compact />
 
@@ -2330,86 +2181,82 @@ const isFutureRoute =
         </div>
       ) : null}
 
-      {!(hasEntryProjection || hasDebtReductionRoute) ? (
-        <div style={visibleInViewStyle}>
-          <Card style={{ marginTop: 18 }}>
+      <div style={visibleInViewStyle}>
+        <Card style={{ marginTop: 18 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
             <div
               style={{
+                fontSize: 12,
+                color: "rgba(148,163,184,0.95)",
+                fontWeight: 950,
                 display: "flex",
-                justifyContent: "space-between",
                 alignItems: "center",
-                gap: 12,
+                gap: 6,
               }}
             >
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "rgba(148,163,184,0.95)",
-                  fontWeight: 950,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Compass
-                  size={13}
-                  strokeWidth={2.3}
-                  style={{ opacity: 0.95, flexShrink: 0 }}
-                />
-                Tu guía
-              </div>
+              <Compass
+                size={13}
+                strokeWidth={2.3}
+                style={{ opacity: 0.95, flexShrink: 0 }}
+              />
+              Tu guía
+            </div>
 
-              <Chip
-                tone={
-                  hasSubmittedCase
-                    ? "good"
-                    : isFutureRoute
-                    ? "brand"
-                    : "neutral"
-                }
-              >
-                {hasSubmittedCase
-                  ? "Caso activo"
+            <Chip
+              tone={
+                hasSubmittedCase
+                  ? "good"
                   : isFutureRoute
-                  ? "Ruta creada"
-                  : "Orientación"}
-              </Chip>
-            </div>
-
-            <div
-              style={{
-                marginTop: 10,
-                fontWeight: 980,
-                fontSize: 18,
-                lineHeight: 1.2,
-              }}
+                  ? "brand"
+                  : "neutral"
+              }
             >
-              {bestNext.title}
-            </div>
+              {hasSubmittedCase
+                ? "Caso activo"
+                : isFutureRoute
+                ? "Ruta futura"
+                : "Orientación"}
+            </Chip>
+          </div>
 
-            <div
-              style={{
-                marginTop: 8,
-                color: "rgba(226,232,240,0.90)",
-                lineHeight: 1.35,
-                fontSize: 13,
-              }}
-            >
-              {bestNext.subtitle}
-            </div>
+          <div
+            style={{
+              marginTop: 10,
+              fontWeight: 980,
+              fontSize: 18,
+              lineHeight: 1.2,
+            }}
+          >
+            {bestNext.title}
+          </div>
 
-            <div style={{ marginTop: 12 }}>
-              <PrimaryButton onClick={() => go(bestNext.to)}>
-                {bestNext.cta}
-              </PrimaryButton>
-            </div>
-          </Card>
-        </div>
-      ) : null}
+          <div
+            style={{
+              marginTop: 8,
+              color: "rgba(226,232,240,0.90)",
+              lineHeight: 1.35,
+              fontSize: 13,
+            }}
+          >
+            {bestNext.subtitle}
+          </div>
 
-      {!hasCreditBlocker &&
-      !hasSubmittedCase &&
-      !(hasEntryProjection || hasDebtReductionRoute) ? (
+          <div style={{ marginTop: 12 }}>
+            <PrimaryButton onClick={() => go(bestNext.to)}>
+              {bestNext.cta}
+            </PrimaryButton>
+          </div>
+        </Card>
+      </div>
+
+      {!hasCreditBlocker && !hasSubmittedCase ? (
         <div style={visibleInViewStyle}>
           <AlternativesCard
             alternatives={homeRecommendation?.alternatives || []}
@@ -2528,7 +2375,7 @@ const isFutureRoute =
                 {hasImmediateViableMortgage
                   ? "Rango estimado de compra"
                   : isFutureRoute
-                  ? "Resumen de tu capacidad"
+                  ? "Rango futuro estimado"
                   : "Orientación de compra"}
               </div>
 
