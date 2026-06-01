@@ -264,6 +264,10 @@ function getPaymentPreferenceTitle(value) {
   );
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function buildLegacyOutputFromMatcher(resultado = {}, entradaPayload = {}) {
   const bestMortgage = resultado?.bestMortgage || null;
   const bestOption = resultado?.bestOption || null;
@@ -1072,6 +1076,282 @@ function PaymentPreferenceCard({ selected, title, description, onClick }) {
   );
 }
 
+function JourneyMatchLoadingOverlay({ ingresoUsado, entrada, ciudadCompra }) {
+  const ciudadLabel = ciudadCompra || "tu ciudad objetivo";
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 22,
+        background:
+          "radial-gradient(circle at 50% 22%, rgba(37,211,166,0.18), transparent 34%)," +
+          "radial-gradient(circle at 12% 20%, rgba(59,130,246,0.20), transparent 26%)," +
+          "linear-gradient(180deg, rgba(2,6,23,0.98), rgba(15,23,42,0.98))",
+        color: "white",
+        boxSizing: "border-box",
+      }}
+    >
+      <style>
+        {`
+          @keyframes hlPulseRing {
+            0% { transform: scale(0.88); opacity: 0.92; }
+            70% { transform: scale(1.18); opacity: 0; }
+            100% { transform: scale(1.18); opacity: 0; }
+          }
+
+          @keyframes hlOrbit {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+
+          @keyframes hlFloatDot {
+            0%, 100% { transform: translateY(0); opacity: 0.62; }
+            50% { transform: translateY(-8px); opacity: 1; }
+          }
+
+          @keyframes hlSlideProgress {
+            0% { transform: translateX(-70%); }
+            100% { transform: translateX(170%); }
+          }
+        `}
+      </style>
+
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 430,
+          borderRadius: 34,
+          padding: "28px 22px 24px",
+          background: "rgba(255,255,255,0.07)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          boxShadow: "0 30px 90px rgba(0,0,0,0.42)",
+          textAlign: "center",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: "-35% -25% auto -25%",
+            height: 230,
+            background:
+              "radial-gradient(circle, rgba(37,211,166,0.16), transparent 62%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          style={{
+            position: "relative",
+            width: 112,
+            height: 112,
+            margin: "0 auto 20px",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 8,
+              borderRadius: 999,
+              border: "1px solid rgba(37,211,166,0.36)",
+              animation: "hlPulseRing 1.7s ease-out infinite",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: 999,
+              border: "1px solid rgba(59,130,246,0.24)",
+              animation: "hlPulseRing 1.7s ease-out infinite 0.35s",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 18,
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderTopColor: "rgba(37,211,166,0.95)",
+              animation: "hlOrbit 1.25s linear infinite",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 31,
+              borderRadius: 28,
+              background:
+                "linear-gradient(180deg, rgba(37,211,166,0.95), rgba(45,212,191,0.52))",
+              boxShadow: "0 18px 36px rgba(37,211,166,0.20)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#052019",
+              fontWeight: 980,
+              fontSize: 24,
+            }}
+          >
+            HL
+          </div>
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            fontSize: 12,
+            fontWeight: 950,
+            letterSpacing: 0.7,
+            textTransform: "uppercase",
+            color: "rgba(37,211,166,0.96)",
+          }}
+        >
+          Construyendo tu match
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            marginTop: 10,
+            fontSize: 27,
+            lineHeight: 1.06,
+            letterSpacing: -0.8,
+            fontWeight: 980,
+          }}
+        >
+          Estamos armando tu ruta hacia casa
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            margin: "12px auto 0",
+            maxWidth: 330,
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: "rgba(203,213,225,0.90)",
+          }}
+        >
+          Cruzamos tu ingreso, entrada, ciudad y preferencias para ordenar una
+          orientación hipotecaria referencial.
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            marginTop: 20,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              padding: "12px 10px",
+              borderRadius: 18,
+              background: "rgba(2,6,23,0.24)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "rgba(148,163,184,0.92)" }}>
+              Ingreso considerado
+            </div>
+            <div style={{ marginTop: 5, fontSize: 16, fontWeight: 950 }}>
+              {money(ingresoUsado)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "12px 10px",
+              borderRadius: 18,
+              background: "rgba(2,6,23,0.24)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "rgba(148,163,184,0.92)" }}>
+              Entrada declarada
+            </div>
+            <div style={{ marginTop: 5, fontSize: 16, fontWeight: 950 }}>
+              {money(entrada)}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            marginTop: 10,
+            padding: "11px 12px",
+            borderRadius: 18,
+            background: "rgba(37,211,166,0.10)",
+            border: "1px solid rgba(37,211,166,0.18)",
+            color: "rgba(226,232,240,0.95)",
+            fontSize: 12,
+            fontWeight: 850,
+          }}
+        >
+          Buscando rutas compatibles en {ciudadLabel}
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            marginTop: 18,
+            height: 8,
+            borderRadius: 999,
+            overflow: "hidden",
+            background: "rgba(255,255,255,0.10)",
+          }}
+        >
+          <div
+            style={{
+              width: "55%",
+              height: "100%",
+              borderRadius: 999,
+              background:
+                "linear-gradient(90deg, transparent, rgba(37,211,166,0.95), transparent)",
+              animation: "hlSlideProgress 1.25s ease-in-out infinite",
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            marginTop: 14,
+            display: "flex",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          {[0, 1, 2].map((dot) => (
+            <span
+              key={dot}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: "rgba(37,211,166,0.92)",
+                animation: `hlFloatDot 1.2s ease-in-out infinite ${dot * 0.16}s`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 async function apiPost(path, body) {
   const token = getCustomerToken();
   const res = await fetch(`${API_BASE}${path}`, {
@@ -1585,6 +1865,9 @@ async function handleCalcular() {
   const e4 = validate(4);
   if (e4) return setErr(e4);
 
+  const useImmersiveLoading = !hasResult;
+  const loadingStartedAt = Date.now();
+
   setLoading(true);
   setErr("");
 
@@ -1730,6 +2013,14 @@ async function handleCalcular() {
       );
     }
 
+    if (useImmersiveLoading) {
+      const elapsed = Date.now() - loadingStartedAt;
+      const remaining = Math.max(0, 1300 - elapsed);
+      if (remaining > 0) {
+        await sleep(remaining);
+      }
+    }
+
     navigate("/", { replace: true });
   } catch (ex) {
     console.error(ex);
@@ -1761,6 +2052,14 @@ async function handleCalcular() {
         width: "100%",
       }}
     />
+
+    {loading && !hasResult ? (
+      <JourneyMatchLoadingOverlay
+        ingresoUsado={ingresoUsado}
+        entrada={toNum(entrada)}
+        ciudadCompra={ciudadCompra}
+      />
+    ) : null}
 
     <div
       style={{
@@ -2727,7 +3026,9 @@ async function handleCalcular() {
                   }}
                 >
                   {loading
-                    ? "Estimando…"
+                    ? hasResult
+                      ? "Actualizando…"
+                      : "Construyendo tu ruta…"
                     : hasResult
                     ? "Actualizar estimación"
                     : getCustomerToken()
